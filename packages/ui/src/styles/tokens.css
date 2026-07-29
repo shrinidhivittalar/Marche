@@ -1,0 +1,213 @@
+/* Marché design tokens — single source of truth for the design system. */
+@theme {
+  /* ---- Color: surfaces (matches the app's existing neutral palette) ---- */
+  --color-bg: #f8f8f6;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f3f4f2;
+  --color-border: #e7e8e4;
+  --color-border-strong: #d4d4d8;
+
+  /* ---- Color: text ---- */
+  --color-ink: #111827;
+  --color-ink-muted: #6b7280;
+
+  /* ---- Color: primary (Tailwind green-900/800 — the app's existing brand
+     green, not a generic SaaS indigo) ---- */
+  --color-primary: #14532d;
+  --color-primary-hover: #166534;
+  --color-primary-active: #052e16;
+  --color-primary-subtle: #f0fdf4;
+  /* Foreground for text/icons placed on a solid --color-primary fill. Kept as
+     its own token (not hardcoded white) because dark mode needs a much
+     brighter primary for standalone text contrast, which in turn needs dark
+     text — not white — to stay readable as a button fill. */
+  --color-primary-fg: #ffffff;
+
+  /* ---- Color: inverse (max-contrast neutral for deliberately punctuated
+     blocks — the dark CTA band, the "secondary" button — independent of
+     --color-ink so these blocks stay high-contrast in both themes instead
+     of flattening out when ink itself flips to near-white in dark mode) ---- */
+  --color-inverse: #15171a;
+  --color-inverse-fg: #ffffff;
+
+  /* ---- Color: accent (marigold gold — used sparingly: ratings, "Work" role) ---- */
+  --color-accent: #f59e0b;
+  --color-accent-hover: #d97f06;
+  --color-accent-subtle: #fff6e5;
+  /* AA-safe (6.6:1) shade for text/initials on accent-subtle or white */
+  --color-accent-text: #92400e;
+
+  /* ---- Color: success (verified — trust blue, deliberately a different hue
+     from primary emerald so brand actions and verification badges never
+     read as the same color). success = icon/fill only; success-text is
+     the AA-safe darker shade for any text on success-subtle/white. ---- */
+  --color-success: #2563eb;
+  --color-success-text: #1d4ed8;
+  --color-success-subtle: #eaf1ff;
+
+  /* ---- Color: danger (form/validation errors, destructive actions) ---- */
+  --color-danger: #dc2626;
+  --color-danger-text: #b91c1c;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-fg: #ffffff;
+
+  /* ---- Type ---- */
+  --font-sans: "Inter", "Inter Fallback", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* ---- Radius ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* ---- Shadow (matches the app's existing shadow-marche-* utilities) ---- */
+  --shadow-card: 0 2px 8px -2px rgba(17, 24, 39, 0.04), 0 1px 3px -1px rgba(17, 24, 39, 0.02);
+  --shadow-card-hover: 0 4px 6px -1px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.1);
+  --shadow-float: 0 24px 48px -12px rgba(20, 83, 45, 0.2), 0 4px 14px rgba(17, 24, 39, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(20, 83, 45, 0.35);
+}
+
+/* ---- Dark mode ----
+   Only applies when something explicitly sets [data-theme="dark"] on
+   <html> (a theme toggle). No app currently wires one up, and most
+   apps/web markup still uses literal Tailwind classes (bg-white,
+   text-zinc-*, etc.) rather than these tokens, so it isn't safe to also
+   auto-switch on the OS's prefers-color-scheme — that would half-invert
+   the page instead of a clean theme swap. */
+:root[data-theme="dark"] {
+  --color-bg: #121110;
+  --color-surface: #1a1815;
+  --color-surface-subtle: #221f1a;
+  --color-border: #33302a;
+  --color-border-strong: #46423a;
+
+  --color-ink: #f5f3ec;
+  --color-ink-muted: #a8a296;
+
+  --color-primary: #1fb683;
+  --color-primary-hover: #34c794;
+  --color-primary-active: #17a06e;
+  --color-primary-subtle: #12332a;
+  --color-primary-fg: #062017;
+
+  --color-accent: #fbbf24;
+  --color-accent-hover: #fdd463;
+  --color-accent-subtle: #3a2a0e;
+  --color-accent-text: #fbbf24;
+
+  --color-success: #5b8def;
+  --color-success-text: #7da6f5;
+  --color-success-subtle: #16233d;
+
+  --color-danger: #f87171;
+  --color-danger-text: #fca5a5;
+  --color-danger-subtle: #3a1414;
+  --color-danger-fg: #ffffff;
+
+  --color-inverse: #f2efe6;
+  --color-inverse-fg: #15171a;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 12px 28px -8px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 24px 48px -12px rgba(31, 182, 131, 0.28), 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 3px rgba(31, 182, 131, 0.45);
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f8f8f6;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f3f4f2;
+  --color-border: #e7e8e4;
+  --color-border-strong: #d4d4d8;
+
+  --color-ink: #111827;
+  --color-ink-muted: #6b7280;
+
+  --color-primary: #14532d;
+  --color-primary-hover: #166534;
+  --color-primary-active: #052e16;
+  --color-primary-subtle: #f0fdf4;
+  --color-primary-fg: #ffffff;
+
+  --color-accent: #f59e0b;
+  --color-accent-hover: #d97f06;
+  --color-accent-subtle: #fff6e5;
+  --color-accent-text: #92400e;
+
+  --color-success: #2563eb;
+  --color-success-text: #1d4ed8;
+  --color-success-subtle: #eaf1ff;
+
+  --color-danger: #dc2626;
+  --color-danger-text: #b91c1c;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-fg: #ffffff;
+
+  --color-inverse: #15171a;
+  --color-inverse-fg: #ffffff;
+
+  --shadow-card: 0 1px 2px rgba(20, 21, 26, 0.04), 0 1px 3px rgba(20, 21, 26, 0.05);
+  --shadow-card-hover: 0 12px 28px -8px rgba(20, 21, 26, 0.12), 0 2px 8px rgba(20, 21, 26, 0.04);
+  --shadow-float: 0 24px 48px -12px rgba(14, 107, 82, 0.2), 0 4px 14px rgba(20, 21, 26, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(14, 107, 82, 0.35);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---- ShadCN/Radix semantic bridge ----
+   ShadCN-generated components (Button, Card, Badge, Avatar, Input, Label)
+   read these canonical variable names. Aliased to the tokens above instead
+   of shadcn's own default palette, so generated components render in
+   Marché's brand colors with no hand-edited class names, and flip
+   automatically per theme because the tokens they point to already do. */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary-foreground: var(--color-primary-fg);
+  --color-secondary: var(--color-inverse);
+  --color-secondary-foreground: var(--color-inverse-fg);
+  --color-muted: var(--color-surface-subtle);
+  --color-muted-foreground: var(--color-ink-muted);
+  --color-accent-foreground: var(--color-accent-text);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--color-danger-fg);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-primary);
+}
