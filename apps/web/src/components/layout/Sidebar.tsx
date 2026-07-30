@@ -3,8 +3,9 @@ import {
   LayoutDashboard,
   Briefcase,
   MessageSquare,
-  FolderKanban,
   CreditCard,
+  Clock,
+  Users,
   Bell,
   User,
   Settings,
@@ -27,6 +28,24 @@ import { useApp } from '../../context/AppContext';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
 
+const FINANCES_LINKS = [
+  { label: 'Weekly summary', path: '/client/finances/weekly-summary' },
+  { label: 'Transactions', path: '/client/finances/transactions' },
+  { label: 'Budgets', path: '/client/finances/budgets' },
+];
+
+const FREELANCERS_LINKS = [
+  { label: 'Hired freelancers', path: '/client/freelancers/hired' },
+  { label: 'Saved freelancers', path: '/client/freelancers/saved' },
+  { label: 'Search for freelancers', path: '/client/search' },
+  { label: 'Bring freelancers to Marché', path: '/client/freelancers/refer' },
+];
+
+const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
+  Finances: FINANCES_LINKS,
+  Freelancers: FREELANCERS_LINKS,
+};
+
 export const Sidebar: React.FC = () => {
   const {
     currentUser,
@@ -43,6 +62,15 @@ export const Sidebar: React.FC = () => {
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
   );
   const [identityOpen, setIdentityOpen] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>(() => {
+    if (route.startsWith('/client/finances/')) return 'Finances';
+    if (route.startsWith('/client/freelancers/')) return 'Freelancers';
+    return null;
+  });
+
+  const toggleSection = (label: string) => {
+    setExpandedSection((prev) => (prev === label ? null : label));
+  };
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -66,11 +94,13 @@ export const Sidebar: React.FC = () => {
   ).length;
 
   const clientNav = [
-    { label: 'Dashboard', path: '/client/dashboard', icon: LayoutDashboard },
-    { label: 'Requirements', path: '/client/requirements', icon: Briefcase },
+    { label: 'Home', path: '/client/dashboard', icon: LayoutDashboard },
+    { label: 'Search', path: '/client/search', icon: Search },
+    { label: 'Jobs', path: '/client/jobs', icon: Briefcase },
+    { label: 'Freelancers', path: '/client/freelancers/hired', icon: Users },
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessageCount },
-    { label: 'Projects', path: '/client/projects', icon: FolderKanban },
-    { label: 'Payments', path: '/client/payments', icon: CreditCard },
+    { label: 'Finances', path: '/client/payments', icon: CreditCard },
+    { label: 'Work Diaries', path: '/client/work-diaries', icon: Clock },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
@@ -87,7 +117,7 @@ export const Sidebar: React.FC = () => {
 
   const adminNav = [
     { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
-    { label: 'Requirements', path: '/provider/dashboard', icon: Briefcase },
+    { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
     { label: 'Client Dashboard', path: '/client/dashboard', icon: LayoutDashboard },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
@@ -158,7 +188,10 @@ export const Sidebar: React.FC = () => {
         <nav className="space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = route === item.path;
+            const isActive =
+              route === item.path ||
+              (item.label === 'Finances' && route.startsWith('/client/finances/')) ||
+              (item.label === 'Freelancers' && route.startsWith('/client/freelancers/'));
             const navButtonClass = `w-full flex items-center rounded-xl text-xs font-medium transition-all cursor-pointer ${
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
             } ${
@@ -270,6 +303,64 @@ export const Sidebar: React.FC = () => {
                     </div>
                   </PopoverContent>
                 </Popover>
+              );
+            }
+
+            const sectionLinks = SECTION_LINKS[item.label];
+            if (sectionLinks) {
+              // Collapsed sidebar can't fit an inline-expanding sub-list — fall back to a flyout popover.
+              if (collapsed) {
+                return (
+                  <Popover key={item.label}>
+                    <PopoverTrigger title={item.label} className={navButtonClass}>
+                      {navButtonContent}
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" className="w-56 p-1.5">
+                      {sectionLinks.map((link) => (
+                        <PopoverClose asChild key={link.path}>
+                          <button
+                            onClick={() => navigate(link.path)}
+                            className="w-full text-left px-2.5 py-2 rounded-lg text-xs font-medium text-ink hover:bg-bg transition-colors cursor-pointer"
+                          >
+                            {link.label}
+                          </button>
+                        </PopoverClose>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                );
+              }
+
+              const isExpanded = expandedSection === item.label;
+              return (
+                <div key={item.label}>
+                  <button onClick={() => toggleSection(item.label)} className={navButtonClass}>
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-zinc-400'}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-ink-muted shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-[26px] mt-1 mb-1 space-y-0.5 border-l border-border pl-3">
+                      {sectionLinks.map((link) => (
+                        <button
+                          key={link.path}
+                          onClick={() => navigate(link.path)}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                            route === link.path
+                              ? 'bg-white text-primary font-bold border border-border shadow-2xs'
+                              : 'text-ink-muted hover:text-ink hover:bg-white/70'
+                          }`}
+                        >
+                          {link.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             }
 

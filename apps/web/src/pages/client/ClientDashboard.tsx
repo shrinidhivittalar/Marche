@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Plus,
   Briefcase,
   FileText,
   Clock,
-  ArrowUpRight,
   ShieldCheck,
   Calendar,
   MapPin,
@@ -22,22 +21,27 @@ import {
   X,
   Eye,
   Inbox,
-  FolderKanban,
   Settings as SettingsIcon,
   User,
   Shield,
   CreditCard,
   Sliders,
   ChevronRight,
+  ChevronLeft,
+  Mail,
+  LayoutGrid,
+  List as ListIcon,
+  FileSignature,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input } from '@marche/ui';
+import { Button, Card, Input, IconTile } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { Requirement, Proposal, Contract } from '../../types';
+import { Job, Proposal, Contract } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
 
 interface ClientDashboardProps {
-  view?: 'dashboard' | 'requirements' | 'projects' | 'settings';
+  view?: 'dashboard' | 'jobs' | 'settings';
 }
 
 export const ClientDashboard: React.FC<ClientDashboardProps> = ({
@@ -45,19 +49,24 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 }) => {
   const {
     currentUser,
-    requirements,
+    jobs,
     proposals,
     contracts,
     notifications,
     navigate,
-    createRequirement,
-    togglePauseRequirement,
-    deleteRequirement,
-    updateRequirement,
+    createJob,
+    togglePauseJob,
+    deleteJob,
+    updateJob,
     markNotificationRead,
   } = useApp();
 
-  // Filter tabs for Requirements View
+  // Top-level tab for Jobs View (matches "All job posts" / "All contracts")
+  const [jobsTab, setJobsTab] = useState<'posts' | 'contracts'>('posts');
+  const [contractSearch, setContractSearch] = useState('');
+  const [contractSortDir, setContractSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Filter tabs for Jobs View
   const [activeTab, setActiveTab] = useState<
     'all' | 'active' | 'proposals' | 'progress' | 'completed'
   >('all');
@@ -65,8 +74,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Modals state
-  const [editModalReq, setEditModalReq] = useState<Requirement | null>(null);
-  const [deleteConfirmReq, setDeleteConfirmReq] = useState<Requirement | null>(null);
+  const [editModalReq, setEditModalReq] = useState<Job | null>(null);
+  const [deleteConfirmReq, setDeleteConfirmReq] = useState<Job | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteVendorName, setInviteVendorName] = useState('');
   const [messageModalOpen, setMessageModalOpen] = useState(false);
@@ -84,21 +93,28 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   // Row action menu (default dashboard view)
   const [activeMenuReqId, setActiveMenuReqId] = useState<string | null>(null);
 
+  // Overview layout toggle (default dashboard view)
+  const [overviewLayout, setOverviewLayout] = useState<'grid' | 'list'>('grid');
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const scrollCarousel = (dir: 'left' | 'right') => {
+    carouselRef.current?.scrollBy({ left: dir === 'left' ? -272 : 272, behavior: 'smooth' });
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // User's requirements
-  const myRequirements = requirements.filter((r) => r.clientId === currentUser.id);
+  // User's jobs
+  const myJobs = jobs.filter((r) => r.clientId === currentUser.id);
 
   // Stats calculation
-  const receivingProposalsCount = myRequirements.filter((r) => {
-    const pCount = proposals.filter((p) => p.requirementId === r.id).length;
+  const receivingProposalsCount = myJobs.filter((r) => {
+    const pCount = proposals.filter((p) => p.jobId === r.id).length;
     return pCount > 0 && r.status !== 'Completed' && r.status !== 'Closed';
   }).length;
 
-  const activeRequirementsCount = myRequirements.filter(
+  const activeJobsCount = myJobs.filter(
     (r) => r.status !== 'Completed' && r.status !== 'Closed' && r.status !== 'Cancelled'
   ).length;
 
@@ -116,17 +132,17 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     .filter((c) => c.clientId === currentUser.id)
     .reduce((sum, c) => sum + c.amount, 0);
 
-  // Filtered Requirements for Requirements View
-  const filteredRequirements = myRequirements.filter((r) => {
-    const reqProposals = proposals.filter((p) => p.requirementId === r.id);
-    const hasActiveContract = contracts.some((c) => c.requirementId === r.id);
+  // Filtered Jobs for Jobs View
+  const filteredJobs = myJobs.filter((r) => {
+    const reqProposals = proposals.filter((p) => p.jobId === r.id);
+    const hasActiveContract = contracts.some((c) => c.jobId === r.id);
 
     if (activeTab === 'active') {
       if (r.status === 'Completed' || r.status === 'Closed' || r.status === 'Cancelled') return false;
     } else if (activeTab === 'proposals') {
       if (reqProposals.length === 0 || hasActiveContract) return false;
     } else if (activeTab === 'progress') {
-      const ctr = contracts.find((c) => c.requirementId === r.id);
+      const ctr = contracts.find((c) => c.jobId === r.id);
       if (!ctr && r.status !== 'In Progress' && r.status !== 'Escrow Held') return false;
     } else if (activeTab === 'completed') {
       if (r.status !== 'Completed' && r.status !== 'Closed') return false;
@@ -147,63 +163,25 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     return true;
   });
 
-  // Attention Items for Dashboard
-  const attentionItems = [];
-
-  const reqsWithNewProposals = myRequirements.filter((r) => {
-    const pCount = proposals.filter((p) => p.requirementId === r.id).length;
-    const hasContract = contracts.some((c) => c.requirementId === r.id);
-    return pCount > 0 && !hasContract;
-  });
-
-  if (reqsWithNewProposals.length > 0) {
-    const topReq = reqsWithNewProposals[0]!;
-    const topProposals = proposals.filter((p) => p.requirementId === topReq.id);
-    attentionItems.push({
-      id: 'att_prop',
-      type: 'proposal' as const,
-      title: `${topProposals.length} new proposals received for "${topReq.title}"`,
-      description: 'Review competitive vendor bids, portfolio samples, and milestone breakdown.',
-      actionLabel: 'Review Proposals',
-      onAction: () => navigate(`/client/requirements/${topReq.id}`),
-      badgeText: 'Action Needed',
-      badgeColor: 'bg-amber-100 text-amber-900 border-amber-200',
+  // Contracts belonging to this client (for the "All contracts" tab)
+  const myContracts = contracts.filter((c) => c.clientId === currentUser.id);
+  const filteredContracts = myContracts
+    .filter((c) => {
+      if (!contractSearch.trim()) return true;
+      const q = contractSearch.toLowerCase();
+      return (
+        c.jobTitle.toLowerCase().includes(q) ||
+        c.vendorName.toLowerCase().includes(q) ||
+        c.acknowledgementNumber.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      const diff = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+      return contractSortDir === 'asc' ? diff : -diff;
     });
-  }
-
-  const activeContractsList = contracts.filter((c) => c.clientId === currentUser.id);
-  if (activeContractsList.length > 0) {
-    const ctr = activeContractsList[0]!;
-    attentionItems.push({
-      id: 'att_escrow',
-      type: 'escrow' as const,
-      title: `Escrow Held: $${ctr.amount.toLocaleString()} for "${ctr.requirementTitle}"`,
-      description: `Provider ${ctr.vendorName} is actively working on your booking. Check contract status or release milestones.`,
-      actionLabel: 'Manage Escrow',
-      onAction: () => navigate(`/contracts/${ctr.id}`),
-      badgeText: 'Escrow Protected',
-      badgeColor: 'bg-emerald-100 text-primary border-emerald-200',
-    });
-  }
-
-  const upcomingReq = myRequirements.find(
-    (r) => r.eventDate && new Date(r.eventDate) >= new Date()
-  );
-  if (upcomingReq) {
-    attentionItems.push({
-      id: 'att_event',
-      type: 'event' as const,
-      title: `Upcoming Event: ${upcomingReq.title}`,
-      description: `Scheduled for ${formatEventSchedule(upcomingReq.eventDate, upcomingReq.timingMode, upcomingReq.eventStartTime, upcomingReq.eventEndTime)} at ${upcomingReq.location}.`,
-      actionLabel: 'View Requirement Brief',
-      onAction: () => navigate(`/client/requirements/${upcomingReq.id}`),
-      badgeText: 'Scheduled Date',
-      badgeColor: 'bg-blue-100 text-blue-900 border-blue-200',
-    });
-  }
 
   // Handlers
-  const openEditModal = (req: Requirement) => {
+  const openEditModal = (req: Job) => {
     setEditModalReq(req);
     setEditTitle(req.title);
     setEditBudgetMin(req.budgetMin);
@@ -214,27 +192,27 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalReq) return;
-    updateRequirement(editModalReq.id, {
+    updateJob(editModalReq.id, {
       title: editTitle,
       budgetMin: Number(editBudgetMin),
       budgetMax: Number(editBudgetMax),
       location: editLocation,
     });
     setEditModalReq(null);
-    showToast('Requirement details updated successfully.');
+    showToast('Job details updated successfully.');
   };
 
   const handleConfirmDelete = () => {
     if (!deleteConfirmReq) return;
-    deleteRequirement(deleteConfirmReq.id);
+    deleteJob(deleteConfirmReq.id);
     setDeleteConfirmReq(null);
-    showToast('Requirement removed from marketplace.');
+    showToast('Job removed from marketplace.');
   };
 
   // ---------------------------------------------------------------------
-  // VIEW: MY REQUIREMENTS ONLY
+  // VIEW: MY JOBS ONLY
   // ---------------------------------------------------------------------
-  if (view === 'requirements') {
+  if (view === 'jobs') {
     return (
       <div className="space-y-6 w-full">
         {toastMessage && (
@@ -244,29 +222,153 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-mono uppercase font-semibold text-primary mb-1">
-              <Briefcase className="w-3.5 h-3.5" />
-              <span>Service Requirements Directory</span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-ink tracking-tight">
-              My Requirements
-            </h1>
-            <p className="text-xs text-ink-muted mt-1">
-              All your posted service requirements, active proposals, and published listings.
-            </p>
-          </div>
+        {/* Top-Level Tabs: All job posts / All contracts */}
+        <div className="flex items-center gap-6 border-b border-border">
+          <button
+            onClick={() => setJobsTab('posts')}
+            className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 -mb-px ${
+              jobsTab === 'posts'
+                ? 'text-ink border-primary'
+                : 'text-ink-muted border-transparent hover:text-ink'
+            }`}
+          >
+            All job posts
+          </button>
+          <button
+            onClick={() => setJobsTab('contracts')}
+            className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 -mb-px ${
+              jobsTab === 'contracts'
+                ? 'text-ink border-primary'
+                : 'text-ink-muted border-transparent hover:text-ink'
+            }`}
+          >
+            All contracts
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+          <h1 className="text-2xl font-extrabold text-ink tracking-tight">
+            {jobsTab === 'contracts' ? 'Contracts' : 'Hiring'}
+          </h1>
 
           <Button
             size="md"
             icon={Plus}
-            onClick={() => navigate('/client/requirements/new')}
+            onClick={() => navigate('/client/jobs/new')}
           >
-            Create Requirement
+            Post a new job
           </Button>
         </div>
 
+        {jobsTab === 'contracts' ? (
+          <>
+            {/* Search, Filters, Sort */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Search by contract, freelancer, or agency name"
+                  value={contractSearch}
+                  onChange={(e) => setContractSearch(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-zinc-400 focus:outline-none focus:border-primary transition-all"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  showToast("Advanced filters aren't wired up yet — Marché is still a frontend preview.")
+                }
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline cursor-pointer shrink-0"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                Filters
+              </button>
+
+              <div className="flex items-center gap-2 text-xs shrink-0">
+                <span className="text-ink-muted font-medium">Sort by Start date</span>
+                <button
+                  type="button"
+                  onClick={() => setContractSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bg border border-border hover:border-zinc-300 font-semibold text-ink transition-all cursor-pointer"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
+                  {contractSortDir === 'asc' ? 'Ascending' : 'Descending'}
+                </button>
+              </div>
+
+              <span className="text-xs text-ink-muted font-medium shrink-0">
+                {filteredContracts.length} total
+              </span>
+            </div>
+
+            {filteredContracts.length === 0 ? (
+              <div className="bg-white border border-border rounded-3xl p-16 text-center space-y-4 shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-primary flex items-center justify-center mx-auto">
+                  <FileSignature className="w-8 h-8" />
+                </div>
+                <div className="max-w-md mx-auto space-y-1.5">
+                  <h3 className="text-base font-bold text-ink">You don't have any contracts yet.</h3>
+                  <p className="text-xs text-ink-muted leading-relaxed">
+                    Your pending and active contracts will be available here when you start hiring talent.{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/client/jobs/new')}
+                      className="text-primary font-semibold hover:underline cursor-pointer"
+                    >
+                      Post a job
+                    </button>{' '}
+                    or{' '}
+                    <button
+                      type="button"
+                      onClick={() => setJobsTab('posts')}
+                      className="text-primary font-semibold hover:underline cursor-pointer"
+                    >
+                      check out who's applied
+                    </button>{' '}
+                    to your existing job posts.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredContracts.map((ctr) => (
+                <Card key={ctr.id} className="p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <span className="text-xs font-mono font-bold text-primary">
+                      REF: {ctr.acknowledgementNumber}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-primary text-[10px] font-extrabold">
+                      {ctr.bookingState}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">{ctr.jobTitle}</h3>
+                    <p className="text-xs text-ink-muted">
+                      Provider: <strong>{ctr.vendorName}</strong>
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-bg border border-border flex items-center justify-between text-xs">
+                    <div>
+                      <span className="block text-[10px] text-ink-muted">Escrow Amount</span>
+                      <span className="text-sm font-extrabold text-ink">
+                        ${ctr.amount.toLocaleString()}
+                      </span>
+                    </div>
+                    <Button size="sm" onClick={() => navigate(`/contracts/${ctr.id}`)}>
+                      Manage Contract
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+              </div>
+            )}
+          </>
+        ) : (
+        <>
         {/* Filters and Search Bar */}
         <div className="space-y-4 bg-white p-4 border border-border rounded-2xl shadow-xs">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -278,7 +380,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
-              All Requirements ({myRequirements.length})
+              All Jobs ({myJobs.length})
             </button>
 
             <button
@@ -289,7 +391,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
-              Active ({activeRequirementsCount})
+              Active ({activeJobsCount})
             </button>
 
             <button
@@ -320,7 +422,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
               <Input
                 type="text"
-                placeholder="Search requirements by title or location..."
+                placeholder="Search jobs by title or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-zinc-400 focus:outline-none focus:border-primary transition-all"
@@ -353,7 +455,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   'DJ & Sound',
                   'Videography',
                   'Floral & Decor',
-                  ...myRequirements.map((r) => r.category),
+                  ...myJobs.map((r) => r.category),
                 ])
               ).map((cat) => (
                 <option key={cat} value={cat}>
@@ -364,35 +466,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           </div>
         </div>
 
-        {/* Requirements Cards List */}
-        {filteredRequirements.length === 0 ? (
+        {/* Jobs Cards List */}
+        {filteredJobs.length === 0 ? (
           <div className="bg-white border border-border rounded-3xl p-12 text-center space-y-4 shadow-xs">
             <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-primary flex items-center justify-center mx-auto">
               <Inbox className="w-8 h-8" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-base font-bold text-ink">
-                No requirements found
+                No jobs found
               </h3>
               <p className="text-xs text-ink-muted">
                 {searchQuery || categoryFilter !== 'All'
                   ? 'Try clearing your search term or category filter.'
-                  : 'You have not posted any requirements matching this tab.'}
+                  : 'You have not posted any jobs matching this tab.'}
               </p>
             </div>
             <Button
               size="sm"
               icon={Plus}
-              onClick={() => navigate('/client/requirements/new')}
+              onClick={() => navigate('/client/jobs/new')}
             >
-              Post New Requirement
+              Post New Job
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredRequirements.map((req) => {
-              const reqProposals = proposals.filter((p) => p.requirementId === req.id);
-              const activeContract = contracts.find((c) => c.requirementId === req.id);
+            {filteredJobs.map((req) => {
+              const reqProposals = proposals.filter((p) => p.jobId === req.id);
+              const activeContract = contracts.find((c) => c.jobId === req.id);
               const isPaused = req.status === 'Draft' || req.isPaused;
 
               return (
@@ -422,7 +524,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                           if (activeContract) {
                             navigate(`/contracts/${activeContract.id}`);
                           } else {
-                            navigate(`/client/requirements/${req.id}`);
+                            navigate(`/client/jobs/${req.id}`);
                           }
                         }}
                         className="text-base font-bold text-ink hover:text-primary cursor-pointer transition-colors"
@@ -479,7 +581,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                           if (activeContract) {
                             navigate(`/contracts/${activeContract.id}`);
                           } else {
-                            navigate(`/client/requirements/${req.id}`);
+                            navigate(`/client/jobs/${req.id}`);
                           }
                         }}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-semibold text-ink transition-all cursor-pointer"
@@ -498,11 +600,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                       <button
                         onClick={() => {
-                          togglePauseRequirement(req.id);
+                          togglePauseJob(req.id);
                           showToast(
                             isPaused
-                              ? 'Requirement resumed & published on marketplace.'
-                              : 'Requirement paused from receiving new bids.'
+                              ? 'Job resumed & published on marketplace.'
+                              : 'Job paused from receiving new bids.'
                           );
                         }}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
@@ -535,13 +637,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           </div>
         )}
 
+        {filteredJobs.length > 0 && (
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              disabled
+              className="p-1.5 rounded-lg text-ink-muted opacity-40 cursor-not-allowed"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center">
+              1
+            </span>
+            <button
+              disabled
+              className="p-1.5 rounded-lg text-ink-muted opacity-40 cursor-not-allowed"
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Edit Modal */}
         {editModalReq && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="text-base font-bold text-ink">
-                  Edit Requirement
+                  Edit Job
                 </h3>
                 <button
                   onClick={() => setEditModalReq(null)}
@@ -629,7 +753,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
               <h3 className="text-base font-bold text-rose-600">
-                Delete Requirement?
+                Delete Job?
               </h3>
               <p className="text-xs text-ink-muted">
                 Are you sure you want to remove <strong>"{deleteConfirmReq.title}"</strong>?
@@ -647,75 +771,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   className="bg-rose-600 hover:bg-rose-700 text-white"
                   onClick={handleConfirmDelete}
                 >
-                  Delete Requirement
+                  Delete Job
                 </Button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // VIEW: PROJECTS ONLY
-  // ---------------------------------------------------------------------
-  if (view === 'projects') {
-    return (
-      <div className="space-y-6 w-full">
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-mono uppercase font-semibold text-primary mb-1">
-              <FolderKanban className="w-3.5 h-3.5" />
-              <span>Escrow & Contracts Management</span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-ink tracking-tight">
-              Active Projects
-            </h1>
-            <p className="text-xs text-ink-muted mt-1">
-              Active bookings backed by simulated escrow protection and milestone verification.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {contracts.map((ctr) => (
-            <Card key={ctr.id} className="p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-xs font-mono font-bold text-primary">
-                  REF: {ctr.acknowledgementNumber}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-primary text-[10px] font-extrabold">
-                  {ctr.bookingState}
-                </span>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-bold text-ink">
-                  {ctr.requirementTitle}
-                </h3>
-                <p className="text-xs text-ink-muted">
-                  Provider: <strong>{ctr.vendorName}</strong>
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-bg border border-border flex items-center justify-between text-xs">
-                <div>
-                  <span className="block text-[10px] text-ink-muted">Escrow Amount</span>
-                  <span className="text-sm font-extrabold text-ink">
-                    ${ctr.amount.toLocaleString()}
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => navigate(`/contracts/${ctr.id}`)}
-                >
-                  Manage Contract
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        </>
+        )}
       </div>
     );
   }
@@ -764,18 +827,18 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   // ---------------------------------------------------------------------
   // DEFAULT VIEW: CLIENT DASHBOARD
   // ---------------------------------------------------------------------
-  const totalProposalsReceived = myRequirements.reduce((sum, r) => {
-    return sum + proposals.filter((p) => p.requirementId === r.id).length;
+  const totalProposalsReceived = myJobs.reduce((sum, r) => {
+    return sum + proposals.filter((p) => p.jobId === r.id).length;
   }, 0);
 
-  const pendingProposalsCount = myRequirements.filter((r) => {
-    const pCount = proposals.filter((p) => p.requirementId === r.id).length;
-    const hasContract = contracts.some((c) => c.requirementId === r.id);
+  const pendingProposalsCount = myJobs.filter((r) => {
+    const pCount = proposals.filter((p) => p.jobId === r.id).length;
+    const hasContract = contracts.some((c) => c.jobId === r.id);
     return pCount > 0 && !hasContract;
   }).length;
 
-  const handleDuplicateRequirement = (req: Requirement) => {
-    createRequirement({
+  const handleDuplicateJob = (req: Job) => {
+    createJob({
       title: `${req.title} (Copy)`,
       category: req.category,
       description: req.description,
@@ -789,7 +852,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       proposalDeadline: req.proposalDeadline,
       deliverables: req.deliverables,
     });
-    showToast(`Requirement "${req.title}" duplicated.`);
+    showToast(`Job "${req.title}" duplicated.`);
   };
 
   // Generate insight line
@@ -800,10 +863,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     if (inProgressContracts.length > 0) {
       return `You have ${inProgressContracts.length} active project${inProgressContracts.length > 1 ? 's' : ''} in progress.`;
     }
-    if (activeRequirementsCount > 0) {
-      return `You have ${activeRequirementsCount} requirement${activeRequirementsCount > 1 ? 's' : ''} active on the marketplace.`;
+    if (activeJobsCount > 0) {
+      return `You have ${activeJobsCount} job${activeJobsCount > 1 ? 's' : ''} active on the marketplace.`;
     }
-    return 'Get started by creating your first service requirement.';
+    return 'Get started by creating your first service job.';
   };
 
   return (
@@ -831,41 +894,106 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => navigate('/client/requirements/new')}
+            onClick={() => navigate('/client/jobs/new')}
             className="flex items-center gap-2 px-3.5 py-2 bg-primary text-white hover:bg-primary-hover rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Create Requirement</span>
+            <span>Create Job</span>
           </button>
+        </div>
+      </div>
+
+      {/* Setup Checklist */}
+      <div className="bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs">
+        <h2 className="text-sm font-extrabold text-ink tracking-tight mb-3">
+          Finish setting up your account
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              showToast("Payment methods aren't wired up yet — Marché is still a frontend preview.")
+            }
+            className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-zinc-300 hover:bg-white transition-all cursor-pointer space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                Required to hire
+              </span>
+              <CreditCard className="w-4 h-4 text-ink-muted" />
+            </div>
+            <p className="text-xs font-bold text-primary underline underline-offset-2">
+              Add a payment method
+            </p>
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              Funds your escrow before a proposal is accepted. No cost until you hire.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/client/profile')}
+            className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-zinc-300 hover:bg-white transition-all cursor-pointer space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                Required to publish
+              </span>
+              <User className="w-4 h-4 text-ink-muted" />
+            </div>
+            <p className="text-xs font-bold text-primary underline underline-offset-2">
+              Complete your profile
+            </p>
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              Add your company details so vendors know who they're proposing to.
+            </p>
+          </button>
+
+          <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                Required to hire
+              </span>
+              <Mail className="w-4 h-4 text-ink-muted" />
+            </div>
+            {currentUser.verified ? (
+              <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Email address verified
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-ink">Email not verified</p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Compact KPI Cards Grid (4 cards in a single row on desktop) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Active Requirements */}
+        {/* Active Jobs */}
         <div
-          onClick={() => navigate('/client/requirements')}
+          onClick={() => navigate('/client/jobs')}
           className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink-muted">Active Requirements</span>
+            <span className="text-[11px] font-medium text-ink-muted">Active Jobs</span>
             <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
               Active
             </span>
           </div>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-extrabold text-ink group-hover:text-primary transition-colors">
-              {activeRequirementsCount}
+              {activeJobsCount}
             </p>
             <span className="text-[11px] text-ink-muted">
-              {activeRequirementsCount === 1 ? '1 brief' : `${activeRequirementsCount} briefs`}
+              {activeJobsCount === 1 ? '1 brief' : `${activeJobsCount} briefs`}
             </span>
           </div>
         </div>
 
         {/* New Proposals */}
         <div
-          onClick={() => navigate('/client/requirements')}
+          onClick={() => navigate('/client/jobs')}
           className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
@@ -886,7 +1014,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
         {/* Active Projects */}
         <div
-          onClick={() => navigate('/client/projects')}
+          onClick={() => navigate('/client/jobs')}
           className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
@@ -907,7 +1035,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
         {/* Completed Projects */}
         <div
-          onClick={() => navigate('/client/projects')}
+          onClick={() => navigate('/client/jobs')}
           className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
@@ -927,105 +1055,140 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         </div>
       </div>
 
-      {/* Main Content Side-By-Side Split Grid on Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Needs Your Attention */}
-        <div className="lg:col-span-5 bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <h2 className="text-base font-extrabold text-ink tracking-tight">
-                Needs Your Attention
-              </h2>
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold font-mono">
-              {attentionItems.length}
-            </span>
-          </div>
-
-          {attentionItems.length === 0 ? (
-            <div className="py-8 px-4 text-center space-y-2 bg-bg/60 rounded-xl border border-border">
-              <CheckCircle2 className="w-7 h-7 text-primary mx-auto" />
-              <h3 className="text-xs font-bold text-ink">All Clear!</h3>
-              <p className="text-[11px] text-ink-muted">
-                No pending proposals or escrow actions require your attention today.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-              {attentionItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl border border-border bg-bg/60 hover:bg-white hover:border-zinc-300 transition-all flex flex-col justify-between gap-3"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${item.badgeColor}`}
-                      >
-                        {item.badgeText}
-                      </span>
-                      <span className="text-[10px] text-ink-muted">Action Required</span>
-                    </div>
-                    <h3 className="text-xs font-bold text-ink line-clamp-1">
-                      {item.title}
-                    </h3>
-                    <p className="text-[11px] text-ink-muted line-clamp-2">
-                      {item.description}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={item.onAction}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                  >
-                    <span>{item.actionLabel}</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Recent Requirements */}
-        <div className="lg:col-span-7 bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+      {/* Overview */}
+      <div className="bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between border-b border-border pb-3">
             <div>
               <h2 className="text-base font-extrabold text-ink tracking-tight">
-                Recent Requirements
+                Overview
               </h2>
             </div>
-            <button
-              onClick={() => navigate('/client/requirements')}
-              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>View All ({myRequirements.length})</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/client/jobs')}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View All ({myJobs.length})</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <div className="flex items-center rounded-lg border border-border p-0.5 bg-bg">
+                <button
+                  type="button"
+                  onClick={() => setOverviewLayout('grid')}
+                  title="Card view"
+                  className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                    overviewLayout === 'grid' ? 'bg-white shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOverviewLayout('list')}
+                  title="List view"
+                  className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                    overviewLayout === 'list' ? 'bg-white shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  <ListIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
 
-          {myRequirements.length === 0 ? (
+          {myJobs.length === 0 ? (
             <div className="py-8 px-4 text-center space-y-2 bg-bg/60 rounded-xl border border-border">
               <Briefcase className="w-7 h-7 text-zinc-400 mx-auto" />
               <div className="space-y-0.5">
-                <h3 className="text-xs font-bold text-ink">No Requirements Yet</h3>
+                <h3 className="text-xs font-bold text-ink">No Jobs Yet</h3>
                 <p className="text-[11px] text-ink-muted">
-                  Post a service requirement to start receiving proposals.
+                  Post a service job to start receiving proposals.
                 </p>
               </div>
               <Button
                 size="sm"
                 icon={Plus}
-                onClick={() => navigate('/client/requirements/new')}
+                onClick={() => navigate('/client/jobs/new')}
               >
-                Create Requirement
+                Create Job
               </Button>
+            </div>
+          ) : overviewLayout === 'grid' ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => scrollCarousel('left')}
+                aria-label="Scroll left"
+                className="hidden sm:flex absolute -left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div
+                ref={carouselRef}
+                className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {myJobs.slice(0, 8).map((req) => {
+                  const pCount = proposals.filter((p) => p.jobId === req.id).length;
+                  return (
+                    <div
+                      key={req.id}
+                      onClick={() => navigate(`/client/jobs/${req.id}`)}
+                      className="group shrink-0 w-64 snap-start rounded-xl border border-border bg-white hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer p-3.5 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <IconTile icon={<Briefcase className="w-4 h-4" />} tone="primary" size="sm" />
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                            req.status === 'Paused'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-emerald-50 text-primary border-emerald-200'
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-ink line-clamp-2 group-hover:text-primary transition-colors">
+                          {req.title}
+                        </p>
+                        <p className="text-[11px] text-ink-muted">{req.category}</p>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-border">
+                        <span>
+                          ${req.budgetMin.toLocaleString()}–${req.budgetMax.toLocaleString()}
+                        </span>
+                        <span>
+                          <strong className="text-ink">{pCount}</strong> proposal{pCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/client/jobs/new')}
+                  className="shrink-0 w-64 snap-start rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-2 text-ink-muted hover:text-primary hover:border-primary hover:bg-primary/5 transition-all cursor-pointer p-3.5 min-h-[152px]"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="text-xs font-bold">Post a Job</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => scrollCarousel('right')}
+                aria-label="Scroll right"
+                className="hidden sm:flex absolute -right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           ) : (
             <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-              {myRequirements.slice(0, 4).map((req) => {
-                const pCount = proposals.filter((p) => p.requirementId === req.id).length;
+              {myJobs.slice(0, 4).map((req) => {
+                const pCount = proposals.filter((p) => p.jobId === req.id).length;
                 const isMenuOpen = activeMenuReqId === req.id;
 
                 return (
@@ -1037,7 +1200,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          onClick={() => navigate(`/client/requirements/${req.id}`)}
+                          onClick={() => navigate(`/client/jobs/${req.id}`)}
                           className="text-xs font-bold text-ink hover:text-primary transition-colors cursor-pointer truncate max-w-[220px] sm:max-w-none"
                         >
                           {req.title}
@@ -1065,7 +1228,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     {/* Actions */}
                     <div className="flex items-center gap-1.5 shrink-0 relative">
                       <button
-                        onClick={() => navigate(`/client/requirements/${req.id}`)}
+                        onClick={() => navigate(`/client/jobs/${req.id}`)}
                         className="px-3 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
                       >
                         View
@@ -1104,11 +1267,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                               <button
                                 onClick={() => {
                                   setActiveMenuReqId(null);
-                                  togglePauseRequirement(req.id);
+                                  togglePauseJob(req.id);
                                   showToast(
                                     req.status === 'Paused'
-                                      ? `Requirement "${req.title}" resumed.`
-                                      : `Requirement "${req.title}" paused.`
+                                      ? `Job "${req.title}" resumed.`
+                                      : `Job "${req.title}" paused.`
                                   );
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
@@ -1129,7 +1292,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                               <button
                                 onClick={() => {
                                   setActiveMenuReqId(null);
-                                  handleDuplicateRequirement(req);
+                                  handleDuplicateJob(req);
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
                               >
@@ -1160,14 +1323,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             </div>
           )}
         </div>
-      </div>
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmReq && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-border">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-ink">Delete Requirement?</h3>
+              <h3 className="text-base font-bold text-ink">Delete Job?</h3>
               <p className="text-xs text-ink-muted">
                 Are you sure you want to delete "{deleteConfirmReq.title}"? This action cannot be undone.
               </p>
@@ -1191,12 +1353,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         </div>
       )}
 
-      {/* Edit Requirement Modal */}
+      {/* Edit Job Modal */}
       {editModalReq && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-border">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-sm font-bold text-ink">Edit Requirement</h3>
+              <h3 className="text-sm font-bold text-ink">Edit Job</h3>
               <button
                 onClick={() => setEditModalReq(null)}
                 className="p-1 text-zinc-400 hover:text-zinc-700 rounded-lg cursor-pointer"

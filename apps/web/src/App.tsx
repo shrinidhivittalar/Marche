@@ -1,4 +1,4 @@
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Clock, UserPlus } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 
@@ -7,10 +7,16 @@ import { LandingPage } from './pages/LandingPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { AuthSignInPage, AuthSignUpPage } from './pages/AuthPages';
 import { ClientDashboard } from './pages/client/ClientDashboard';
-import { CreateRequirementPage } from './pages/client/CreateRequirementPage';
-import { RequirementDetailPage } from './pages/client/RequirementDetailPage';
+import { CreateJobPage } from './pages/client/CreateJobPage';
+import { JobDetailPage } from './pages/client/JobDetailPage';
 import { ProposalDetailPage } from './pages/client/ProposalDetailPage';
 import { ContractDetailPage } from './pages/client/ContractDetailPage';
+import { SearchTalentPage } from './pages/client/SearchTalentPage';
+import { YourHiresPage } from './pages/client/freelancers/YourHiresPage';
+import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
+import { WeeklySummaryPage } from './pages/client/finances/WeeklySummaryPage';
+import { TransactionsPage } from './pages/client/finances/TransactionsPage';
+import { BudgetsPage } from './pages/client/finances/BudgetsPage';
 
 import { ProviderHomePage } from './pages/provider/ProviderHomePage';
 import { SearchJobsPage } from './pages/provider/SearchJobsPage';
@@ -18,7 +24,7 @@ import { ProviderDashboard } from './pages/provider/ProviderDashboard';
 import { FinancesPage } from './pages/provider/FinancesPage';
 import { ContractsPage } from './pages/provider/ContractsPage';
 import { StatsPage } from './pages/provider/StatsPage';
-import { RequirementDetailProviderView } from './pages/provider/RequirementDetailProviderView';
+import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
 import { SubmitProposalPage } from './pages/provider/SubmitProposalPage';
 import { VendorProfilePage } from './pages/provider/VendorProfilePage';
 import { EditProfilePage } from './pages/EditProfilePage';
@@ -47,10 +53,21 @@ function AppContent() {
   const matchRoute = () => {
     // Client routes
     if (route === '/client/dashboard' || route === '/dashboard') return <ClientDashboard key="dashboard" view="dashboard" />;
-    if (route === '/client/requirements') return <ClientDashboard key="requirements" view="requirements" />;
-    if (route === '/client/projects') return <ClientDashboard key="projects" view="projects" />;
+    if (route === '/client/search') return <SearchTalentPage />;
+    if (route === '/client/freelancers/hired') return <YourHiresPage />;
+    if (route === '/client/freelancers/saved') return <SavedTalentPage />;
+    if (route === '/client/freelancers/refer') {
+      return (
+        <ComingSoonPage
+          title="Bring Freelancers to Marché"
+          description="Inviting providers you already work with outside Marché to join the platform will be available here soon."
+          icon={UserPlus}
+        />
+      );
+    }
+    if (route === '/client/jobs' || route === '/client/projects') return <ClientDashboard key="jobs" view="jobs" />;
     if (route === '/client/settings') return <ClientDashboard key="settings" view="settings" />;
-    if (route === '/client/requirements/new') return <CreateRequirementPage />;
+    if (route === '/client/jobs/new') return <CreateJobPage />;
     if (route === '/client/profile') return <EditProfilePage />;
     if (route === '/client/payments') {
       return (
@@ -62,9 +79,23 @@ function AppContent() {
       );
     }
 
-    if (route.startsWith('/client/requirements/')) {
-      const id = route.replace('/client/requirements/', '');
-      return <RequirementDetailPage id={id} />;
+    if (route === '/client/finances/weekly-summary') return <WeeklySummaryPage />;
+    if (route === '/client/finances/transactions') return <TransactionsPage />;
+    if (route === '/client/finances/budgets') return <BudgetsPage />;
+
+    if (route === '/client/work-diaries') {
+      return (
+        <ComingSoonPage
+          title="Work Diaries"
+          description="Time-tracking and work diary records aren't available yet in this preview."
+          icon={Clock}
+        />
+      );
+    }
+
+    if (route.startsWith('/client/jobs/')) {
+      const id = route.replace('/client/jobs/', '');
+      return <JobDetailPage id={id} />;
     }
 
     if (route.startsWith('/client/proposals/')) {
@@ -81,14 +112,14 @@ function AppContent() {
     if (route === '/provider/contracts') return <ContractsPage />;
     if (route === '/provider/stats') return <StatsPage />;
 
-    if (route.startsWith('/provider/requirements/')) {
-      const id = route.replace('/provider/requirements/', '');
-      return <RequirementDetailProviderView id={id} />;
+    if (route.startsWith('/provider/jobs/')) {
+      const id = route.replace('/provider/jobs/', '');
+      return <JobDetailProviderView id={id} />;
     }
 
     if (route.startsWith('/provider/submit-proposal/')) {
       const id = route.replace('/provider/submit-proposal/', '');
-      return <SubmitProposalPage requirementId={id} />;
+      return <SubmitProposalPage jobId={id} />;
     }
 
     if (route.startsWith('/profile/')) {

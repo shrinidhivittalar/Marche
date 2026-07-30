@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   User,
   UserRole,
-  Requirement,
+  Job,
   Proposal,
   Contract,
   AuditLogEntry,
@@ -14,7 +14,7 @@ import {
 } from '../types';
 import {
   DEMO_USERS,
-  INITIAL_REQUIREMENTS,
+  INITIAL_JOBS,
   INITIAL_PROPOSALS,
   INITIAL_CONTRACTS,
   INITIAL_AUDIT_LOGS,
@@ -29,7 +29,7 @@ interface AppContextType {
   route: string;
   navigate: (path: string) => void;
   goBack: () => void;
-  requirements: Requirement[];
+  jobs: Job[];
   proposals: Proposal[];
   contracts: Contract[];
   auditLogs: AuditLogEntry[];
@@ -43,9 +43,9 @@ interface AppContextType {
   setSelectedLocationFilter: (loc: string) => void;
   
   // Actions
-  createRequirement: (
+  createJob: (
     data: Omit<
-      Requirement,
+      Job,
       | 'id'
       | 'clientId'
       | 'clientName'
@@ -56,11 +56,11 @@ interface AppContextType {
       | 'createdAt'
       | 'status'
     >
-  ) => Requirement;
+  ) => Job;
   
   submitProposal: (
     data: {
-      requirementId: string;
+      jobId: string;
       bidAmount: number;
       coverLetter: string;
       estimatedDelivery: string;
@@ -71,7 +71,7 @@ interface AppContextType {
   ) => Proposal;
   
   hireVendorAndDepositEscrow: (
-    requirementId: string,
+    jobId: string,
     proposalId: string
   ) => Promise<{ contract: Contract; success: boolean }>;
 
@@ -88,15 +88,15 @@ interface AppContextType {
   sendMessage: (contractId: string, text: string) => void;
   markMessagesRead: (contractId: string) => void;
   
-  // Requirement quick actions
-  togglePauseRequirement: (id: string) => void;
-  deleteRequirement: (id: string) => void;
-  updateRequirement: (id: string, updates: Partial<Requirement>) => void;
+  // Job quick actions
+  togglePauseJob: (id: string) => void;
+  deleteJob: (id: string) => void;
+  updateJob: (id: string, updates: Partial<Job>) => void;
   
   // Helper helpers
-  getRequirementById: (id: string) => Requirement | undefined;
-  getProposalsForRequirement: (reqId: string) => Proposal[];
-  getContractByRequirementId: (reqId: string) => Contract | undefined;
+  getJobById: (id: string) => Job | undefined;
+  getProposalsForJob: (reqId: string) => Proposal[];
+  getContractByJobId: (reqId: string) => Contract | undefined;
   getContractById: (contractId: string) => Contract | undefined;
 }
 
@@ -124,9 +124,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : '/';
   });
 
-  const [requirements, setRequirements] = useState<Requirement[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_requirements`);
-    return saved ? JSON.parse(saved) : INITIAL_REQUIREMENTS;
+  const [jobs, setJobs] = useState<Job[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_jobs`);
+    return saved ? JSON.parse(saved) : INITIAL_JOBS;
   });
 
   const [proposals, setProposals] = useState<Proposal[]>(() => {
@@ -161,13 +161,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync state to local storage
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_user_role`, currentUser.role);
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_requirements`, JSON.stringify(requirements));
+    localStorage.setItem(`${LOCAL_STORAGE_KEY}_jobs`, JSON.stringify(jobs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_proposals`, JSON.stringify(proposals));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_contracts`, JSON.stringify(contracts));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_audit`, JSON.stringify(auditLogs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_notifications`, JSON.stringify(notifications));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_messages`, JSON.stringify(messages));
-  }, [currentUser, requirements, proposals, contracts, auditLogs, notifications, messages]);
+  }, [currentUser, jobs, proposals, contracts, auditLogs, notifications, messages]);
 
   // Handle popstate for back/forward navigation
   useEffect(() => {
@@ -255,10 +255,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) => [notif, ...prev]);
   };
 
-  // 1. Create Requirement
-  const createRequirement = (
+  // 1. Create Job
+  const createJob = (
     data: Omit<
-      Requirement,
+      Job,
       | 'id'
       | 'clientId'
       | 'clientName'
@@ -269,9 +269,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       | 'createdAt'
       | 'status'
     >
-  ): Requirement => {
-    const newReqId = `req_${Date.now()}`;
-    const newReq: Requirement = {
+  ): Job => {
+    const newReqId = `job_${Date.now()}`;
+    const newReq: Job = {
       ...data,
       id: newReqId,
       clientId: currentUser.id,
@@ -284,21 +284,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    setRequirements((prev) => [newReq, ...prev]);
+    setJobs((prev) => [newReq, ...prev]);
 
     addAuditLog(
-      'Requirement Published',
-      `Requirement ${newReq.id} ("${newReq.title}")`,
+      'Job Published',
+      `Job ${newReq.id} ("${newReq.title}")`,
       'Draft',
       'Escrow Held (Open for Proposals)'
     );
 
     addNotification(
       'user_vendor_1',
-      'New Matching Requirement',
-      `New requirement posted in ${newReq.category}: "${newReq.title}"`,
+      'New Matching Job',
+      `New job posted in ${newReq.category}: "${newReq.title}"`,
       'job_alert',
-      `/provider/requirements/${newReq.id}`
+      `/provider/jobs/${newReq.id}`
     );
 
     return newReq;
@@ -306,7 +306,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 2. Submit Proposal
   const submitProposal = (data: {
-    requirementId: string;
+    jobId: string;
     bidAmount: number;
     coverLetter: string;
     estimatedDelivery: string;
@@ -315,11 +315,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     milestones: { title: string; amount: number; description: string }[];
   }): Proposal => {
     const newPropId = `prop_${Date.now()}`;
-    const targetReq = requirements.find((r) => r.id === data.requirementId);
+    const targetReq = jobs.find((r) => r.id === data.jobId);
 
     const newProposal: Proposal = {
       id: newPropId,
-      requirementId: data.requirementId,
+      jobId: data.jobId,
       vendorId: currentUser.id,
       vendorName: currentUser.name,
       vendorAvatar: currentUser.avatar,
@@ -344,16 +344,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setProposals((prev) => [newProposal, ...prev]);
 
-    // Increment proposals count on requirement
-    setRequirements((prev) =>
+    // Increment proposals count on job
+    setJobs((prev) =>
       prev.map((r) =>
-        r.id === data.requirementId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r
+        r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r
       )
     );
 
     addAuditLog(
       'Proposal Submitted',
-      `Proposal ${newPropId} for Requirement ${data.requirementId}`,
+      `Proposal ${newPropId} for Job ${data.jobId}`,
       'None',
       `Submitted ($${data.bidAmount.toLocaleString()})`
     );
@@ -364,7 +364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'New Proposal Received',
         `${currentUser.name} submitted a proposal ($${data.bidAmount.toLocaleString()}) for "${targetReq.title}"`,
         'proposal',
-        `/client/requirements/${targetReq.id}`
+        `/client/jobs/${targetReq.id}`
       );
     }
 
@@ -373,14 +373,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 3. Hire & Deposit Escrow
   const hireVendorAndDepositEscrow = async (
-    requirementId: string,
+    jobId: string,
     proposalId: string
   ): Promise<{ contract: Contract; success: boolean }> => {
-    const req = requirements.find((r) => r.id === requirementId);
+    const req = jobs.find((r) => r.id === jobId);
     const prop = proposals.find((p) => p.id === proposalId);
 
     if (!req || !prop) {
-      throw new Error('Requirement or proposal not found');
+      throw new Error('Job or proposal not found');
     }
 
     const contractId = `ctr_${Date.now()}`;
@@ -388,8 +388,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newContract: Contract = {
       id: contractId,
-      requirementId: req.id,
-      requirementTitle: req.title,
+      jobId: req.id,
+      jobTitle: req.title,
       category: req.category,
       clientId: req.clientId,
       clientName: req.clientName,
@@ -424,15 +424,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProposals((prev) =>
       prev.map((p) => {
         if (p.id === proposalId) return { ...p, status: 'accepted' };
-        if (p.requirementId === requirementId) return { ...p, status: 'declined' };
+        if (p.jobId === jobId) return { ...p, status: 'declined' };
         return p;
       })
     );
 
-    // Update requirement state
-    setRequirements((prev) =>
+    // Update job state
+    setJobs((prev) =>
       prev.map((r) =>
-        r.id === requirementId ? { ...r, status: 'Confirmed' } : r
+        r.id === jobId ? { ...r, status: 'Confirmed' } : r
       )
     );
 
@@ -480,9 +480,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    setRequirements((prev) =>
+    setJobs((prev) =>
       prev.map((r) =>
-        r.id === ctr.requirementId ? { ...r, status: 'Completed' } : r
+        r.id === ctr.jobId ? { ...r, status: 'Completed' } : r
       )
     );
 
@@ -496,7 +496,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification(
       ctr.clientId,
       'Event Marked Delivered',
-      `${ctr.vendorName} marked the event "${ctr.requirementTitle}" as completed. Please confirm to release $${ctr.amount.toLocaleString()} escrow.`,
+      `${ctr.vendorName} marked the event "${ctr.jobTitle}" as completed. Please confirm to release $${ctr.amount.toLocaleString()} escrow.`,
       'escrow',
       `/contracts/${contractId}`
     );
@@ -521,9 +521,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    setRequirements((prev) =>
+    setJobs((prev) =>
       prev.map((r) =>
-        r.id === ctr.requirementId ? { ...r, status: 'Closed' } : r
+        r.id === ctr.jobId ? { ...r, status: 'Closed' } : r
       )
     );
 
@@ -537,7 +537,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification(
       ctr.vendorId,
       'Escrow Released!',
-      `Payout of $${ctr.amount.toLocaleString()} for "${ctr.requirementTitle}" has been released from escrow to your payout account.`,
+      `Payout of $${ctr.amount.toLocaleString()} for "${ctr.jobTitle}" has been released from escrow to your payout account.`,
       'escrow',
       `/contracts/${contractId}`
     );
@@ -549,13 +549,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     targetState: BookingState,
     reason: string
   ) => {
-    const req = requirements.find((r) => r.id === bookingId);
-    const ctr = contracts.find((c) => c.requirementId === bookingId || c.id === bookingId);
+    const req = jobs.find((r) => r.id === bookingId);
+    const ctr = contracts.find((c) => c.jobId === bookingId || c.id === bookingId);
 
     const oldState = req?.status || ctr?.bookingState || 'Unknown';
 
     if (req) {
-      setRequirements((prev) =>
+      setJobs((prev) =>
         prev.map((r) => (r.id === bookingId ? { ...r, status: targetState } : r))
       );
     }
@@ -614,15 +614,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const togglePauseRequirement = (id: string) => {
-    setRequirements((prev) =>
+  const togglePauseJob = (id: string) => {
+    setJobs((prev) =>
       prev.map((r) => {
         if (r.id === id) {
           const isPaused = r.status === 'Draft' || r.isPaused;
           const newStatus = isPaused ? 'Escrow Held' : 'Draft';
           addAuditLog(
-            'Requirement Status Changed',
-            `Requirement ${id}`,
+            'Job Status Changed',
+            `Job ${id}`,
             r.status,
             newStatus,
             isPaused ? 'Resumed by Client' : 'Paused by Client'
@@ -634,23 +634,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const deleteRequirement = (id: string) => {
-    setRequirements((prev) => prev.filter((r) => r.id !== id));
-    addAuditLog('Requirement Deleted', `Requirement ${id}`, 'Active', 'Deleted', 'Removed by Client');
+  const deleteJob = (id: string) => {
+    setJobs((prev) => prev.filter((r) => r.id !== id));
+    addAuditLog('Job Deleted', `Job ${id}`, 'Active', 'Deleted', 'Removed by Client');
   };
 
-  const updateRequirement = (id: string, updates: Partial<Requirement>) => {
-    setRequirements((prev) =>
+  const updateJob = (id: string, updates: Partial<Job>) => {
+    setJobs((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
     );
-    addAuditLog('Requirement Updated', `Requirement ${id}`, 'Before Update', 'Updated', 'Edited by Client');
+    addAuditLog('Job Updated', `Job ${id}`, 'Before Update', 'Updated', 'Edited by Client');
   };
 
-  const getRequirementById = (id: string) => requirements.find((r) => r.id === id);
-  const getProposalsForRequirement = (reqId: string) =>
-    proposals.filter((p) => p.requirementId === reqId);
-  const getContractByRequirementId = (reqId: string) =>
-    contracts.find((c) => c.requirementId === reqId);
+  const getJobById = (id: string) => jobs.find((r) => r.id === id);
+  const getProposalsForJob = (reqId: string) =>
+    proposals.filter((p) => p.jobId === reqId);
+  const getContractByJobId = (reqId: string) =>
+    contracts.find((c) => c.jobId === reqId);
   const getContractById = (contractId: string) =>
     contracts.find((c) => c.id === contractId);
 
@@ -663,7 +663,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         route,
         navigate,
         goBack,
-        requirements,
+        jobs,
         proposals,
         contracts,
         auditLogs,
@@ -675,7 +675,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedCategoryFilter,
         selectedLocationFilter,
         setSelectedLocationFilter,
-        createRequirement,
+        createJob,
         submitProposal,
         hireVendorAndDepositEscrow,
         vendorMarkCompleted,
@@ -685,12 +685,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markAllNotificationsRead,
         sendMessage,
         markMessagesRead,
-        togglePauseRequirement,
-        deleteRequirement,
-        updateRequirement,
-        getRequirementById,
-        getProposalsForRequirement,
-        getContractByRequirementId,
+        togglePauseJob,
+        deleteJob,
+        updateJob,
+        getJobById,
+        getProposalsForJob,
+        getContractByJobId,
         getContractById,
       }}
     >

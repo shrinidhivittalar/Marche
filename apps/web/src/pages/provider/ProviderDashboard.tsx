@@ -45,7 +45,7 @@ function getMonthCells(monthDate: Date): (Date | null)[] {
 }
 
 export const ProviderDashboard: React.FC = () => {
-  const { currentUser, proposals, contracts, requirements, navigate } = useApp();
+  const { currentUser, proposals, contracts, jobs, navigate } = useApp();
 
   const [activeTab, setActiveTab] = useState<'bids' | 'contracts' | 'calendar'>('bids');
 
@@ -209,18 +209,18 @@ export const ProviderDashboard: React.FC = () => {
             {myProposals.length === 0 ? (
               <EmptyState
                 title="No active proposals"
-                description="Browse open event requirements and submit your first bid."
-                actionLabel="Explore Requirements"
+                description="Browse open event jobs and submit your first bid."
+                actionLabel="Explore Jobs"
                 onAction={() => navigate('/provider/dashboard')}
               />
             ) : (
               myProposals.map((proposal) => {
-                const req = requirements.find((r) => r.id === proposal.requirementId);
+                const req = jobs.find((r) => r.id === proposal.jobId);
                 return (
                   <div
                     key={proposal.id}
                     onClick={() =>
-                      req && navigate(`/provider/requirements/${req.id}`)
+                      req && navigate(`/provider/jobs/${req.id}`)
                     }
                     className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
                   >
@@ -233,7 +233,7 @@ export const ProviderDashboard: React.FC = () => {
                           </span>
                         </div>
                         <h3 className="text-base font-bold text-ink">
-                          {req?.title || 'Event Requirement'}
+                          {req?.title || 'Event Job'}
                         </h3>
                       </div>
 
@@ -271,7 +271,7 @@ export const ProviderDashboard: React.FC = () => {
               <EmptyState
                 title="No active contracts yet"
                 description="When a client accepts your proposal and deposits escrow, your contract will appear here."
-                actionLabel="Explore Requirements"
+                actionLabel="Explore Jobs"
                 onAction={() => navigate('/provider/dashboard')}
               />
             ) : (
@@ -288,7 +288,7 @@ export const ProviderDashboard: React.FC = () => {
                         <StatusBadge status={ctr.escrowStatus} />
                       </div>
                       <h3 className="text-base font-bold text-ink">
-                        {ctr.requirementTitle}
+                        {ctr.jobTitle}
                       </h3>
                       <p className="text-xs text-ink-muted mt-0.5">
                         Client: {ctr.clientName}

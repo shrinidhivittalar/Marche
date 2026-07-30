@@ -15,7 +15,7 @@ import { useApp } from '../context/AppContext';
 import { Button } from '@marche/ui';
 
 export const LandingPage: React.FC = () => {
-  const { navigate, setCurrentUserRole, requirements } = useApp();
+  const { navigate, setCurrentUserRole, jobs } = useApp();
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
         </h1>
 
         <p className="text-lg md:text-xl text-ink-muted max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-          Post event requirements, receive direct proposals from verified creators, and hire with total security through simulated escrow protection.
+          Post event jobs, receive direct proposals from verified creators, and hire with total security through simulated escrow protection.
         </p>
 
         {/* Dual Role Quick Actions */}
@@ -71,10 +71,10 @@ export const LandingPage: React.FC = () => {
             iconPosition="right"
             onClick={() => {
               setCurrentUserRole('client');
-              navigate('/client/requirements/new');
+              navigate('/client/jobs/new');
             }}
           >
-            Post a Requirement
+            Post a Job
           </Button>
 
           <Button
@@ -87,7 +87,7 @@ export const LandingPage: React.FC = () => {
               navigate('/provider/dashboard');
             }}
           >
-            Explore Requirements
+            Explore Jobs
           </Button>
         </div>
 
@@ -116,7 +116,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Featured Live Requirements Ticker / Grid */}
+      {/* Featured Live Jobs Ticker / Grid */}
       <section className="px-6 py-16 bg-surface-subtle border-y border-border">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
@@ -125,7 +125,7 @@ export const LandingPage: React.FC = () => {
                 Live Marketplace
               </span>
               <h2 className="text-2xl md:text-3xl font-bold text-ink mt-1">
-                Recent Open Requirements
+                Recent Open Jobs
               </h2>
             </div>
             <Button
@@ -138,17 +138,17 @@ export const LandingPage: React.FC = () => {
                 navigate('/provider/dashboard');
               }}
             >
-              View All Requirements
+              View All Jobs
             </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {requirements.slice(0, 3).map((req) => (
+            {jobs.slice(0, 3).map((req) => (
               <div
                 key={req.id}
                 onClick={() => {
                   setCurrentUserRole('vendor');
-                  navigate(`/provider/requirements/${req.id}`);
+                  navigate(`/provider/jobs/${req.id}`);
                 }}
                 className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
               >

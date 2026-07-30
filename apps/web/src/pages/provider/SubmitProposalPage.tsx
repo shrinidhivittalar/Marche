@@ -15,23 +15,23 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
 
 interface SubmitProposalPageProps {
-  requirementId: string;
+  jobId: string;
 }
 
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
-  requirementId,
+  jobId,
 }) => {
-  const { getRequirementById, submitProposal, navigate } = useApp();
+  const { getJobById, submitProposal, navigate } = useApp();
 
-  const requirement = getRequirementById(requirementId);
+  const job = getJobById(jobId);
 
   // Form State
-  const [bidAmount, setBidAmount] = useState<number>(requirement?.budgetMin || 3200);
+  const [bidAmount, setBidAmount] = useState<number>(job?.budgetMin || 3200);
   const [proposedStartTime, setProposedStartTime] = useState<string>(
-    requirement?.eventStartTime || '18:00'
+    job?.eventStartTime || '18:00'
   );
   const [proposedEndTime, setProposedEndTime] = useState<string>(
-    requirement?.eventEndTime || '22:00'
+    job?.eventEndTime || '22:00'
   );
   const [estimatedDelivery, setEstimatedDelivery] = useState<string>('48 Hours');
   const [coverLetter, setCoverLetter] = useState<string>(
@@ -62,12 +62,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   const [msAmount, setMsAmount] = useState<number>(500);
   const [msDesc, setMsDesc] = useState('');
 
-  if (!requirement) {
+  if (!job) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
-          title="Requirement Not Found"
-          description="The requested requirement is unavailable."
+          title="Job Not Found"
+          description="The requested job is unavailable."
           actionLabel="Browse Marketplace"
           onAction={() => navigate('/provider/dashboard')}
         />
@@ -93,15 +93,15 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!coverLetter || !bidAmount) return;
-    if (requirement.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
+    if (job.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
 
     submitProposal({
-      requirementId: requirement.id,
+      jobId: job.id,
       bidAmount,
       coverLetter,
       estimatedDelivery,
-      proposedStartTime: requirement.timingMode === 'fixed' ? proposedStartTime : undefined,
-      proposedEndTime: requirement.timingMode === 'fixed' ? proposedEndTime : undefined,
+      proposedStartTime: job.timingMode === 'fixed' ? proposedStartTime : undefined,
+      proposedEndTime: job.timingMode === 'fixed' ? proposedEndTime : undefined,
       milestones,
     });
 
@@ -114,11 +114,11 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Top Navigation */}
       <button
-        onClick={() => navigate(`/provider/requirements/${requirement.id}`)}
+        onClick={() => navigate(`/provider/jobs/${job.id}`)}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        <span>Back to Requirement Specs</span>
+        <span>Back to Job Specs</span>
       </button>
 
       {/* Header */}
@@ -127,13 +127,13 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
           Service Provider Bid Proposal
         </span>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight mt-1">
-          Submit Proposal for "{requirement.title}"
+          Submit Proposal for "{job.title}"
         </h1>
         <p className="text-xs text-ink-muted mt-1">
-          Client Budget: ${requirement.budgetMin.toLocaleString()} - ${requirement.budgetMax.toLocaleString()} • {formatEventSchedule(requirement.eventDate, requirement.timingMode, requirement.eventStartTime, requirement.eventEndTime)}
+          Client Budget: ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()} • {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
         </p>
         <p className="text-xs text-amber-700 font-semibold mt-1">
-          Submit your proposal by {requirement.proposalDeadline}.
+          Submit your proposal by {job.proposalDeadline}.
         </p>
       </div>
 
@@ -161,7 +161,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               <label className="block text-xs font-semibold text-ink mb-1">
                 Confirmed Event Time
               </label>
-              {requirement.timingMode === 'fixed' ? (
+              {job.timingMode === 'fixed' ? (
                 <>
                   <div className="flex items-center gap-2">
                     <Input
@@ -184,7 +184,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 </>
               ) : (
                 <div className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink-muted">
-                  Flexible — deliver by {requirement.eventDate}
+                  Flexible — deliver by {job.eventDate}
                 </div>
               )}
             </div>

@@ -35,7 +35,7 @@ export const NotificationsPage: React.FC = () => {
             Notifications & Updates
           </h1>
           <p className="text-xs text-ink-muted mt-1">
-            Real-time state change updates for your requirements, proposals, and escrow contracts.
+            Real-time state change updates for your jobs, proposals, and escrow contracts.
           </p>
         </div>
 
@@ -89,10 +89,10 @@ export const NotificationsPage: React.FC = () => {
                 Get notified about new job alerts
               </h2>
               <p className="text-sm text-ink-muted max-w-sm">
-                We'll alert you here the moment a new requirement matches your services.
+                We'll alert you here the moment a new job matches your services.
               </p>
             </div>
-            <Button onClick={() => navigate('/provider/dashboard')}>Explore Requirements</Button>
+            <Button onClick={() => navigate('/provider/dashboard')}>Explore Jobs</Button>
           </div>
         ) : (
           <EmptyState

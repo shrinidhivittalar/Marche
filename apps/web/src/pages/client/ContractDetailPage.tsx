@@ -95,7 +95,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <span className="text-primary font-bold">{contract.category}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-              {contract.requirementTitle}
+              {contract.jobTitle}
             </h1>
           </div>
 

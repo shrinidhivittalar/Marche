@@ -36,7 +36,7 @@ type FeedTab = 'best' | 'recent' | 'saved' | 'invites';
 export const ProviderHomePage: React.FC = () => {
   const {
     currentUser,
-    requirements,
+    jobs,
     navigate,
     searchQuery,
     setSearchQuery,
@@ -53,9 +53,9 @@ export const ProviderHomePage: React.FC = () => {
   const [pendingLocation, setPendingLocation] = useState(locationFilter);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
-  const selectedRequirement = selectedRequirementId
-    ? requirements.find((r) => r.id === selectedRequirementId)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const selectedJob = selectedJobId
+    ? jobs.find((r) => r.id === selectedJobId)
     : undefined;
 
   const toggleSaved = (id: string) => {
@@ -70,13 +70,13 @@ export const ProviderHomePage: React.FC = () => {
     });
   };
 
-  const dismissRequirement = (id: string) => {
+  const dismissJob = (id: string) => {
     setDismissedIds((prev) => new Set(prev).add(id));
   };
 
-  const openRequirements = requirements.filter((r) => !dismissedIds.has(r.id));
+  const openJobs = jobs.filter((r) => !dismissedIds.has(r.id));
 
-  const filteredFeed = openRequirements.filter((req) => {
+  const filteredFeed = openJobs.filter((req) => {
     const matchesCategory =
       selectedCategoryFilter === 'All' || req.category === selectedCategoryFilter;
     const matchesSearch =
@@ -96,7 +96,7 @@ export const ProviderHomePage: React.FC = () => {
       : filteredFeed; // 'best' — default relevance order; 'invites' handled separately below
 
   // Search-only match set (ignoring category/location) — used to compute facet counts
-  const searchMatched = openRequirements.filter(
+  const searchMatched = openJobs.filter(
     (req) =>
       req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -181,17 +181,17 @@ export const ProviderHomePage: React.FC = () => {
         <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
         <Input
           type="text"
-          placeholder="Search requirements..."
+          placeholder="Search jobs..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
         />
       </div>
 
-      {/* Requirements Feed */}
+      {/* Jobs Feed */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-bold text-ink">Requirements you might like</h2>
+          <h2 className="text-lg font-bold text-ink">Jobs you might like</h2>
           <p className="text-xs text-ink-muted mt-0.5">
             Browse open client requests that match your services. Ordered by relevance.
           </p>
@@ -236,14 +236,14 @@ export const ProviderHomePage: React.FC = () => {
         {feedTab === 'invites' ? (
           <EmptyState
             title="No invitations yet"
-            description="When clients invite you directly to bid on a requirement, it will show up here."
+            description="When clients invite you directly to bid on a job, it will show up here."
           />
         ) : feedItems.length === 0 ? (
           <EmptyState
-            title={feedTab === 'saved' ? 'No saved requirements' : 'No requirements match your filters'}
+            title={feedTab === 'saved' ? 'No saved jobs' : 'No jobs match your filters'}
             description={
               feedTab === 'saved'
-                ? 'Tap the heart icon on a requirement to save it here for later.'
+                ? 'Tap the heart icon on a job to save it here for later.'
                 : 'Try adjusting your keyword search or category filters.'
             }
           />
@@ -252,7 +252,7 @@ export const ProviderHomePage: React.FC = () => {
             {feedItems.map((req) => (
               <div
                 key={req.id}
-                onClick={() => setSelectedRequirementId(req.id)}
+                onClick={() => setSelectedJobId(req.id)}
                 className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -263,7 +263,7 @@ export const ProviderHomePage: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        dismissRequirement(req.id);
+                        dismissJob(req.id);
                       }}
                       title="Not interested"
                       className="text-zinc-400 hover:text-ink cursor-pointer"
@@ -313,36 +313,36 @@ export const ProviderHomePage: React.FC = () => {
         )}
       </div>
 
-      {/* Requirement Overview Dialog */}
+      {/* Job Overview Dialog */}
       <Dialog
-        open={!!selectedRequirementId}
-        onOpenChange={(open) => !open && setSelectedRequirementId(null)}
+        open={!!selectedJobId}
+        onOpenChange={(open) => !open && setSelectedJobId(null)}
       >
         <DialogContent className="max-w-lg">
-          {selectedRequirement && (
+          {selectedJob && (
             <>
               <DialogHeader>
                 <div>
                   <span className="inline-block px-2.5 py-0.5 rounded-full bg-surface-subtle text-[11px] font-bold text-primary border border-border mb-2">
-                    {selectedRequirement.category}
+                    {selectedJob.category}
                   </span>
-                  <DialogTitle>{selectedRequirement.title}</DialogTitle>
+                  <DialogTitle>{selectedJob.title}</DialogTitle>
                   <DialogDescription>
-                    Posted {new Date(selectedRequirement.createdAt).toLocaleDateString()} •{' '}
-                    {selectedRequirement.proposalsCount} proposals
+                    Posted {new Date(selectedJob.createdAt).toLocaleDateString()} •{' '}
+                    {selectedJob.proposalsCount} proposals
                   </DialogDescription>
                 </div>
               </DialogHeader>
 
               <DialogBody className="space-y-4">
-                <p className="text-xs text-ink leading-relaxed">{selectedRequirement.description}</p>
+                <p className="text-xs text-ink leading-relaxed">{selectedJob.description}</p>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 bg-bg border border-border rounded-xl">
                     <span className="block text-[10px] text-ink-muted uppercase font-mono">Budget</span>
                     <span className="font-bold text-primary">
-                      ${selectedRequirement.budgetMin.toLocaleString()} - $
-                      {selectedRequirement.budgetMax.toLocaleString()}
+                      ${selectedJob.budgetMin.toLocaleString()} - $
+                      {selectedJob.budgetMax.toLocaleString()}
                     </span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl">
@@ -351,39 +351,39 @@ export const ProviderHomePage: React.FC = () => {
                     </span>
                     <span className="font-semibold text-ink">
                       {formatEventSchedule(
-                        selectedRequirement.eventDate,
-                        selectedRequirement.timingMode,
-                        selectedRequirement.eventStartTime,
-                        selectedRequirement.eventEndTime,
+                        selectedJob.eventDate,
+                        selectedJob.timingMode,
+                        selectedJob.eventStartTime,
+                        selectedJob.eventEndTime,
                       )}
                     </span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
                     <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="font-semibold text-ink">{selectedRequirement.location}</span>
+                    <span className="font-semibold text-ink">{selectedJob.location}</span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
                     <CalendarClock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                     <span className="font-semibold text-amber-700">
-                      Due {selectedRequirement.proposalDeadline}
+                      Due {selectedJob.proposalDeadline}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-ink-muted">
-                  {selectedRequirement.clientVerified && (
+                  {selectedJob.clientVerified && (
                     <span className="flex items-center gap-1 text-primary font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Payment Verified
                     </span>
                   )}
-                  <span>{selectedRequirement.clientCompany || selectedRequirement.clientName}</span>
+                  <span>{selectedJob.clientCompany || selectedJob.clientName}</span>
                 </div>
               </DialogBody>
 
               <DialogFooter>
                 <button
-                  onClick={() => setSelectedRequirementId(null)}
+                  onClick={() => setSelectedJobId(null)}
                   className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer mr-auto"
                 >
                   Close
@@ -392,7 +392,7 @@ export const ProviderHomePage: React.FC = () => {
                   size="sm"
                   icon={ArrowRight}
                   iconPosition="right"
-                  onClick={() => navigate(`/provider/requirements/${selectedRequirement.id}`)}
+                  onClick={() => navigate(`/provider/jobs/${selectedJob.id}`)}
                 >
                   View Full Details
                 </Button>

@@ -21,31 +21,31 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatTimeRange } from '../../lib/formatTime';
 
-interface RequirementDetailPageProps {
+interface JobDetailPageProps {
   id: string;
 }
 
-export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id }) => {
+export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
   const {
-    getRequirementById,
-    getProposalsForRequirement,
-    getContractByRequirementId,
+    getJobById,
+    getProposalsForJob,
+    getContractByJobId,
     auditLogs,
     navigate,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'proposals' | 'specs' | 'audit'>('proposals');
 
-  const requirement = getRequirementById(id);
-  const proposals = getProposalsForRequirement(id);
-  const activeContract = getContractByRequirementId(id);
+  const job = getJobById(id);
+  const proposals = getProposalsForJob(id);
+  const activeContract = getContractByJobId(id);
 
-  if (!requirement) {
+  if (!job) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
-          title="Requirement Not Found"
-          description="The requested requirement does not exist or was removed."
+          title="Job Not Found"
+          description="The requested job does not exist or was removed."
           actionLabel="Back to Dashboard"
           onAction={() => navigate('/client/dashboard')}
         />
@@ -53,7 +53,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
     );
   }
 
-  const reqLogs = auditLogs.filter((log) => log.targetEntity.includes(requirement.id));
+  const reqLogs = auditLogs.filter((log) => log.targetEntity.includes(job.id));
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -68,7 +68,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
         </button>
 
         <div className="flex items-center gap-2">
-          <StatusBadge status={requirement.status} />
+          <StatusBadge status={job.status} />
           {activeContract && (
             <Button
               size="sm"
@@ -82,21 +82,21 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
         </div>
       </div>
 
-      {/* Main Requirement Header Card */}
+      {/* Main Job Header Card */}
       <Card className="p-8 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 border-b border-border pb-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-surface-subtle text-xs font-bold text-primary border border-border">
-                {requirement.category}
+                {job.category}
               </span>
               <span className="text-xs font-mono text-ink-muted">
-                Posted {new Date(requirement.createdAt).toLocaleDateString()}
+                Posted {new Date(job.createdAt).toLocaleDateString()}
               </span>
             </div>
 
             <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-              {requirement.title}
+              {job.title}
             </h1>
           </div>
 
@@ -105,7 +105,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
               Budget Bounds
             </span>
             <span className="text-xl font-bold text-primary">
-              ${requirement.budgetMin.toLocaleString()} - ${requirement.budgetMax.toLocaleString()}
+              ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()}
             </span>
           </div>
         </div>
@@ -120,7 +120,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
               <span className="block text-[10px] text-ink-muted uppercase font-mono">
                 Event Date
               </span>
-              <span className="font-semibold text-ink">{requirement.eventDate}</span>
+              <span className="font-semibold text-ink">{job.eventDate}</span>
             </div>
           </div>
 
@@ -133,8 +133,8 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
                 Event Time
               </span>
               <span className="font-semibold text-ink">
-                {requirement.eventStartTime && requirement.eventEndTime
-                  ? formatTimeRange(requirement.eventStartTime, requirement.eventEndTime)
+                {job.eventStartTime && job.eventEndTime
+                  ? formatTimeRange(job.eventStartTime, job.eventEndTime)
                   : 'Flexible'}
               </span>
             </div>
@@ -149,7 +149,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
                 Location
               </span>
               <span className="font-semibold text-ink truncate max-w-[140px] block">
-                {requirement.location}
+                {job.location}
               </span>
             </div>
           </div>
@@ -176,7 +176,7 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
               <span className="block text-[10px] text-ink-muted uppercase font-mono">
                 Proposal Deadline
               </span>
-              <span className="font-semibold text-ink">{requirement.proposalDeadline}</span>
+              <span className="font-semibold text-ink">{job.proposalDeadline}</span>
             </div>
           </div>
         </div>
@@ -224,9 +224,9 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
           {proposals.length === 0 ? (
             <EmptyState
               title="No proposals received yet"
-              description="Your requirement is live in the marketplace. Service providers are reviewing the specifications."
+              description="Your job is live in the marketplace. Service providers are reviewing the specifications."
               actionLabel="Switch to Service Provider Mode to Submit Bid"
-              onAction={() => navigate(`/provider/requirements/${requirement.id}`)}
+              onAction={() => navigate(`/provider/jobs/${job.id}`)}
             />
           ) : (
             proposals.map((proposal) => (
@@ -291,19 +291,19 @@ export const RequirementDetailPage: React.FC<RequirementDetailPageProps> = ({ id
         <Card className="p-8 space-y-6">
           <div>
             <h3 className="text-xs font-mono uppercase font-bold text-primary mb-2">
-              Full Requirement Scope
+              Full Job Scope
             </h3>
             <p className="text-xs text-ink leading-relaxed whitespace-pre-line">
-              {requirement.description}
+              {job.description}
             </p>
           </div>
 
           <div className="pt-6 border-t border-border">
             <h3 className="text-xs font-mono uppercase font-bold text-primary mb-4">
-              Required Deliverables ({requirement.deliverables.length})
+              Required Deliverables ({job.deliverables.length})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {requirement.deliverables.map((item, idx) => (
+              {job.deliverables.map((item, idx) => (
                 <div
                   key={idx}
                   className="p-3 bg-bg border border-border rounded-xl text-xs text-ink flex items-center gap-2.5"

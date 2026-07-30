@@ -25,7 +25,7 @@ interface ProposalDetailPageProps {
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { proposals, getRequirementById, hireVendorAndDepositEscrow, navigate } = useApp();
+  const { proposals, getJobById, hireVendorAndDepositEscrow, navigate } = useApp();
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [simulatedOutcome, setSimulatedOutcome] = useState<'SUCCESS' | 'FAILURE' | 'TIMEOUT'>('SUCCESS');
@@ -33,9 +33,9 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const proposal = proposals.find((p) => p.id === id);
-  const requirement = proposal ? getRequirementById(proposal.requirementId) : undefined;
+  const job = proposal ? getJobById(proposal.jobId) : undefined;
 
-  if (!proposal || !requirement) {
+  if (!proposal || !job) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
@@ -69,7 +69,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
 
     try {
       const { contract } = await hireVendorAndDepositEscrow(
-        requirement.id,
+        job.id,
         proposal.id
       );
       setIsProcessing(false);
@@ -86,11 +86,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       {/* Top Back Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(`/client/requirements/${requirement.id}`)}
+          onClick={() => navigate(`/client/jobs/${job.id}`)}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Requirement Inbox</span>
+          <span>Back to Job Inbox</span>
         </button>
 
         <StatusBadge status={proposal.status} />
@@ -206,14 +206,14 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
 
             <div className="space-y-2 text-xs border-t border-b border-border py-4">
               <div className="flex justify-between">
-                <span className="text-ink-muted">Requirement:</span>
+                <span className="text-ink-muted">Job:</span>
                 <span className="font-medium text-ink truncate max-w-[140px]">
-                  {requirement.title}
+                  {job.title}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-ink-muted">Event Date:</span>
-                <span className="font-medium text-ink">{requirement.eventDate}</span>
+                <span className="font-medium text-ink">{job.eventDate}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-ink-muted">Confirmed Time:</span>
@@ -276,9 +276,9 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
               <span className="font-bold text-ink">{proposal.vendorName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-ink-muted">Requirement:</span>
+              <span className="text-ink-muted">Job:</span>
               <span className="font-medium text-ink truncate max-w-[200px]">
-                {requirement.title}
+                {job.title}
               </span>
             </div>
             <div className="flex justify-between pt-2 border-t border-border font-bold text-sm">

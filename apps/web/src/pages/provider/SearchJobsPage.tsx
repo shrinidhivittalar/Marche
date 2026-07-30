@@ -45,7 +45,7 @@ function FilterSection({ title, children }: { title: string; children: React.Rea
 }
 
 export const SearchJobsPage: React.FC = () => {
-  const { requirements, navigate } = useApp();
+  const { jobs, navigate } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('best');
@@ -64,7 +64,7 @@ export const SearchJobsPage: React.FC = () => {
     setter(next);
   };
 
-  const openJobs = requirements.filter((r) => !dismissedIds.has(r.id));
+  const openJobs = jobs.filter((r) => !dismissedIds.has(r.id));
 
   const searchMatched = openJobs.filter(
     (r) =>
@@ -123,7 +123,7 @@ export const SearchJobsPage: React.FC = () => {
       <div className="pb-6 border-b border-border">
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">Search Jobs</h1>
         <p className="text-xs text-ink-muted mt-1">
-          Filter open requirements by budget, category, and client details to find your next event.
+          Filter open jobs by budget, category, and client details to find your next event.
         </p>
       </div>
 
@@ -229,7 +229,7 @@ export const SearchJobsPage: React.FC = () => {
               {sortedJobs.map((req) => (
                 <div
                   key={req.id}
-                  onClick={() => navigate(`/provider/requirements/${req.id}`)}
+                  onClick={() => navigate(`/provider/jobs/${req.id}`)}
                   className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-3">

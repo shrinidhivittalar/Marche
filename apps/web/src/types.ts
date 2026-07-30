@@ -54,7 +54,7 @@ export type BookingState =
 
 export type EscrowStatus = 'none' | 'HELD' | 'RELEASED';
 
-export interface Requirement {
+export interface Job {
   id: string;
   clientId: string;
   clientName: string;
@@ -89,7 +89,7 @@ export interface ProposalMilestone {
 
 export interface Proposal {
   id: string;
-  requirementId: string;
+  jobId: string;
   vendorId: string;
   vendorName: string;
   vendorAvatar: string;
@@ -100,8 +100,8 @@ export interface Proposal {
   bidAmount: number;
   coverLetter: string;
   estimatedDelivery: string;
-  proposedStartTime?: string; // HH:MM, 24h — only when the requirement's timingMode is 'fixed'
-  proposedEndTime?: string; // HH:MM, 24h — only when the requirement's timingMode is 'fixed'
+  proposedStartTime?: string; // HH:MM, 24h — only when the job's timingMode is 'fixed'
+  proposedEndTime?: string; // HH:MM, 24h — only when the job's timingMode is 'fixed'
   milestones: ProposalMilestone[];
   status: 'submitted' | 'accepted' | 'declined' | 'withdrawn';
   submittedAt: string;
@@ -110,8 +110,8 @@ export interface Proposal {
 
 export interface Contract {
   id: string;
-  requirementId: string;
-  requirementTitle: string;
+  jobId: string;
+  jobTitle: string;
   category: EventCategory;
   clientId: string;
   clientName: string;
@@ -168,6 +168,89 @@ export interface VendorService {
   description: string;
   includedSlots: TimeSlot[];
   galleryImages: string[];
+}
+
+export type EnglishLevel = 'Basic' | 'Conversational' | 'Fluent' | 'Native or bilingual';
+
+export interface TalentProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  portfolioImage: string;
+  category: EventCategory;
+  headline: string;
+  bio: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  timezone: string; // IANA time zone id, e.g. 'America/New_York'
+  hourlyRate: number;
+  verified: boolean;
+  availableNow: boolean;
+  jobsCompleted: number;
+  skills: string[];
+  englishLevel: EnglishLevel;
+  hoursBilled: number;
+  earned: number;
+  hoursPerWeek: string;
+  openToContractToHire: boolean;
+  avgResponseHours: string;
+}
+
+export type WorkHistoryStatus = 'completed' | 'in_progress';
+export type PriceType = 'Fixed price' | 'Hourly';
+
+export interface ProviderWorkHistoryEntry {
+  id: string;
+  vendorId: string;
+  jobTitle: string;
+  category: EventCategory;
+  clientName: string;
+  clientAvatar: string;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD — absent while status is 'in_progress'
+  status: WorkHistoryStatus;
+  priceType: PriceType;
+  amount: number;
+  rating?: number; // present when status is 'completed'
+  review?: string; // present when status is 'completed'
+  tags?: string[]; // insight tags, present when status is 'completed'
+}
+
+export interface ProviderPortfolioItem {
+  id: string;
+  vendorId: string;
+  image: string;
+  caption: string;
+}
+
+export interface ProviderProjectPackage {
+  id: string;
+  vendorId: string;
+  image: string;
+  title: string;
+  priceFrom: number;
+  deliveryDays: number;
+}
+
+export interface ProviderTestimonial {
+  id: string;
+  vendorId: string;
+  quote: string;
+  authorName: string;
+  authorTitle: string;
+  company: string;
+  date: string; // YYYY-MM-DD
+  verified: boolean;
+}
+
+export interface ProviderEmploymentEntry {
+  id: string;
+  vendorId: string;
+  title: string;
+  company: string;
+  startDate: string; // YYYY-MM
+  endDate?: string; // YYYY-MM — absent means current
 }
 
 export interface AvailabilitySlot {

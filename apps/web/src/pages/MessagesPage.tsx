@@ -23,7 +23,7 @@ interface ConversationView {
   contactName: string;
   contactAvatar: string;
   category: string;
-  requirementTitle: string;
+  jobTitle: string;
 }
 
 function formatMessageTime(timestamp: string): string {
@@ -57,7 +57,7 @@ export const MessagesPage: React.FC = () => {
       contactName: isClientView ? ctr.vendorName : ctr.clientName,
       contactAvatar: isClientView ? ctr.vendorAvatar : ctr.clientAvatar,
       category: ctr.category,
-      requirementTitle: ctr.requirementTitle,
+      jobTitle: ctr.jobTitle,
     };
   });
 
@@ -106,7 +106,7 @@ export const MessagesPage: React.FC = () => {
       (c) =>
         c.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.requirementTitle.toLowerCase().includes(searchQuery.toLowerCase())
+        c.jobTitle.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .filter((c) => !showUnreadOnly || isUnread(c.id))
     .filter((c) => !showFavoritesOnly || favoriteIds.has(c.id));
@@ -139,10 +139,10 @@ export const MessagesPage: React.FC = () => {
             </div>
             <Button
               onClick={() =>
-                navigate(currentUser.role === 'vendor' ? '/provider/search' : '/client/requirements')
+                navigate(currentUser.role === 'vendor' ? '/provider/search' : '/client/jobs')
               }
             >
-              {currentUser.role === 'vendor' ? 'Search Jobs' : 'View Your Requirements'}
+              {currentUser.role === 'vendor' ? 'Search Jobs' : 'View Your Jobs'}
             </Button>
           </div>
         </div>
@@ -288,7 +288,7 @@ export const MessagesPage: React.FC = () => {
 
                     <div className="flex items-center gap-1 text-[10px] font-medium text-primary pt-0.5">
                       <Briefcase className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{conv.requirementTitle}</span>
+                      <span className="truncate">{conv.jobTitle}</span>
                     </div>
                   </div>
                 </div>
@@ -322,7 +322,7 @@ export const MessagesPage: React.FC = () => {
               <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-emerald-200">
                 <Shield className="w-3.5 h-3.5" />
                 <span className="truncate max-w-[200px]">
-                  {activeConv.requirementTitle}
+                  {activeConv.jobTitle}
                 </span>
               </div>
             </div>

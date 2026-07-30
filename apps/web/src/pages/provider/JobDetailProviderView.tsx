@@ -18,24 +18,24 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
 
-interface RequirementDetailProviderViewProps {
+interface JobDetailProviderViewProps {
   id: string;
 }
 
-export const RequirementDetailProviderView: React.FC<
-  RequirementDetailProviderViewProps
+export const JobDetailProviderView: React.FC<
+  JobDetailProviderViewProps
 > = ({ id }) => {
-  const { getRequirementById, proposals, currentUser, navigate, goBack } = useApp();
+  const { getJobById, proposals, currentUser, navigate, goBack } = useApp();
 
-  const requirement = getRequirementById(id);
+  const job = getJobById(id);
 
-  if (!requirement) {
+  if (!job) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
-          title="Requirement Not Found"
-          description="The requested requirement is unavailable."
-          actionLabel="Browse Requirements"
+          title="Job Not Found"
+          description="The requested job is unavailable."
+          actionLabel="Browse Jobs"
           onAction={() => navigate('/provider/dashboard')}
         />
       </div>
@@ -44,7 +44,7 @@ export const RequirementDetailProviderView: React.FC<
 
   // Check if current vendor already submitted a proposal
   const existingProposal = proposals.find(
-    (p) => p.requirementId === id && p.vendorId === currentUser.id
+    (p) => p.jobId === id && p.vendorId === currentUser.id
   );
 
   return (
@@ -59,7 +59,7 @@ export const RequirementDetailProviderView: React.FC<
           <span>Back to Marketplace</span>
         </button>
 
-        <StatusBadge status={requirement.status} />
+        <StatusBadge status={job.status} />
       </div>
 
       <div className="grid grid-cols-1 @2xl:grid-cols-3 gap-8">
@@ -69,24 +69,24 @@ export const RequirementDetailProviderView: React.FC<
             <div className="pb-6 border-b border-border">
               <div className="flex items-center gap-2 mb-2">
                 <span className="px-3 py-1 rounded-full bg-surface-subtle text-xs font-bold text-primary border border-border">
-                  {requirement.category}
+                  {job.category}
                 </span>
                 <span className="text-xs font-mono text-ink-muted">
-                  Posted {new Date(requirement.createdAt).toLocaleDateString()}
+                  Posted {new Date(job.createdAt).toLocaleDateString()}
                 </span>
               </div>
 
               <h1 className="text-2xl font-extrabold text-ink tracking-tight">
-                {requirement.title}
+                {job.title}
               </h1>
             </div>
 
             <div>
               <h3 className="text-xs font-mono uppercase font-bold text-primary mb-2">
-                Requirement Description
+                Job Description
               </h3>
               <p className="text-xs text-ink leading-relaxed whitespace-pre-line bg-bg p-4 border border-border rounded-xl">
-                {requirement.description}
+                {job.description}
               </p>
             </div>
 
@@ -96,7 +96,7 @@ export const RequirementDetailProviderView: React.FC<
                 Expected Deliverables
               </h3>
               <div className="space-y-2">
-                {requirement.deliverables.map((d, idx) => (
+                {job.deliverables.map((d, idx) => (
                   <div
                     key={idx}
                     className="p-3 bg-white border border-border rounded-xl text-xs text-ink flex items-center gap-2.5"
@@ -118,7 +118,7 @@ export const RequirementDetailProviderView: React.FC<
                 Client Budget Range
               </span>
               <p className="text-2xl font-extrabold text-primary">
-                ${requirement.budgetMin.toLocaleString()} - ${requirement.budgetMax.toLocaleString()}
+                ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()}
               </p>
             </div>
 
@@ -128,7 +128,7 @@ export const RequirementDetailProviderView: React.FC<
                 <div>
                   <span className="block text-[10px] text-ink-muted">Event Date & Time</span>
                   <span className="font-semibold text-ink">
-                    {formatEventSchedule(requirement.eventDate, requirement.timingMode, requirement.eventStartTime, requirement.eventEndTime)}
+                    {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
                   </span>
                 </div>
               </div>
@@ -137,7 +137,7 @@ export const RequirementDetailProviderView: React.FC<
                 <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
                 <div>
                   <span className="block text-[10px] text-ink-muted">Venue / City</span>
-                  <span className="font-semibold text-ink">{requirement.location}</span>
+                  <span className="font-semibold text-ink">{job.location}</span>
                 </div>
               </div>
 
@@ -145,7 +145,7 @@ export const RequirementDetailProviderView: React.FC<
                 <CalendarClock className="w-4 h-4 text-amber-600 shrink-0" />
                 <div>
                   <span className="block text-[10px] text-ink-muted">Proposal Deadline</span>
-                  <span className="font-semibold text-amber-700">{requirement.proposalDeadline}</span>
+                  <span className="font-semibold text-amber-700">{job.proposalDeadline}</span>
                 </div>
               </div>
             </div>
@@ -157,16 +157,16 @@ export const RequirementDetailProviderView: React.FC<
               </span>
               <div className="flex items-center gap-2.5 pt-1">
                 <img
-                  src={requirement.clientAvatar}
-                  alt={requirement.clientName}
+                  src={job.clientAvatar}
+                  alt={job.clientName}
                   className="w-8 h-8 rounded-full object-cover ring-1 ring-border"
                 />
                 <div>
                   <span className="block font-bold text-ink">
-                    {requirement.clientName}
+                    {job.clientName}
                   </span>
                   <span className="block text-[10px] text-ink-muted">
-                    {requirement.clientCompany || 'Verified Client'}
+                    {job.clientCompany || 'Verified Client'}
                   </span>
                 </div>
               </div>
@@ -184,7 +184,7 @@ export const RequirementDetailProviderView: React.FC<
                 size="lg"
                 className="w-full"
                 icon={Send}
-                onClick={() => navigate(`/provider/submit-proposal/${requirement.id}`)}
+                onClick={() => navigate(`/provider/submit-proposal/${job.id}`)}
               >
                 Submit Proposal Now
               </Button>

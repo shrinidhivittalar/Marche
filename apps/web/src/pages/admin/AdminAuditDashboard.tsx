@@ -18,14 +18,14 @@ import { BookingState } from '../../types';
 
 export const AdminAuditDashboard: React.FC = () => {
   const {
-    requirements,
+    jobs,
     contracts,
     auditLogs,
     adminOverrideBookingState,
     navigate,
   } = useApp();
 
-  const [selectedBookingId, setSelectedBookingId] = useState<string>('req_101');
+  const [selectedBookingId, setSelectedBookingId] = useState<string>('job_101');
   const [overrideTargetState, setOverrideTargetState] = useState<BookingState>('Cancelled');
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [overrideModalOpen, setOverrideModalOpen] = useState<boolean>(false);
@@ -203,14 +203,14 @@ export const AdminAuditDashboard: React.FC = () => {
               onChange={(e) => setSelectedBookingId(e.target.value)}
               className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
             >
-              {requirements.map((r) => (
+              {jobs.map((r) => (
                 <option key={r.id} value={r.id}>
-                  Requirement {r.id}: {r.title} ({r.status})
+                  Job {r.id}: {r.title} ({r.status})
                 </option>
               ))}
               {contracts.map((c) => (
                 <option key={c.id} value={c.id}>
-                  Contract {c.id}: {c.requirementTitle} ({c.bookingState})
+                  Contract {c.id}: {c.jobTitle} ({c.bookingState})
                 </option>
               ))}
             </select>
