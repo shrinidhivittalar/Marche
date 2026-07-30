@@ -55,7 +55,7 @@ export const AdminAuditDashboard: React.FC = () => {
           <span>Platform Operator & State Inspector</span>
         </div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-          Escrow Audit & State Machine Inspector
+          Booking Audit & State Machine Inspector
         </h1>
         <p className="text-xs text-ink-muted mt-1">
           PRD Section 8.6 & 16.5: Constrained admin state machine overrides & append-only immutable audit trail.
@@ -89,7 +89,7 @@ export const AdminAuditDashboard: React.FC = () => {
           <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
             <span className="font-bold text-ink">Force-Expire Request</span>
             <p className="text-[11px] text-ink-muted">
-              Escrow Held / Pending → Expired. Clear inactive vendor requests.
+              Open / Pending → Expired. Clear inactive vendor requests.
             </p>
           </div>
           <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
@@ -99,15 +99,15 @@ export const AdminAuditDashboard: React.FC = () => {
             </p>
           </div>
           <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
-            <span className="font-bold text-ink">Force-Release Escrow</span>
+            <span className="font-bold text-ink">Force-Close Booking</span>
             <p className="text-[11px] text-ink-muted">
-              Completed → Escrow Released. Resolves unconfirmed completions.
+              Completed → Closed. Resolves unconfirmed completions.
             </p>
           </div>
           <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
             <span className="font-bold text-ink">Forbidden Overrides</span>
             <p className="text-[11px] text-rose-700 font-semibold">
-              Reversing RELEASED → HELD or reviving terminal state is REJECTED.
+              Reviving a terminal (Closed/Cancelled) state is REJECTED.
             </p>
           </div>
         </div>
@@ -227,7 +227,6 @@ export const AdminAuditDashboard: React.FC = () => {
             >
               <option value="Expired">Force-Expire Request</option>
               <option value="Cancelled">Force-Cancel Booking</option>
-              <option value="Escrow Released">Force-Release Escrow</option>
               <option value="Closed">Force-Close Booking</option>
             </select>
           </div>

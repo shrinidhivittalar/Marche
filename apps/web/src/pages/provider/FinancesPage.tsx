@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Hourglass, History, DollarSign, Info, FileText, Lock } from 'lucide-react';
+import { Hourglass, History, IndianRupee, Info, FileText, Lock } from 'lucide-react';
 import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 
@@ -18,7 +18,7 @@ export const FinancesPage: React.FC = () => {
           </div>
           <h2 className="text-lg font-bold text-ink">Coming Soon</h2>
           <p className="text-xs text-ink-muted leading-relaxed">
-            Transaction history, escrow withdrawals, billing reports, and tax documents will be
+            Transaction history, payout withdrawals, billing reports, and tax documents will be
             available here soon.
           </p>
         </Card>
@@ -63,20 +63,20 @@ export const FinancesPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5">
                 <span className="text-xs font-medium text-ink-muted">Work in progress</span>
-                <p className="text-2xl font-bold text-ink mt-2">$0.00</p>
+                <p className="text-2xl font-bold text-ink mt-2">₹0.00</p>
               </Card>
               <Card className="p-5">
                 <span className="text-xs font-medium text-ink-muted">In review</span>
-                <p className="text-2xl font-bold text-ink mt-2">$0.00</p>
+                <p className="text-2xl font-bold text-ink mt-2">₹0.00</p>
               </Card>
               <Card className="p-5">
                 <span className="text-xs font-medium text-ink-muted">Pending</span>
-                <p className="text-2xl font-bold text-ink mt-2">$0.00</p>
+                <p className="text-2xl font-bold text-ink mt-2">₹0.00</p>
               </Card>
               <Card className="p-5">
                 <span className="text-xs font-medium text-ink-muted">Available</span>
-                <p className="text-2xl font-bold text-ink mt-2">$0.00</p>
-                <p className="text-[11px] text-ink-muted mt-1">Last payment: $0.00</p>
+                <p className="text-2xl font-bold text-ink mt-2">₹0.00</p>
+                <p className="text-[11px] text-ink-muted mt-1">Last payment: ₹0.00</p>
               </Card>
             </div>
 
@@ -98,7 +98,7 @@ export const FinancesPage: React.FC = () => {
                   <span className="text-xs font-medium">Pending earnings</span>
                   <Hourglass className="w-4 h-4" />
                 </div>
-                <p className="text-xl font-bold text-ink">$0.00</p>
+                <p className="text-xl font-bold text-ink">₹0.00</p>
                 <p className="text-[11px] text-ink-muted">No pending transactions</p>
               </Card>
 
@@ -118,9 +118,9 @@ export const FinancesPage: React.FC = () => {
               <Card className="p-5 space-y-2">
                 <div className="flex items-center justify-between text-ink-muted">
                   <span className="text-xs font-medium">Available balance</span>
-                  <DollarSign className="w-4 h-4" />
+                  <IndianRupee className="w-4 h-4" />
                 </div>
-                <p className="text-xl font-bold text-ink">$0.00</p>
+                <p className="text-xl font-bold text-ink">₹0.00</p>
                 <Button size="sm" variant="secondary" disabled>
                   Withdrawals
                 </Button>
@@ -197,8 +197,8 @@ export const FinancesPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="p-5 space-y-2">
                 <span className="text-xs font-medium text-ink-muted">Available balance</span>
-                <p className="text-2xl font-bold text-ink">$0.00</p>
-                <p className="text-[11px] text-ink-muted">+$0.00 pending</p>
+                <p className="text-2xl font-bold text-ink">₹0.00</p>
+                <p className="text-[11px] text-ink-muted">+₹0.00 pending</p>
                 <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 mt-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>To withdraw earnings, please update your tax information.</span>

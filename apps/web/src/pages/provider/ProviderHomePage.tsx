@@ -292,7 +292,7 @@ export const ProviderHomePage: React.FC = () => {
                 <div className="space-y-1.5 text-xs text-ink-muted pt-2 border-t border-border">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-primary">
-                      ${req.budgetMin.toLocaleString()} - ${req.budgetMax.toLocaleString()}
+                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
                     </span>
                     <span className="shrink-0">{req.proposalsCount} proposals</span>
                   </div>
@@ -341,8 +341,8 @@ export const ProviderHomePage: React.FC = () => {
                   <div className="p-3 bg-bg border border-border rounded-xl">
                     <span className="block text-[10px] text-ink-muted uppercase font-mono">Budget</span>
                     <span className="font-bold text-primary">
-                      ${selectedJob.budgetMin.toLocaleString()} - $
-                      {selectedJob.budgetMax.toLocaleString()}
+                      ₹{selectedJob.budgetMin.toLocaleString('en-IN')} - ₹
+                      {selectedJob.budgetMax.toLocaleString('en-IN')}
                     </span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl">

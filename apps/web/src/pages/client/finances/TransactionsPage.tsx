@@ -31,7 +31,7 @@ export const TransactionsPage: React.FC = () => {
             Transaction history
           </h1>
           <button className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-white text-xs font-semibold text-ink">
-            Outstanding balance: $0.00
+            Outstanding balance: ₹0.00
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -84,7 +84,7 @@ export const StatsPage: React.FC = () => {
 
           <Card className="p-5">
             <span className="text-xs font-medium text-ink-muted">Total Earnings</span>
-            <p className="text-2xl font-bold text-ink mt-1">${totalEarnings.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-ink mt-1">₹{totalEarnings.toLocaleString('en-IN')}</p>
             <p className="text-[11px] text-ink-muted mt-1">
               Across {myContracts.length} contract{myContracts.length === 1 ? '' : 's'}
             </p>
@@ -162,7 +162,7 @@ export const StatsPage: React.FC = () => {
                       />
                     </div>
                     <span className="w-16 text-right text-xs font-bold text-ink shrink-0">
-                      ${m.amount.toLocaleString()}
+                      ₹{m.amount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 ))}

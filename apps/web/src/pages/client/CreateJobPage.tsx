@@ -6,7 +6,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
-  DollarSign,
+  IndianRupee,
   MapPin,
   Sparkles,
   Trash2,
@@ -86,29 +86,44 @@ function todayISODate(): string {
   return `${year}-${month}-${day}`;
 }
 
-export const CreateJobPage: React.FC = () => {
-  const { createJob, navigate } = useApp();
+interface CreateJobPageProps {
+  draftId?: string;
+}
 
+export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
+  const { createJob, saveJobDraft, publishJobDraft, getJobById, navigate } = useApp();
+
+  const existingDraft = draftId ? getJobById(draftId) : undefined;
+
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId ?? null);
   const [step, setStep] = useState<WizardStep>(1);
   const [attemptedNext, setAttemptedNext] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<EventCategory>('Photography');
-  const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('Manhattan, New York, NY');
-  const [eventDate, setEventDate] = useState('2026-09-25');
-  const [timingMode, setTimingMode] = useState<EventTimingMode>('fixed');
-  const [eventStartTime, setEventStartTime] = useState('18:00');
-  const [eventEndTime, setEventEndTime] = useState('22:00');
-  const [proposalDeadline, setProposalDeadline] = useState('2026-09-10');
-  const [budgetMin, setBudgetMin] = useState<number>(2500);
-  const [budgetMax, setBudgetMax] = useState<number>(4000);
-  const [deliverables, setDeliverables] = useState<string[]>([
-    'High-resolution edited digital assets within 48h',
-    'On-site production crew & equipment included',
-    'Full commercial licensing for social & press',
-  ]);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Form State — pre-filled from an existing draft when resuming one
+  const [title, setTitle] = useState(existingDraft?.title ?? '');
+  const [category, setCategory] = useState<EventCategory>(existingDraft?.category ?? 'Photography');
+  const [description, setDescription] = useState(existingDraft?.description ?? '');
+  const [location, setLocation] = useState(existingDraft?.location ?? 'Manhattan, New York, NY');
+  const [eventDate, setEventDate] = useState(existingDraft?.eventDate ?? '2026-09-25');
+  const [timingMode, setTimingMode] = useState<EventTimingMode>(existingDraft?.timingMode ?? 'fixed');
+  const [eventStartTime, setEventStartTime] = useState(existingDraft?.eventStartTime ?? '18:00');
+  const [eventEndTime, setEventEndTime] = useState(existingDraft?.eventEndTime ?? '22:00');
+  const [proposalDeadline, setProposalDeadline] = useState(existingDraft?.proposalDeadline ?? '2026-09-10');
+  const [budgetMin, setBudgetMin] = useState<number>(existingDraft?.budgetMin ?? 2500);
+  const [budgetMax, setBudgetMax] = useState<number>(existingDraft?.budgetMax ?? 4000);
+  const [deliverables, setDeliverables] = useState<string[]>(
+    existingDraft?.deliverables ?? [
+      'High-resolution edited digital assets within 48h',
+      'On-site production crew & equipment included',
+      'Full commercial licensing for social & press',
+    ]
+  );
   const [newDeliverableInput, setNewDeliverableInput] = useState('');
 
   const handleAddDeliverable = () => {
@@ -167,26 +182,35 @@ export const CreateJobPage: React.FC = () => {
     goToStep((step - 1) as WizardStep);
   };
 
+  const buildJobData = () => ({
+    title,
+    category,
+    description,
+    location,
+    eventDate,
+    timingMode,
+    eventStartTime: timingMode === 'fixed' ? eventStartTime : undefined,
+    eventEndTime: timingMode === 'fixed' ? eventEndTime : undefined,
+    proposalDeadline,
+    budgetMin,
+    budgetMax,
+    deliverables,
+  });
+
+  const handleSaveDraft = () => {
+    const saved = saveJobDraft(currentDraftId, buildJobData());
+    setCurrentDraftId(saved.id);
+    showToast('Draft saved. You can find it on your Client Dashboard.');
+  };
+
   const handleSubmit = () => {
     if (!isStepValid(5)) {
       setAttemptedNext(true);
       return;
     }
 
-    const createdReq = createJob({
-      title,
-      category,
-      description,
-      location,
-      eventDate,
-      timingMode,
-      eventStartTime: timingMode === 'fixed' ? eventStartTime : undefined,
-      eventEndTime: timingMode === 'fixed' ? eventEndTime : undefined,
-      proposalDeadline,
-      budgetMin,
-      budgetMax,
-      deliverables,
-    });
+    const data = buildJobData();
+    const createdReq = currentDraftId ? publishJobDraft(currentDraftId, data) : createJob(data);
 
     navigate(`/client/jobs/${createdReq.id}`);
   };
@@ -197,6 +221,12 @@ export const CreateJobPage: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-4">
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header Back Link */}
       <button
         onClick={() => navigate('/client/dashboard')}
@@ -246,7 +276,7 @@ export const CreateJobPage: React.FC = () => {
 
       <div className="text-center">
         <span className="text-xs font-mono uppercase font-semibold text-ink-muted">
-          {step}/5 · Event Job
+          {step}/5 · Event Job{currentDraftId ? ' · Editing Draft' : ''}
         </span>
       </div>
 
@@ -543,8 +573,8 @@ export const CreateJobPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
-                  <DollarSign className="w-3.5 h-3.5 text-ink-muted" />
-                  Minimum Budget ($)
+                  <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
+                  Minimum Budget (₹)
                 </label>
                 <Input
                   type="number"
@@ -557,8 +587,8 @@ export const CreateJobPage: React.FC = () => {
 
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
-                  <DollarSign className="w-3.5 h-3.5 text-ink-muted" />
-                  Maximum Budget ($)
+                  <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
+                  Maximum Budget (₹)
                 </label>
                 <Input
                   type="number"
@@ -605,7 +635,7 @@ export const CreateJobPage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-ink-muted">Budget:</span>
                 <span className="font-bold text-primary">
-                  ${budgetMin.toLocaleString()} - ${budgetMax.toLocaleString()}
+                  ₹{budgetMin.toLocaleString('en-IN')} - ₹{budgetMax.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -618,13 +648,18 @@ export const CreateJobPage: React.FC = () => {
         <Button variant="outline" onClick={handleBack}>
           Back
         </Button>
-        <Button
-          onClick={handleNext}
-          icon={step === 5 ? Sparkles : ArrowRight}
-          iconPosition={step === 5 ? 'left' : 'right'}
-        >
-          {step === 5 ? 'Publish Job to Marketplace' : `Next: ${STEP_LABELS[(step + 1) as WizardStep]}`}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={handleSaveDraft}>
+            Save as Draft
+          </Button>
+          <Button
+            onClick={handleNext}
+            icon={step === 5 ? Sparkles : ArrowRight}
+            iconPosition={step === 5 ? 'left' : 'right'}
+          >
+            {step === 5 ? 'Publish Job to Marketplace' : `Next: ${STEP_LABELS[(step + 1) as WizardStep]}`}
+          </Button>
+        </div>
       </div>
 
       {/* Progress Bar */}

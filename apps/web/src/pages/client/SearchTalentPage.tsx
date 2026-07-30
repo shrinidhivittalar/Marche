@@ -33,10 +33,10 @@ type EarnedFilter = 'any' | '1' | '100' | '1k' | '10k' | 'none';
 type HoursBilledFilter = 'any' | '1' | '100' | '1000';
 
 const RATE_BUCKETS = [
-  { label: 'Under $150/hr', test: (rate: number) => rate < 150 },
-  { label: '$150 – $250/hr', test: (rate: number) => rate >= 150 && rate < 250 },
-  { label: '$250 – $350/hr', test: (rate: number) => rate >= 250 && rate < 350 },
-  { label: '$350+/hr', test: (rate: number) => rate >= 350 },
+  { label: 'Under ₹150/hr', test: (rate: number) => rate < 150 },
+  { label: '₹150 – ₹250/hr', test: (rate: number) => rate >= 150 && rate < 250 },
+  { label: '₹250 – ₹350/hr', test: (rate: number) => rate >= 250 && rate < 350 },
+  { label: '₹350+/hr', test: (rate: number) => rate >= 350 },
 ];
 
 const ENGLISH_LEVELS: EnglishLevel[] = ['Basic', 'Conversational', 'Fluent', 'Native or bilingual'];
@@ -334,8 +334,8 @@ export const SearchTalentPage: React.FC = () => {
               ))}
             </div>
             <div className="flex items-center justify-between text-[10px] text-ink-muted px-1 mb-2">
-              <span>under $10</span>
-              <span>$400+</span>
+              <span>under ₹10</span>
+              <span>₹400+</span>
             </div>
             {rateCounts.map(({ label, count }) => (
               <label key={label} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
@@ -383,10 +383,10 @@ export const SearchTalentPage: React.FC = () => {
 
           <FilterSection title="Earned amount">
             <RadioOption label="Any amount earned" checked={earnedFilter === 'any'} onChange={() => setEarnedFilter('any')} />
-            <RadioOption label="$1+ earned" checked={earnedFilter === '1'} onChange={() => setEarnedFilter('1')} />
-            <RadioOption label="$100+ earned" checked={earnedFilter === '100'} onChange={() => setEarnedFilter('100')} />
-            <RadioOption label="$1K+ earned" checked={earnedFilter === '1k'} onChange={() => setEarnedFilter('1k')} />
-            <RadioOption label="$10K+ earned" checked={earnedFilter === '10k'} onChange={() => setEarnedFilter('10k')} />
+            <RadioOption label="₹1+ earned" checked={earnedFilter === '1'} onChange={() => setEarnedFilter('1')} />
+            <RadioOption label="₹100+ earned" checked={earnedFilter === '100'} onChange={() => setEarnedFilter('100')} />
+            <RadioOption label="₹1K+ earned" checked={earnedFilter === '1k'} onChange={() => setEarnedFilter('1k')} />
+            <RadioOption label="₹10K+ earned" checked={earnedFilter === '10k'} onChange={() => setEarnedFilter('10k')} />
             <RadioOption label="No earnings yet" checked={earnedFilter === 'none'} onChange={() => setEarnedFilter('none')} />
           </FilterSection>
 
@@ -552,7 +552,7 @@ export const SearchTalentPage: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-2 flex-wrap">
-                          <span className="font-semibold text-ink">${t.hourlyRate}/hr</span>
+                          <span className="font-semibold text-ink">₹{t.hourlyRate}/hr</span>
                           <span className="flex items-center gap-1 font-semibold text-primary">
                             <Crown className="w-3.5 h-3.5" />
                             {jobSuccess}% Job Success

@@ -14,10 +14,10 @@ import {
   PanelLeftOpen,
   ChevronDown,
   BarChart3,
-  DollarSign,
+  IndianRupee,
   FileSignature,
   FileText,
-  Lock,
+  ShieldCheck,
   CheckCheck,
   Megaphone,
   TrendingUp,
@@ -110,7 +110,7 @@ export const Sidebar: React.FC = () => {
     { label: 'Dashboard', path: '/provider/analytics', icon: BarChart3 },
     { label: 'Stats', path: '/provider/stats', icon: TrendingUp },
     { label: 'Contracts', path: '/provider/contracts', icon: FileSignature },
-    { label: 'Finances', path: '/provider/finances', icon: DollarSign },
+    { label: 'Finances', path: '/provider/finances', icon: IndianRupee },
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessageCount },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
@@ -260,7 +260,7 @@ export const Sidebar: React.FC = () => {
                                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                                   n.type === 'proposal'
                                     ? 'bg-amber-100 text-amber-800'
-                                    : n.type === 'escrow'
+                                    : n.type === 'contract'
                                     ? 'bg-emerald-100 text-primary'
                                     : n.type === 'job_alert'
                                     ? 'bg-sky-100 text-sky-800'
@@ -269,8 +269,8 @@ export const Sidebar: React.FC = () => {
                               >
                                 {n.type === 'proposal' ? (
                                   <FileText className="w-3.5 h-3.5" />
-                                ) : n.type === 'escrow' ? (
-                                  <Lock className="w-3.5 h-3.5" />
+                                ) : n.type === 'contract' ? (
+                                  <ShieldCheck className="w-3.5 h-3.5" />
                                 ) : n.type === 'job_alert' ? (
                                   <Megaphone className="w-3.5 h-3.5" />
                                 ) : (

@@ -220,7 +220,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <div className="text-sm font-extrabold text-ink">
-                ${talent.earned >= 1000 ? `${Math.round(talent.earned / 1000)}K+` : talent.earned}
+                ₹{talent.earned >= 1000 ? `${Math.round(talent.earned / 1000)}K+` : talent.earned}
               </div>
               <div className="text-[10px] text-ink-muted mt-0.5">Total earnings</div>
             </div>
@@ -269,7 +269,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           <Card padding="lg" className="space-y-3">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <h2 className="text-base font-bold text-ink max-w-xl">{talent.headline}</h2>
-              <span className="text-lg font-extrabold text-ink shrink-0">${talent.hourlyRate}/hr</span>
+              <span className="text-lg font-extrabold text-ink shrink-0">₹{talent.hourlyRate}/hr</span>
             </div>
             <p className="text-xs text-ink leading-relaxed">
               {displayedBio}{' '}
@@ -365,7 +365,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                           </div>
                         )}
                         <div className="flex items-center justify-between text-xs pt-1">
-                          <span className="font-semibold text-ink">${job.amount.toLocaleString()}</span>
+                          <span className="font-semibold text-ink">₹{job.amount.toLocaleString('en-IN')}</span>
                           <span className="text-ink-muted">{job.priceType}</span>
                         </div>
                       </div>
@@ -458,7 +458,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                       <p className="text-xs font-semibold text-ink">{project.title}</p>
                       <div className="flex items-center gap-3 text-[11px] text-ink-muted">
                         <span className="px-2 py-0.5 rounded bg-bg border border-border font-semibold text-ink">
-                          From ${project.priceFrom}
+                          From ₹{project.priceFrom.toLocaleString('en-IN')}
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />

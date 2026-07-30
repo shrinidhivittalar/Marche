@@ -8,6 +8,8 @@ import { ComingSoonPage } from './pages/ComingSoonPage';
 import { AuthSignInPage, AuthSignUpPage } from './pages/AuthPages';
 import { ClientDashboard } from './pages/client/ClientDashboard';
 import { CreateJobPage } from './pages/client/CreateJobPage';
+import { PostJobIntroPage } from './pages/client/PostJobIntroPage';
+import { ClientOnboardingPage } from './pages/client/ClientOnboardingPage';
 import { JobDetailPage } from './pages/client/JobDetailPage';
 import { ProposalDetailPage } from './pages/client/ProposalDetailPage';
 import { ContractDetailPage } from './pages/client/ContractDetailPage';
@@ -25,6 +27,7 @@ import { FinancesPage } from './pages/provider/FinancesPage';
 import { ContractsPage } from './pages/provider/ContractsPage';
 import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
+import { ProviderOnboardingPage } from './pages/provider/ProviderOnboardingPage';
 import { SubmitProposalPage } from './pages/provider/SubmitProposalPage';
 import { VendorProfilePage } from './pages/provider/VendorProfilePage';
 import { EditProfilePage } from './pages/EditProfilePage';
@@ -49,6 +52,14 @@ function AppContent() {
     return <AuthSignUpPage />;
   }
 
+  if (route === '/provider/onboarding') {
+    return <ProviderOnboardingPage />;
+  }
+
+  if (route === '/client/onboarding') {
+    return <ClientOnboardingPage />;
+  }
+
   // Dynamic Route Matchers
   const matchRoute = () => {
     // Client routes
@@ -67,13 +78,18 @@ function AppContent() {
     }
     if (route === '/client/jobs' || route === '/client/projects') return <ClientDashboard key="jobs" view="jobs" />;
     if (route === '/client/settings') return <ClientDashboard key="settings" view="settings" />;
-    if (route === '/client/jobs/new') return <CreateJobPage />;
+    if (route === '/client/jobs/new') return <PostJobIntroPage />;
+    if (route === '/client/jobs/new/manual') return <CreateJobPage />;
+    if (route.startsWith('/client/jobs/new/manual/')) {
+      const draftId = route.replace('/client/jobs/new/manual/', '');
+      return <CreateJobPage draftId={draftId} />;
+    }
     if (route === '/client/profile') return <EditProfilePage />;
     if (route === '/client/payments') {
       return (
         <ComingSoonPage
           title="Payments"
-          description="Payment history, invoices, and escrow transaction records will be available here soon."
+          description="Payment history, invoices, and transaction records will be available here soon."
           icon={CreditCard}
         />
       );

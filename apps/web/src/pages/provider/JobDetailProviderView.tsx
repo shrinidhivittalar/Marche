@@ -42,9 +42,12 @@ export const JobDetailProviderView: React.FC<
     );
   }
 
-  // Check if current vendor already submitted a proposal
+  // Check if current vendor already submitted (or has a draft) proposal
   const existingProposal = proposals.find(
-    (p) => p.jobId === id && p.vendorId === currentUser.id
+    (p) => p.jobId === id && p.vendorId === currentUser.id && p.status !== 'draft'
+  );
+  const draftProposal = proposals.find(
+    (p) => p.jobId === id && p.vendorId === currentUser.id && p.status === 'draft'
   );
 
   return (
@@ -118,7 +121,7 @@ export const JobDetailProviderView: React.FC<
                 Client Budget Range
               </span>
               <p className="text-2xl font-extrabold text-primary">
-                ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()}
+                ₹{job.budgetMin.toLocaleString('en-IN')} - ₹{job.budgetMax.toLocaleString('en-IN')}
               </p>
             </div>
 
@@ -176,9 +179,19 @@ export const JobDetailProviderView: React.FC<
               <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold text-center space-y-1">
                 <span>You Have Already Submitted a Proposal</span>
                 <span className="block text-[11px] text-emerald-700 font-mono">
-                  Quote: ${existingProposal.bidAmount.toLocaleString()}
+                  Quote: ₹{existingProposal.bidAmount.toLocaleString('en-IN')}
                 </span>
               </div>
+            ) : draftProposal ? (
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full"
+                icon={Send}
+                onClick={() => navigate(`/provider/submit-proposal/${job.id}`)}
+              >
+                Continue Draft Proposal
+              </Button>
             ) : (
               <Button
                 size="lg"

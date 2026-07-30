@@ -1,23 +1,78 @@
 import React, { useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { MapPin, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Badge, Button, Card, Input, Textarea } from '@marche/ui';
+
+interface ProfileDraftFields {
+  companyOrTitle: string;
+  hourlyRate: number;
+  location: string;
+  bio: string;
+}
+
+function draftKey(userId: string): string {
+  return `marche_profile_draft_${userId}`;
+}
+
+function loadDraft(userId: string): ProfileDraftFields | null {
+  try {
+    const raw = localStorage.getItem(draftKey(userId));
+    return raw ? (JSON.parse(raw) as ProfileDraftFields) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const EditProfilePage: React.FC = () => {
   const { currentUser, updateCurrentUser, navigate } = useApp();
   const isVendor = currentUser.role === 'vendor';
 
-  const [companyOrTitle, setCompanyOrTitle] = useState(currentUser.companyOrTitle || '');
-  const [hourlyRate, setHourlyRate] = useState(currentUser.hourlyRate ?? 0);
-  const [location, setLocation] = useState(currentUser.location || '');
-  const [bio, setBio] = useState(currentUser.bio || '');
-  const [showSaved, setShowSaved] = useState(false);
+  const liveFields: ProfileDraftFields = {
+    companyOrTitle: currentUser.companyOrTitle || '',
+    hourlyRate: currentUser.hourlyRate ?? 0,
+    location: currentUser.location || '',
+    bio: currentUser.bio || '',
+  };
+
+  const [existingDraft] = useState<ProfileDraftFields | null>(() => loadDraft(currentUser.id));
+  const [showDraftBanner, setShowDraftBanner] = useState(
+    !!existingDraft && JSON.stringify(existingDraft) !== JSON.stringify(liveFields)
+  );
+
+  const initialFields = existingDraft ?? liveFields;
+
+  const [companyOrTitle, setCompanyOrTitle] = useState(initialFields.companyOrTitle);
+  const [hourlyRate, setHourlyRate] = useState(initialFields.hourlyRate);
+  const [location, setLocation] = useState(initialFields.location);
+  const [bio, setBio] = useState(initialFields.bio);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const showStatus = (msg: string) => {
+    setStatusMessage(msg);
+    setTimeout(() => setStatusMessage(null), 2000);
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     updateCurrentUser(isVendor ? { companyOrTitle, hourlyRate, location, bio } : { companyOrTitle, location, bio });
-    setShowSaved(true);
-    setTimeout(() => setShowSaved(false), 2000);
+    localStorage.removeItem(draftKey(currentUser.id));
+    setShowDraftBanner(false);
+    showStatus('Saved!');
+  };
+
+  const handleSaveDraft = () => {
+    const draft: ProfileDraftFields = { companyOrTitle, hourlyRate, location, bio };
+    localStorage.setItem(draftKey(currentUser.id), JSON.stringify(draft));
+    showStatus('Draft saved on this device.');
+  };
+
+  const handleDiscardDraft = () => {
+    localStorage.removeItem(draftKey(currentUser.id));
+    setCompanyOrTitle(liveFields.companyOrTitle);
+    setHourlyRate(liveFields.hourlyRate);
+    setLocation(liveFields.location);
+    setBio(liveFields.bio);
+    setShowDraftBanner(false);
   };
 
   return (
@@ -58,6 +113,28 @@ export const EditProfilePage: React.FC = () => {
         </div>
       </Card>
 
+      {showDraftBanner && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+          <span>You have unsaved draft changes from a previous session — shown below.</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="font-semibold hover:underline cursor-pointer"
+            >
+              Discard draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDraftBanner(false)}
+              className="text-amber-700 hover:text-amber-900 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Edit Form */}
       <form onSubmit={handleSave}>
         <Card className="p-8 space-y-6">
@@ -79,7 +156,7 @@ export const EditProfilePage: React.FC = () => {
           {isVendor && (
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">
-                Hourly Rate ($)
+                Hourly Rate (₹)
               </label>
               <Input
                 type="number"
@@ -122,9 +199,12 @@ export const EditProfilePage: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            {showSaved && (
-              <span className="text-xs text-primary font-semibold">Saved!</span>
+            {statusMessage && (
+              <span className="text-xs text-primary font-semibold">{statusMessage}</span>
             )}
+            <Button type="button" variant="ghost" onClick={handleSaveDraft}>
+              Save as Draft
+            </Button>
             <Button type="submit">Save Changes</Button>
           </div>
         </Card>

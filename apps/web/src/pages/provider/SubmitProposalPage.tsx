@@ -1,66 +1,88 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
-  DollarSign,
+  IndianRupee,
   Send,
-  Plus,
   Trash2,
-  Sparkles,
   CheckCircle2,
   Calendar,
+  MapPin,
+  ShieldCheck,
+  Paperclip,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card, Input, Textarea } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { INITIAL_PORTFOLIO_ITEMS } from '../../data/mockData';
 
 interface SubmitProposalPageProps {
   jobId: string;
 }
 
+const MARCHE_SERVICE_FEE_RATE = 0.1;
+const MAX_HIGHLIGHTS = 4;
+const DESCRIPTION_TRUNCATE_LENGTH = 180;
+
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   jobId,
 }) => {
-  const { getJobById, submitProposal, navigate } = useApp();
+  const { currentUser, proposals, getJobById, submitProposal, saveProposalDraft, navigate } = useApp();
 
   const job = getJobById(jobId);
+  const existingDraft = proposals.find(
+    (p) => p.jobId === jobId && p.vendorId === currentUser.id && p.status === 'draft'
+  );
 
-  // Form State
-  const [bidAmount, setBidAmount] = useState<number>(job?.budgetMin || 3200);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(existingDraft?.id ?? null);
+
+  // Form State — pre-filled from an existing draft proposal when resuming one
+  const [bidAmount, setBidAmount] = useState<number>(existingDraft?.bidAmount ?? job?.budgetMin ?? 3200);
   const [proposedStartTime, setProposedStartTime] = useState<string>(
-    job?.eventStartTime || '18:00'
+    existingDraft?.proposedStartTime ?? job?.eventStartTime ?? '18:00'
   );
   const [proposedEndTime, setProposedEndTime] = useState<string>(
-    job?.eventEndTime || '22:00'
+    existingDraft?.proposedEndTime ?? job?.eventEndTime ?? '22:00'
   );
-  const [estimatedDelivery, setEstimatedDelivery] = useState<string>('48 Hours');
+  const [estimatedDelivery, setEstimatedDelivery] = useState<string>(existingDraft?.estimatedDelivery ?? '48 Hours');
   const [coverLetter, setCoverLetter] = useState<string>(
-    'Hello. I have extensive experience providing top-tier event services for similar high-profile gatherings. My team will ensure full coverage, rapid asset turnaround, and professional execution.'
+    existingDraft?.coverLetter ??
+      'Hello. I have extensive experience providing top-tier event services for similar high-profile gatherings. My team will ensure full coverage, rapid asset turnaround, and professional execution.'
   );
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [selectedHighlights, setSelectedHighlights] = useState<string[]>(existingDraft?.portfolioLinks ?? []);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [milestones, setMilestones] = useState<
     { title: string; amount: number; description: string }[]
-  >([
-    {
-      title: 'Event On-Site Setup & Equipment Prep',
-      amount: Math.round(bidAmount * 0.3),
-      description: 'Arrival 2 hours prior to start, equipment calibration & survey.',
-    },
-    {
-      title: 'Live Event Execution & Primary Deliverable',
-      amount: Math.round(bidAmount * 0.5),
-      description: 'On-site execution during selected date and time slot.',
-    },
-    {
-      title: 'Post-Production & Final Master Delivery',
-      amount: Math.round(bidAmount * 0.2),
-      description: 'High-res color grading, editing, and commercial usage licensing.',
-    },
-  ]);
+  >(
+    existingDraft?.milestones.map((m) => ({ title: m.title, amount: m.amount, description: m.description })) ?? [
+      {
+        title: 'Event On-Site Setup & Equipment Prep',
+        amount: Math.round(bidAmount * 0.3),
+        description: 'Arrival 2 hours prior to start, equipment calibration & survey.',
+      },
+      {
+        title: 'Live Event Execution & Primary Deliverable',
+        amount: Math.round(bidAmount * 0.5),
+        description: 'On-site execution during selected date and time slot.',
+      },
+      {
+        title: 'Post-Production & Final Master Delivery',
+        amount: Math.round(bidAmount * 0.2),
+        description: 'High-res color grading, editing, and commercial usage licensing.',
+      },
+    ]
+  );
 
   const [msTitle, setMsTitle] = useState('');
   const [msAmount, setMsAmount] = useState<number>(500);
   const [msDesc, setMsDesc] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   if (!job) {
     return (
@@ -74,6 +96,19 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
       </div>
     );
   }
+
+  const portfolioItems = INITIAL_PORTFOLIO_ITEMS.filter((p) => p.vendorId === currentUser.id);
+
+  const toggleHighlight = (image: string) => {
+    setSelectedHighlights((prev) => {
+      if (prev.includes(image)) return prev.filter((img) => img !== image);
+      if (prev.length >= MAX_HIGHLIGHTS) {
+        showToast(`You can only select up to ${MAX_HIGHLIGHTS} highlights.`);
+        return prev;
+      }
+      return [...prev, image];
+    });
+  };
 
   const handleAddMilestone = () => {
     if (msTitle.trim()) {
@@ -90,28 +125,54 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     setMilestones(milestones.filter((_, i) => i !== idx));
   };
 
+  const buildProposalData = () => ({
+    jobId: job.id,
+    bidAmount,
+    coverLetter,
+    estimatedDelivery,
+    proposedStartTime: job.timingMode === 'fixed' ? proposedStartTime : undefined,
+    proposedEndTime: job.timingMode === 'fixed' ? proposedEndTime : undefined,
+    milestones,
+    portfolioLinks: selectedHighlights.length > 0 ? selectedHighlights : undefined,
+  });
+
+  const handleSaveDraft = () => {
+    const saved = saveProposalDraft(currentDraftId, buildProposalData());
+    setCurrentDraftId(saved.id);
+    showToast('Draft saved. You can find it on your Dashboard.');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!coverLetter || !bidAmount) return;
     if (job.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
 
     submitProposal({
-      jobId: job.id,
-      bidAmount,
-      coverLetter,
-      estimatedDelivery,
-      proposedStartTime: job.timingMode === 'fixed' ? proposedStartTime : undefined,
-      proposedEndTime: job.timingMode === 'fixed' ? proposedEndTime : undefined,
-      milestones,
+      ...buildProposalData(),
+      draftId: currentDraftId ?? undefined,
     });
 
     navigate('/provider/dashboard');
   };
 
   const milestoneTotal = milestones.reduce((sum, m) => sum + m.amount, 0);
+  const serviceFee = Math.round(bidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;
+  const youReceive = bidAmount - serviceFee;
+
+  const descriptionIsLong = job.description.length > DESCRIPTION_TRUNCATE_LENGTH;
+  const displayedDescription =
+    descriptionIsLong && !descriptionExpanded
+      ? `${job.description.slice(0, DESCRIPTION_TRUNCATE_LENGTH).trimEnd()}…`
+      : job.description;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Top Navigation */}
       <button
         onClick={() => navigate(`/provider/jobs/${job.id}`)}
@@ -124,107 +185,203 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
       {/* Header */}
       <div>
         <span className="text-xs font-mono uppercase font-semibold text-primary">
-          Service Provider Bid Proposal
+          Service Provider Bid Proposal{currentDraftId ? ' · Editing Draft' : ''}
         </span>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight mt-1">
           Submit Proposal for "{job.title}"
         </h1>
-        <p className="text-xs text-ink-muted mt-1">
-          Client Budget: ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()} • {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
-        </p>
         <p className="text-xs text-amber-700 font-semibold mt-1">
           Submit your proposal by {job.proposalDeadline}.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Proposal Bid Pricing */}
-        <Card className="p-8 space-y-6">
-          <h2 className="text-lg font-bold text-ink">1. Quote & Timeline</h2>
+        {/* Job Details Recap */}
+        <Card className="p-8 space-y-4">
+          <h2 className="text-lg font-bold text-ink">Job details</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">
-                Your Total Proposed Bid ($)
-              </label>
-              <Input
-                type="number"
-                step={50}
-                value={bidAmount}
-                onChange={(e) => setBidAmount(Number(e.target.value))}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">
-                Confirmed Event Time
-              </label>
-              {job.timingMode === 'fixed' ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={proposedStartTime}
-                      onChange={(e) => setProposedStartTime(e.target.value)}
-                      className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-                    />
-                    <span className="text-ink-muted text-xs shrink-0">to</span>
-                    <Input
-                      type="time"
-                      value={proposedEndTime}
-                      onChange={(e) => setProposedEndTime(e.target.value)}
-                      className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                  {proposedEndTime <= proposedStartTime && (
-                    <p className="text-[11px] text-rose-600 mt-1">End time must be after start time.</p>
-                  )}
-                </>
-              ) : (
-                <div className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink-muted">
-                  Flexible — deliver by {job.eventDate}
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-8">
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-base font-bold text-ink">{job.title}</h3>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="px-2.5 py-1 rounded-lg bg-surface-subtle text-[11px] font-medium text-ink-muted border border-border">
+                    {job.category}
+                  </span>
+                  <span className="text-[11px] text-ink-muted">
+                    Posted {new Date(job.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
                 </div>
-              )}
+              </div>
+
+              <p className="text-xs text-ink-muted leading-relaxed">
+                {displayedDescription}{' '}
+                {descriptionIsLong && (
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionExpanded((v) => !v)}
+                    className="text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    {descriptionExpanded ? 'less' : 'more'}
+                  </button>
+                )}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/provider/jobs/${job.id}`)}
+                className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+              >
+                View job posting
+              </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">
-                Estimated Delivery Turnaround
-              </label>
-              <Input
-                type="text"
-                placeholder="e.g. 24 Hours / 48 Hours"
-                value={estimatedDelivery}
-                onChange={(e) => setEstimatedDelivery(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-              />
+            <div className="space-y-3 md:border-l md:border-border md:pl-6">
+              <div className="flex items-start gap-2.5">
+                <IndianRupee className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-ink">
+                    ₹{job.budgetMin.toLocaleString('en-IN')} – ₹{job.budgetMax.toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-[11px] text-ink-muted">Budget range</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <Calendar className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-ink">
+                    {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
+                  </p>
+                  <p className="text-[11px] text-ink-muted">Event timing</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-ink">{job.location}</p>
+                  <p className="text-[11px] text-ink-muted">Location</p>
+                </div>
+              </div>
             </div>
           </div>
+        </Card>
 
-          {/* Pitch Letter */}
-          <div>
-            <label className="block text-xs font-semibold text-ink mb-1">
-              Cover Letter & Strategy Pitch
-            </label>
-            <Textarea
-              rows={5}
-              placeholder="Explain why you are the best talent for this event, your equipment & approach, and past client successes..."
-              value={coverLetter}
-              onChange={(e) => setCoverLetter(e.target.value)}
-              className="w-full bg-bg border border-border rounded-xl p-4 text-xs text-ink focus:outline-none focus:border-primary leading-relaxed"
-              required
-            />
+        {/* Terms: Bid & Fee Breakdown */}
+        <Card className="p-8 space-y-6">
+          <h2 className="text-lg font-bold text-ink">Terms</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-8">
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  What's your total bid for this job?
+                </label>
+                <div className="relative max-w-xs">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
+                  <Input
+                    type="number"
+                    step={50}
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(Number(e.target.value))}
+                    className="w-full bg-bg border border-border rounded-xl pl-7 pr-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1">
+                    Confirmed Event Time
+                  </label>
+                  {job.timingMode === 'fixed' ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="time"
+                          value={proposedStartTime}
+                          onChange={(e) => setProposedStartTime(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+                        />
+                        <span className="text-ink-muted text-xs shrink-0">to</span>
+                        <Input
+                          type="time"
+                          value={proposedEndTime}
+                          onChange={(e) => setProposedEndTime(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      {proposedEndTime <= proposedStartTime && (
+                        <p className="text-[11px] text-rose-600 mt-1">End time must be after start time.</p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink-muted">
+                      Flexible — deliver by {job.eventDate}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1">
+                    Estimated Delivery Turnaround
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. 24 Hours / 48 Hours"
+                    value={estimatedDelivery}
+                    onChange={(e) => setEstimatedDelivery(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <div>
+                    <span className="text-ink">Marché Service Fee: {(MARCHE_SERVICE_FEE_RATE * 100).toFixed(0)}%</span>
+                    <p className="text-[10px] text-ink-muted">Fixed for the entire contract</p>
+                  </div>
+                  <span className="text-ink-muted shrink-0">
+                    -₹{serviceFee.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <div>
+                    <span className="font-bold text-ink">You'll receive</span>
+                    <p className="text-[10px] text-ink-muted">After service fees</p>
+                  </div>
+                  <span className="font-mono font-bold text-primary shrink-0">
+                    ₹{youReceive.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white border border-border rounded-xl flex items-start gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                <div className="text-[11px] text-ink-muted leading-relaxed">
+                  Includes Marché Booking Protection.{' '}
+                  <button
+                    type="button"
+                    onClick={() => showToast("Booking protection details aren't wired up yet — Marché is still a frontend preview.")}
+                    className="text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    Learn more
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
 
         {/* Milestones Builder */}
         <Card className="p-8 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-ink">2. Proposed Milestones</h2>
+            <h2 className="text-lg font-bold text-ink">Milestone breakdown</h2>
             <span className="text-xs font-mono font-bold text-primary">
-              Milestones Total: ${milestoneTotal.toLocaleString()} / ${bidAmount.toLocaleString()}
+              Milestones Total: ₹{milestoneTotal.toLocaleString('en-IN')} / ₹{bidAmount.toLocaleString('en-IN')}
             </span>
           </div>
 
@@ -242,7 +399,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-mono font-bold text-primary">
-                    ${ms.amount.toLocaleString()}
+                    ₹{ms.amount.toLocaleString('en-IN')}
                   </span>
                   <button
                     type="button"
@@ -268,7 +425,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               />
               <Input
                 type="number"
-                placeholder="Amount ($)"
+                placeholder="Amount (₹)"
                 value={msAmount}
                 onChange={(e) => setMsAmount(Number(e.target.value))}
                 className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
@@ -287,11 +444,99 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
           </div>
         </Card>
 
+        {/* Additional Details */}
+        <Card className="p-8 space-y-6">
+          <h2 className="text-lg font-bold text-ink">Additional details</h2>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">
+              Cover Letter
+            </label>
+            <Textarea
+              rows={5}
+              placeholder="Explain why you are the best talent for this event, your equipment & approach, and past client successes..."
+              value={coverLetter}
+              onChange={(e) => setCoverLetter(e.target.value)}
+              className="w-full bg-bg border border-border rounded-xl p-4 text-xs text-ink focus:outline-none focus:border-primary leading-relaxed"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Attachments</label>
+            <button
+              type="button"
+              onClick={() => showToast("File uploads aren't wired up yet — Marché is still a frontend preview.")}
+              className="w-full border border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 text-xs text-ink-muted hover:border-primary hover:text-primary transition-colors cursor-pointer"
+            >
+              <Paperclip className="w-4 h-4" />
+              <span>
+                Drag or <span className="underline font-semibold">upload</span> project files
+              </span>
+            </button>
+            <p className="text-[11px] text-ink-muted mt-2 leading-relaxed">
+              You may attach up to 10 files under 25 MB each. Include work samples or other documents to support your proposal. Do not attach your resume — your Marché profile is automatically forwarded to the client with your proposal.
+            </p>
+          </div>
+        </Card>
+
+        {/* Profile Highlights */}
+        <Card className="p-8 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-ink">Profile highlights</h2>
+            <p className="text-xs text-ink-muted mt-1">
+              Highlight relevant work from your profile to include with this proposal. You can add up to {MAX_HIGHLIGHTS} highlights.
+            </p>
+          </div>
+
+          {portfolioItems.length === 0 ? (
+            <div className="bg-bg border border-border rounded-2xl py-10 flex items-center justify-center text-center">
+              <p className="text-xs text-ink-muted">You don't have any portfolio projects.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {portfolioItems.map((item) => {
+                const isSelected = selectedHighlights.includes(item.image);
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => toggleHighlight(item.image)}
+                    className={`relative rounded-xl overflow-hidden border-2 text-left cursor-pointer transition-all ${
+                      isSelected ? 'border-primary' : 'border-transparent hover:border-border'
+                    }`}
+                  >
+                    <img src={item.image} alt={item.caption} className="w-full h-24 object-cover" />
+                    {isSelected && (
+                      <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                      </span>
+                    )}
+                    <span className="block px-2 py-1.5 text-[10px] font-medium text-ink bg-white truncate">
+                      {item.caption}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
         {/* Submit Action */}
-        <div className="flex justify-end pt-4">
+        <div className="flex items-center gap-4 pt-4">
           <Button type="submit" size="lg" icon={Send}>
-            Publish Proposal to Client
+            Submit proposal
           </Button>
+          <Button type="button" variant="ghost" onClick={handleSaveDraft}>
+            Save as Draft
+          </Button>
+          <button
+            type="button"
+            onClick={() => navigate(`/provider/jobs/${job.id}`)}
+            className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
+          >
+            Cancel
+          </button>
         </div>
       </form>
     </div>

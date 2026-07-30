@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ShieldCheck,
   CheckCircle2,
-  Lock,
   Calendar,
   Clock,
   MapPin,
@@ -31,7 +30,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     currentUser,
     getContractById,
     vendorMarkCompleted,
-    clientConfirmCompletionAndReleaseEscrow,
+    clientConfirmCompletion,
     navigate,
   } = useApp();
 
@@ -73,7 +72,6 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
 
         <div className="flex items-center gap-3">
           <StatusBadge status={contract.bookingState} />
-          <StatusBadge status={contract.escrowStatus} />
           <Button
             size="sm"
             variant="outline"
@@ -101,10 +99,10 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
 
           <div className="p-4 bg-bg border border-border rounded-2xl text-right shrink-0">
             <span className="block text-[10px] font-mono uppercase text-ink-muted">
-              Agreed Escrow Amount
+              Agreed Booking Amount
             </span>
             <span className="text-2xl font-extrabold text-primary">
-              ${contract.amount.toLocaleString()}
+              ₹{contract.amount.toLocaleString('en-IN')}
             </span>
           </div>
         </div>
@@ -114,51 +112,36 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           <span className="text-xs font-mono uppercase font-bold text-primary">
             Lifecycle State Machine Progress
           </span>
-          <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-semibold">
+          <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-semibold">
             <div
               className={`p-2.5 rounded-xl border transition-all ${
                 contract.bookingState === 'Confirmed' ||
                 contract.bookingState === 'Completed' ||
-                contract.bookingState === 'Closed' ||
-                contract.bookingState === 'Escrow Released'
+                contract.bookingState === 'Closed'
                   ? 'bg-emerald-50 border-emerald-300 text-primary'
                   : 'bg-bg border-border text-ink-muted'
               }`}
             >
-              1. Escrow Held
-            </div>
-            <div
-              className={`p-2.5 rounded-xl border transition-all ${
-                contract.bookingState === 'Confirmed' ||
-                contract.bookingState === 'Completed' ||
-                contract.bookingState === 'Closed' ||
-                contract.bookingState === 'Escrow Released'
-                  ? 'bg-emerald-50 border-emerald-300 text-primary'
-                  : 'bg-bg border-border text-ink-muted'
-              }`}
-            >
-              2. Confirmed
+              1. Confirmed
             </div>
             <div
               className={`p-2.5 rounded-xl border transition-all ${
                 contract.bookingState === 'Completed' ||
-                contract.bookingState === 'Closed' ||
-                contract.bookingState === 'Escrow Released'
+                contract.bookingState === 'Closed'
                   ? 'bg-emerald-50 border-emerald-300 text-primary'
                   : 'bg-bg border-border text-ink-muted'
               }`}
             >
-              3. Event Completed
+              2. Event Completed
             </div>
             <div
               className={`p-2.5 rounded-xl border transition-all ${
-                contract.bookingState === 'Closed' ||
-                contract.bookingState === 'Escrow Released'
+                contract.bookingState === 'Closed'
                   ? 'bg-emerald-50 border-emerald-300 text-primary'
                   : 'bg-bg border-border text-ink-muted'
               }`}
             >
-              4. Escrow Released
+              3. Closed
             </div>
           </div>
         </div>
@@ -193,27 +176,39 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       <Card className="p-8 space-y-6">
         <h3 className="text-base font-bold text-ink">Engagement Controls & Delivery</h3>
 
-        {/* Current Escrow Status Explanation */}
-        {contract.escrowStatus === 'HELD' && (
+        {/* Current Booking Status Explanation */}
+        {contract.bookingState === 'Confirmed' && (
           <div className="p-4 bg-emerald-50/80 border border-emerald-200 text-emerald-900 rounded-2xl space-y-2 text-xs">
             <div className="flex items-center gap-2 font-bold">
               <ShieldCheck className="w-5 h-5 text-primary" />
-              <span>Simulated Escrow Protection Active (${contract.amount.toLocaleString()})</span>
+              <span>Booking Confirmed (₹{contract.amount.toLocaleString('en-IN')})</span>
             </div>
             <p className="leading-relaxed">
-              Funds are safely held in escrow state. The vendor performs the service on the scheduled event date ({contract.eventDate}), marks it completed, and the client releases escrow.
+              This booking is confirmed for the scheduled event date ({contract.eventDate}). The provider will mark it completed once the event is delivered.
             </p>
           </div>
         )}
 
-        {contract.escrowStatus === 'RELEASED' && (
+        {contract.bookingState === 'Completed' && (
+          <div className="p-4 bg-amber-50/80 border border-amber-200 text-amber-900 rounded-2xl space-y-2 text-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <Clock className="w-5 h-5 text-amber-700" />
+              <span>Event Marked Complete — Awaiting Your Confirmation</span>
+            </div>
+            <p className="leading-relaxed">
+              {contract.vendorName} marked this event as delivered. Confirm below to close out the booking.
+            </p>
+          </div>
+        )}
+
+        {contract.bookingState === 'Closed' && (
           <div className="p-4 bg-emerald-100/60 border border-emerald-300 text-emerald-950 rounded-2xl space-y-2 text-xs">
             <div className="flex items-center gap-2 font-bold text-primary">
               <CheckCircle2 className="w-5 h-5 text-primary" />
-              <span>Escrow Released & Contract Closed</span>
+              <span>Booking Completed & Closed</span>
             </div>
             <p className="leading-relaxed">
-              Full payment of ${contract.amount.toLocaleString()} was successfully released from escrow to {contract.vendorName}.
+              Full payment of ₹{contract.amount.toLocaleString('en-IN')} was confirmed for {contract.vendorName}.
             </p>
           </div>
         )}
@@ -239,12 +234,12 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             )}
 
             {/* Client Action */}
-            {contract.bookingState === 'Completed' && contract.escrowStatus === 'HELD' && (
+            {contract.bookingState === 'Completed' && (
               <Button
-                icon={Lock}
-                onClick={() => clientConfirmCompletionAndReleaseEscrow(contract.id)}
+                icon={CheckCircle2}
+                onClick={() => clientConfirmCompletion(contract.id)}
               >
-                [Client] Confirm Completion & Release Escrow
+                [Client] Confirm Completion
               </Button>
             )}
 
@@ -295,18 +290,18 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                 </p>
               </div>
               <div>
-                <span className="text-[10px] font-mono uppercase text-ink-muted">Escrow Status</span>
-                <p className="font-bold text-primary">{contract.escrowStatus}</p>
+                <span className="text-[10px] font-mono uppercase text-ink-muted">Category</span>
+                <p className="font-bold text-primary">{contract.category}</p>
               </div>
             </div>
 
             <div className="p-3 bg-bg border border-border rounded-xl flex justify-between font-mono font-bold text-sm">
               <span>Contract Agreed Total:</span>
-              <span className="text-primary">${contract.amount.toLocaleString()}</span>
+              <span className="text-primary">₹{contract.amount.toLocaleString('en-IN')}</span>
             </div>
 
             <p className="text-[10px] text-ink-muted italic leading-relaxed pt-2 border-t border-border">
-              Notice: This document is a non-fiscal confirmation of a marketplace service reservation and simulated escrow state. It does not constitute a tax invoice.
+              Notice: This document is a non-fiscal confirmation of a marketplace service reservation. It does not constitute a tax invoice.
             </p>
           </div>
 

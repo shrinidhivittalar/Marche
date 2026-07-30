@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, FileText, Lock, Megaphone, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Bell, CheckCheck, FileText, Megaphone, ShieldCheck, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
@@ -35,7 +35,7 @@ export const NotificationsPage: React.FC = () => {
             Notifications & Updates
           </h1>
           <p className="text-xs text-ink-muted mt-1">
-            Real-time state change updates for your jobs, proposals, and escrow contracts.
+            Real-time updates for your jobs, proposals, and contracts.
           </p>
         </div>
 
@@ -97,7 +97,7 @@ export const NotificationsPage: React.FC = () => {
         ) : (
           <EmptyState
             title="No notifications yet"
-            description="You are all caught up! New proposal alerts and escrow status changes will appear here."
+            description="You are all caught up! New proposal alerts and booking updates will appear here."
           />
         )
       ) : (
@@ -119,7 +119,7 @@ export const NotificationsPage: React.FC = () => {
                 className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                   n.type === 'proposal'
                     ? 'bg-amber-100 text-amber-800'
-                    : n.type === 'escrow'
+                    : n.type === 'contract'
                     ? 'bg-emerald-100 text-primary'
                     : n.type === 'job_alert'
                     ? 'bg-sky-100 text-sky-800'
@@ -128,8 +128,8 @@ export const NotificationsPage: React.FC = () => {
               >
                 {n.type === 'proposal' ? (
                   <FileText className="w-4 h-4" />
-                ) : n.type === 'escrow' ? (
-                  <Lock className="w-4 h-4" />
+                ) : n.type === 'contract' ? (
+                  <ShieldCheck className="w-4 h-4" />
                 ) : n.type === 'job_alert' ? (
                   <Megaphone className="w-4 h-4" />
                 ) : (

@@ -4,13 +4,11 @@ import {
   Star,
   ShieldCheck,
   CheckCircle2,
-  Lock,
   Calendar,
   Clock,
   MapPin,
   Building,
   DollarSign,
-  AlertCircle,
   ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -25,12 +23,11 @@ interface ProposalDetailPageProps {
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { proposals, getJobById, hireVendorAndDepositEscrow, navigate } = useApp();
+  const { proposals, getJobById, hireVendor, navigate } = useApp();
 
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [simulatedOutcome, setSimulatedOutcome] = useState<'SUCCESS' | 'FAILURE' | 'TIMEOUT'>('SUCCESS');
+  const [hireModalOpen, setHireModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [confirmedContractId, setConfirmedContractId] = useState<string | null>(null);
 
   const proposal = proposals.find((p) => p.id === id);
   const job = proposal ? getJobById(proposal.jobId) : undefined;
@@ -48,37 +45,16 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     );
   }
 
-  const handleSimulatePayment = async () => {
+  const handleConfirmHire = async () => {
     setIsProcessing(true);
-    setPaymentError(null);
+    const { contract } = await hireVendor(job.id, proposal.id);
+    setIsProcessing(false);
+    setConfirmedContractId(contract.id);
+  };
 
-    // Simulate network latency
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    if (simulatedOutcome === 'FAILURE') {
-      setIsProcessing(false);
-      setPaymentError('Simulated payment failed. Escrow remains pending. You may retry or change payment method.');
-      return;
-    }
-
-    if (simulatedOutcome === 'TIMEOUT') {
-      setIsProcessing(false);
-      setPaymentError('Simulated gateway request timed out. Booking remains in pending payment window.');
-      return;
-    }
-
-    try {
-      const { contract } = await hireVendorAndDepositEscrow(
-        job.id,
-        proposal.id
-      );
-      setIsProcessing(false);
-      setPaymentModalOpen(false);
-      navigate(`/contracts/${contract.id}`);
-    } catch (err) {
-      setIsProcessing(false);
-      setPaymentError(err instanceof Error ? err.message : 'Payment failed');
-    }
+  const closeHireModal = () => {
+    setHireModalOpen(false);
+    setConfirmedContractId(null);
   };
 
   return (
@@ -161,7 +137,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
                       <p className="text-ink-muted text-[11px] mt-0.5">{ms.description}</p>
                     </div>
                     <span className="font-mono font-bold text-primary">
-                      ${ms.amount.toLocaleString()}
+                      ₹{ms.amount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 ))}
@@ -189,7 +165,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
           </Card>
         </div>
 
-        {/* Right Column: Pricing & Escrow Deposit Action */}
+        {/* Right Column: Pricing & Hire Action */}
         <div className="space-y-6">
           <Card className="p-6 space-y-6 sticky top-24">
             <div>
@@ -197,7 +173,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
                 Fixed Proposed Quote
               </span>
               <p className="text-3xl font-extrabold text-primary">
-                ${proposal.bidAmount.toLocaleString()}
+                ₹{proposal.bidAmount.toLocaleString('en-IN')}
               </p>
               <p className="text-[11px] text-ink-muted mt-1">
                 Guaranteed price locked in. No hidden fees.
@@ -229,29 +205,18 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
               </div>
             </div>
 
-            {/* Escrow Guarantee Box */}
-            <div className="p-3.5 bg-bg border border-border rounded-xl text-xs space-y-1.5">
-              <div className="flex items-center gap-1.5 font-bold text-primary">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Simulated Escrow Protection</span>
-              </div>
-              <p className="text-[11px] text-ink-muted leading-relaxed">
-                Your payment is held in escrow (<code className="font-mono text-primary">HELD</code>) and released only after you confirm the event was completed satisfactorily.
-              </p>
-            </div>
-
             {proposal.status === 'submitted' ? (
               <Button
                 size="lg"
                 className="w-full"
-                icon={Lock}
-                onClick={() => setPaymentModalOpen(true)}
+                icon={ShieldCheck}
+                onClick={() => setHireModalOpen(true)}
               >
-                Hire Talent & Deposit Escrow
+                Hire Talent
               </Button>
             ) : proposal.status === 'accepted' ? (
               <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold text-center">
-                Vendor Hired & Escrow Held
+                Vendor Hired & Booking Confirmed
               </div>
             ) : (
               <div className="p-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs text-center">
@@ -262,107 +227,65 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
         </div>
       </div>
 
-      {/* Simulated Payment Modal */}
+      {/* Hire Confirmation Modal */}
       <Modal
-        isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        title="Simulated Payment & Escrow Deposit"
-        description="PRD Section 12b: Exercise simulated payment outcomes to test escrow state transitions."
+        isOpen={hireModalOpen}
+        onClose={closeHireModal}
+        title={confirmedContractId ? 'Booking Confirmed' : 'Confirm Hire'}
+        description={confirmedContractId ? undefined : 'Review the details below before confirming.'}
       >
-        <div className="space-y-6 pt-2">
-          <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-ink-muted">Vendor:</span>
-              <span className="font-bold text-ink">{proposal.vendorName}</span>
+        {confirmedContractId ? (
+          <div className="space-y-6 pt-2 text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-7 h-7 text-primary" />
             </div>
-            <div className="flex justify-between">
-              <span className="text-ink-muted">Job:</span>
-              <span className="font-medium text-ink truncate max-w-[200px]">
-                {job.title}
-              </span>
+            <div>
+              <p className="text-sm font-bold text-ink">You've hired {proposal.vendorName}!</p>
+              <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">
+                Your booking for "{job.title}" is confirmed for {job.eventDate}. {proposal.vendorName} has been notified.
+              </p>
             </div>
-            <div className="flex justify-between pt-2 border-t border-border font-bold text-sm">
-              <span>Total Escrow Hold:</span>
-              <span className="text-primary font-mono">
-                ${proposal.bidAmount.toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          {/* Test Outcome Selector */}
-          <div className="space-y-2">
-            <label className="block text-xs font-mono uppercase font-bold text-primary">
-              Simulated Payment Outcome (QA Inspector)
-            </label>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setSimulatedOutcome('SUCCESS')}
-                className={`p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                  simulatedOutcome === 'SUCCESS'
-                    ? 'border-primary bg-primary/10 text-primary font-bold'
-                    : 'border-border bg-white text-ink-muted'
-                }`}
-              >
-                SUCCESS
-                <span className="block text-[10px] text-ink-muted font-normal">
-                  Sets Escrow to HELD
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSimulatedOutcome('FAILURE')}
-                className={`p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                  simulatedOutcome === 'FAILURE'
-                    ? 'border-amber-600 bg-amber-50 text-amber-900 font-bold'
-                    : 'border-border bg-white text-ink-muted'
-                }`}
-              >
-                FAILURE
-                <span className="block text-[10px] text-ink-muted font-normal">
-                  Retryable error
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSimulatedOutcome('TIMEOUT')}
-                className={`p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                  simulatedOutcome === 'TIMEOUT'
-                    ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold'
-                    : 'border-border bg-white text-ink-muted'
-                }`}
-              >
-                TIMEOUT
-                <span className="block text-[10px] text-ink-muted font-normal">
-                  Booking Expires
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {paymentError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{paymentError}</span>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>
-              Cancel
-            </Button>
             <Button
-              loading={isProcessing}
-              onClick={handleSimulatePayment}
-              icon={Lock}
+              className="w-full"
+              onClick={() => {
+                closeHireModal();
+                navigate(`/contracts/${confirmedContractId}`);
+              }}
             >
-              Confirm & Lock ${proposal.bidAmount.toLocaleString()} Escrow
+              View Booking Details
             </Button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-6 pt-2">
+            <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Vendor:</span>
+                <span className="font-bold text-ink">{proposal.vendorName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Job:</span>
+                <span className="font-medium text-ink truncate max-w-[200px]">
+                  {job.title}
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-border font-bold text-sm">
+                <span>Total:</span>
+                <span className="text-primary font-mono">
+                  ₹{proposal.bidAmount.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+              <Button variant="outline" onClick={closeHireModal}>
+                Cancel
+              </Button>
+              <Button loading={isProcessing} onClick={handleConfirmHire} icon={ShieldCheck}>
+                Confirm & Hire
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

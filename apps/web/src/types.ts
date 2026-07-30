@@ -15,6 +15,22 @@ export interface User {
   memberSince: string;
   hourlyRate?: number;
   completedJobsCount?: number;
+  category?: EventCategory;
+  skills?: string[];
+  workExperience?: {
+    title: string;
+    company: string;
+    location?: string;
+    startDate?: string; // YYYY-MM
+    endDate?: string; // YYYY-MM
+    current?: boolean;
+  }[];
+  education?: { school: string; degree?: string }[];
+  languages?: { language: string; proficiency: EnglishLevel }[];
+  phone?: string;
+  dateOfBirth?: string; // YYYY-MM-DD
+  website?: string;
+  orgSize?: string;
 }
 
 export type EventCategory =
@@ -40,19 +56,14 @@ export type EventTimingMode = 'fixed' | 'flexible';
 export type BookingState =
   | 'Draft'
   | 'Open'
-  | 'Pending Payment'
-  | 'Escrow Held'
   | 'In Progress'
   | 'Confirmed'
   | 'Completed'
-  | 'Escrow Released'
   | 'Closed'
   | 'Cancelled'
   | 'Rejected'
   | 'Expired'
   | 'Paused';
-
-export type EscrowStatus = 'none' | 'HELD' | 'RELEASED';
 
 export interface Job {
   id: string;
@@ -78,6 +89,7 @@ export interface Job {
   deliverables: string[];
   featured?: boolean;
   isPaused?: boolean;
+  isDraftPost?: boolean; // true only for a job saved from the wizard that has never been published
 }
 
 export interface ProposalMilestone {
@@ -103,7 +115,7 @@ export interface Proposal {
   proposedStartTime?: string; // HH:MM, 24h — only when the job's timingMode is 'fixed'
   proposedEndTime?: string; // HH:MM, 24h — only when the job's timingMode is 'fixed'
   milestones: ProposalMilestone[];
-  status: 'submitted' | 'accepted' | 'declined' | 'withdrawn';
+  status: 'draft' | 'submitted' | 'accepted' | 'declined' | 'withdrawn';
   submittedAt: string;
   portfolioLinks?: string[];
 }
@@ -127,11 +139,9 @@ export interface Contract {
   eventEndTime?: string; // HH:MM, 24h — only when timingMode is 'fixed'
   location: string;
   bookingState: BookingState;
-  escrowStatus: EscrowStatus;
   createdAt: string;
   vendorCompletedAt?: string;
   clientConfirmedAt?: string;
-  escrowReleasedAt?: string;
   acknowledgementNumber: string;
 }
 
@@ -153,7 +163,7 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'proposal' | 'escrow' | 'contract' | 'system' | 'job_alert';
+  type: 'proposal' | 'contract' | 'system' | 'job_alert';
   read: boolean;
   timestamp: string;
   linkRoute?: string;

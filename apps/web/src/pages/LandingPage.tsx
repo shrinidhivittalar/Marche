@@ -59,7 +59,7 @@ export const LandingPage: React.FC = () => {
         </h1>
 
         <p className="text-lg md:text-xl text-ink-muted max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-          Post event jobs, receive direct proposals from verified creators, and hire with total security through simulated escrow protection.
+          Post event jobs, receive direct proposals from verified creators, and hire with a confirmed, binding contract.
         </p>
 
         {/* Dual Role Quick Actions */}
@@ -95,8 +95,8 @@ export const LandingPage: React.FC = () => {
         <div className="pt-8 border-t border-border grid grid-cols-2 md:grid-cols-4 gap-6 text-left">
           <div className="p-4 bg-white border border-border rounded-2xl shadow-xs">
             <Lock className="w-5 h-5 text-primary mb-2" />
-            <h4 className="text-xs font-semibold text-ink">Simulated Escrow</h4>
-            <p className="text-[11px] text-ink-muted mt-0.5">Funds held safely until event completion.</p>
+            <h4 className="text-xs font-semibold text-ink">Confirmed Bookings</h4>
+            <p className="text-[11px] text-ink-muted mt-0.5">Every hire is instantly locked in with a binding contract.</p>
           </div>
           <div className="p-4 bg-white border border-border rounded-2xl shadow-xs">
             <Users className="w-5 h-5 text-primary mb-2" />
@@ -158,7 +158,7 @@ export const LandingPage: React.FC = () => {
                       {req.category}
                     </span>
                     <span className="font-mono text-primary font-bold">
-                      ${req.budgetMin.toLocaleString()} - ${req.budgetMax.toLocaleString()}
+                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
                     </span>
                   </div>
 
@@ -193,7 +193,7 @@ export const LandingPage: React.FC = () => {
               Privacy Policy
             </button>
             <button onClick={() => navigate('/landing')} className="hover:text-ink">
-              Terms of Escrow
+              Terms of Service
             </button>
             <button
               onClick={() => {

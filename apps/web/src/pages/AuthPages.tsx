@@ -60,7 +60,7 @@ export const AuthSignInPage: React.FC = () => {
             Welcome back
           </h1>
           <p className="text-[11px] text-ink-muted">
-            Sign in to access your event dashboard and escrow contracts
+            Sign in to access your event dashboard and contracts
           </p>
         </div>
 
@@ -218,9 +218,9 @@ export const AuthSignUpPage: React.FC = () => {
     if (!agreeTerms) return;
     setCurrentUserRole(role);
     if (role === 'vendor') {
-      navigate('/provider/dashboard');
+      navigate('/provider/onboarding');
     } else {
-      navigate('/client/dashboard');
+      navigate('/client/onboarding');
     }
   };
 

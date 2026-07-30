@@ -48,19 +48,19 @@ export const WeeklySummaryPage: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-ink-muted">Hourly (0:00 hrs)</span>
-                <span className="font-semibold text-ink">$0.00</span>
+                <span className="font-semibold text-ink">₹0.00</span>
               </div>
               <div className="flex items-center justify-between pl-3">
                 <span className="text-ink-muted">└ Manual time (0:00 hrs)</span>
-                <span className="font-semibold text-ink">$0.00</span>
+                <span className="font-semibold text-ink">₹0.00</span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-ink-muted">Fixed price and other</span>
-                <span className="font-semibold text-ink">$0.00</span>
+                <span className="font-semibold text-ink">₹0.00</span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-border font-bold text-ink">
                 <span>Total</span>
-                <span>$0.00</span>
+                <span>₹0.00</span>
               </div>
             </div>
           </Card>

@@ -76,7 +76,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               icon={ShieldCheck}
               onClick={() => navigate(`/contracts/${activeContract.id}`)}
             >
-              View Active Escrow Contract
+              View Active Contract
             </Button>
           )}
         </div>
@@ -105,7 +105,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               Budget Bounds
             </span>
             <span className="text-xl font-bold text-primary">
-              ${job.budgetMin.toLocaleString()} - ${job.budgetMax.toLocaleString()}
+              ₹{job.budgetMin.toLocaleString('en-IN')} - ₹{job.budgetMax.toLocaleString('en-IN')}
             </span>
           </div>
         </div>
@@ -225,8 +225,6 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
             <EmptyState
               title="No proposals received yet"
               description="Your job is live in the marketplace. Service providers are reviewing the specifications."
-              actionLabel="Switch to Service Provider Mode to Submit Bid"
-              onAction={() => navigate(`/provider/jobs/${job.id}`)}
             />
           ) : (
             proposals.map((proposal) => (
@@ -265,7 +263,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
                       Proposed Quote
                     </span>
                     <span className="text-xl font-extrabold text-primary">
-                      ${proposal.bidAmount.toLocaleString()}
+                      ₹{proposal.bidAmount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>

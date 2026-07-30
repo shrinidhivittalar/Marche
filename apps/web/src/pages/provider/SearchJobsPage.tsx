@@ -8,10 +8,10 @@ import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
 type SortOption = 'best' | 'recent' | 'budget_high' | 'budget_low';
 
 const BUDGET_BUCKETS = [
-  { label: 'Under $3,000', test: (min: number) => min < 3000 },
-  { label: '$3,000 – $5,000', test: (min: number) => min >= 3000 && min < 5000 },
-  { label: '$5,000 – $8,000', test: (min: number) => min >= 5000 && min < 8000 },
-  { label: '$8,000+', test: (min: number) => min >= 8000 },
+  { label: 'Under ₹3,000', test: (min: number) => min < 3000 },
+  { label: '₹3,000 – ₹5,000', test: (min: number) => min >= 3000 && min < 5000 },
+  { label: '₹5,000 – ₹8,000', test: (min: number) => min >= 5000 && min < 8000 },
+  { label: '₹8,000+', test: (min: number) => min >= 8000 },
 ];
 
 const PROPOSAL_BUCKETS = [
@@ -280,7 +280,7 @@ export const SearchJobsPage: React.FC = () => {
 
                   <p className="text-xs text-ink mt-2">
                     <span className="font-semibold text-primary">
-                      ${req.budgetMin.toLocaleString()} - ${req.budgetMax.toLocaleString()}
+                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
                     </span>{' '}
                     · {req.category}
                   </p>

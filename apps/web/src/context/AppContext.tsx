@@ -9,7 +9,6 @@ import {
   Notification,
   ChatMessage,
   BookingState,
-  EscrowStatus,
   EventCategory,
 } from '../types';
 import {
@@ -21,6 +20,20 @@ import {
   INITIAL_NOTIFICATIONS,
 } from '../data/mockData';
 import { deriveSlotFromEvent, markVendorSlotBooked } from '../lib/availability';
+
+type JobDraftInput = Omit<
+  Job,
+  | 'id'
+  | 'clientId'
+  | 'clientName'
+  | 'clientAvatar'
+  | 'clientCompany'
+  | 'clientVerified'
+  | 'proposalsCount'
+  | 'createdAt'
+  | 'status'
+  | 'isDraftPost'
+>;
 
 interface AppContextType {
   currentUser: User;
@@ -43,21 +56,10 @@ interface AppContextType {
   setSelectedLocationFilter: (loc: string) => void;
   
   // Actions
-  createJob: (
-    data: Omit<
-      Job,
-      | 'id'
-      | 'clientId'
-      | 'clientName'
-      | 'clientAvatar'
-      | 'clientCompany'
-      | 'clientVerified'
-      | 'proposalsCount'
-      | 'createdAt'
-      | 'status'
-    >
-  ) => Job;
-  
+  createJob: (data: JobDraftInput) => Job;
+  saveJobDraft: (draftId: string | null, data: JobDraftInput) => Job;
+  publishJobDraft: (draftId: string, data: JobDraftInput) => Job;
+
   submitProposal: (
     data: {
       jobId: string;
@@ -67,16 +69,32 @@ interface AppContextType {
       proposedStartTime?: string;
       proposedEndTime?: string;
       milestones: { title: string; amount: number; description: string }[];
+      portfolioLinks?: string[];
+      draftId?: string;
     }
   ) => Proposal;
-  
-  hireVendorAndDepositEscrow: (
+
+  saveProposalDraft: (
+    draftId: string | null,
+    data: {
+      jobId: string;
+      bidAmount: number;
+      coverLetter: string;
+      estimatedDelivery: string;
+      proposedStartTime?: string;
+      proposedEndTime?: string;
+      milestones: { title: string; amount: number; description: string }[];
+      portfolioLinks?: string[];
+    }
+  ) => Proposal;
+
+  hireVendor: (
     jobId: string,
     proposalId: string
   ) => Promise<{ contract: Contract; success: boolean }>;
 
   vendorMarkCompleted: (contractId: string) => void;
-  clientConfirmCompletionAndReleaseEscrow: (contractId: string) => void;
+  clientConfirmCompletion: (contractId: string) => void;
   adminOverrideBookingState: (
     bookingId: string,
     targetState: BookingState,
@@ -239,7 +257,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     userId: string,
     title: string,
     message: string,
-    type: 'proposal' | 'escrow' | 'contract' | 'system' | 'job_alert',
+    type: 'proposal' | 'contract' | 'system' | 'job_alert',
     linkRoute?: string
   ) => {
     const notif: Notification = {
@@ -256,20 +274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 1. Create Job
-  const createJob = (
-    data: Omit<
-      Job,
-      | 'id'
-      | 'clientId'
-      | 'clientName'
-      | 'clientAvatar'
-      | 'clientCompany'
-      | 'clientVerified'
-      | 'proposalsCount'
-      | 'createdAt'
-      | 'status'
-    >
-  ): Job => {
+  const createJob = (data: JobDraftInput): Job => {
     const newReqId = `job_${Date.now()}`;
     const newReq: Job = {
       ...data,
@@ -279,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clientAvatar: currentUser.avatar,
       clientCompany: currentUser.companyOrTitle,
       clientVerified: currentUser.verified,
-      status: 'Escrow Held', // Active for proposals
+      status: 'Open', // Active for proposals
       proposalsCount: 0,
       createdAt: new Date().toISOString(),
     };
@@ -290,7 +295,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'Job Published',
       `Job ${newReq.id} ("${newReq.title}")`,
       'Draft',
-      'Escrow Held (Open for Proposals)'
+      'Open'
     );
 
     addNotification(
@@ -304,6 +309,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newReq;
   };
 
+  // 1b. Save Job Draft (create a new draft, or update an existing one in place)
+  const saveJobDraft = (draftId: string | null, data: JobDraftInput): Job => {
+    if (draftId) {
+      const existing = jobs.find((r) => r.id === draftId);
+      if (!existing) throw new Error('Draft not found');
+      const updated: Job = { ...existing, ...data, status: 'Draft', isDraftPost: true };
+      setJobs((prev) => prev.map((r) => (r.id === draftId ? updated : r)));
+      return updated;
+    }
+
+    const newReqId = `job_${Date.now()}`;
+    const newReq: Job = {
+      ...data,
+      id: newReqId,
+      clientId: currentUser.id,
+      clientName: currentUser.name,
+      clientAvatar: currentUser.avatar,
+      clientCompany: currentUser.companyOrTitle,
+      clientVerified: currentUser.verified,
+      status: 'Draft',
+      isDraftPost: true,
+      proposalsCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    setJobs((prev) => [newReq, ...prev]);
+    addAuditLog('Job Draft Saved', `Job ${newReqId} ("${newReq.title || 'Untitled job'}")`, 'None', 'Draft');
+
+    return newReq;
+  };
+
+  // 1c. Publish an existing Job Draft
+  const publishJobDraft = (draftId: string, data: JobDraftInput): Job => {
+    const existing = jobs.find((r) => r.id === draftId);
+    if (!existing) throw new Error('Draft not found');
+
+    const published: Job = { ...existing, ...data, status: 'Open', isDraftPost: false };
+    setJobs((prev) => prev.map((r) => (r.id === draftId ? published : r)));
+
+    addAuditLog('Job Published', `Job ${draftId} ("${published.title}")`, 'Draft', 'Open');
+
+    addNotification(
+      'user_vendor_1',
+      'New Matching Job',
+      `New job posted in ${published.category}: "${published.title}"`,
+      'job_alert',
+      `/provider/jobs/${draftId}`
+    );
+
+    return published;
+  };
+
   // 2. Submit Proposal
   const submitProposal = (data: {
     jobId: string;
@@ -313,10 +370,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     proposedStartTime?: string;
     proposedEndTime?: string;
     milestones: { title: string; amount: number; description: string }[];
+    portfolioLinks?: string[];
+    draftId?: string;
   }): Proposal => {
+    const targetReq = jobs.find((r) => r.id === data.jobId);
+    let newProposal: Proposal;
+
+    if (data.draftId) {
+      const existing = proposals.find((p) => p.id === data.draftId);
+      if (!existing) throw new Error('Draft not found');
+      newProposal = {
+        ...existing,
+        bidAmount: data.bidAmount,
+        coverLetter: data.coverLetter,
+        estimatedDelivery: data.estimatedDelivery,
+        proposedStartTime: data.proposedStartTime,
+        proposedEndTime: data.proposedEndTime,
+        milestones: data.milestones.map((m, idx) => ({
+          id: `ms_${existing.id}_${idx}`,
+          title: m.title,
+          amount: m.amount,
+          description: m.description,
+        })),
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+        portfolioLinks: data.portfolioLinks,
+      };
+      setProposals((prev) => prev.map((p) => (p.id === data.draftId ? newProposal : p)));
+    } else {
+      const newPropId = `prop_${Date.now()}`;
+      newProposal = {
+        id: newPropId,
+        jobId: data.jobId,
+        vendorId: currentUser.id,
+        vendorName: currentUser.name,
+        vendorAvatar: currentUser.avatar,
+        vendorRating: currentUser.rating || 4.95,
+        vendorReviewCount: currentUser.reviewCount || 12,
+        vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
+        vendorLocation: currentUser.location || 'New York, NY',
+        bidAmount: data.bidAmount,
+        coverLetter: data.coverLetter,
+        estimatedDelivery: data.estimatedDelivery,
+        proposedStartTime: data.proposedStartTime,
+        proposedEndTime: data.proposedEndTime,
+        milestones: data.milestones.map((m, idx) => ({
+          id: `ms_${newPropId}_${idx}`,
+          title: m.title,
+          amount: m.amount,
+          description: m.description,
+        })),
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+        portfolioLinks: data.portfolioLinks,
+      };
+      setProposals((prev) => [newProposal, ...prev]);
+    }
+
+    // Increment proposals count on job
+    setJobs((prev) =>
+      prev.map((r) =>
+        r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r
+      )
+    );
+
+    addAuditLog(
+      'Proposal Submitted',
+      `Proposal ${newProposal.id} for Job ${data.jobId}`,
+      'None',
+      `Submitted (₹${data.bidAmount.toLocaleString('en-IN')})`
+    );
+
+    if (targetReq) {
+      addNotification(
+        targetReq.clientId,
+        'New Proposal Received',
+        `${currentUser.name} submitted a proposal (₹${data.bidAmount.toLocaleString('en-IN')}) for "${targetReq.title}"`,
+        'proposal',
+        `/client/jobs/${targetReq.id}`
+      );
+    }
+
+    return newProposal;
+  };
+
+  // 2b. Save Proposal Draft (create a new draft, or update an existing one in place)
+  const saveProposalDraft = (
+    draftId: string | null,
+    data: {
+      jobId: string;
+      bidAmount: number;
+      coverLetter: string;
+      estimatedDelivery: string;
+      proposedStartTime?: string;
+      proposedEndTime?: string;
+      milestones: { title: string; amount: number; description: string }[];
+      portfolioLinks?: string[];
+    }
+  ): Proposal => {
+    if (draftId) {
+      const existing = proposals.find((p) => p.id === draftId);
+      if (!existing) throw new Error('Draft not found');
+      const updated: Proposal = {
+        ...existing,
+        bidAmount: data.bidAmount,
+        coverLetter: data.coverLetter,
+        estimatedDelivery: data.estimatedDelivery,
+        proposedStartTime: data.proposedStartTime,
+        proposedEndTime: data.proposedEndTime,
+        milestones: data.milestones.map((m, idx) => ({
+          id: `ms_${existing.id}_${idx}`,
+          title: m.title,
+          amount: m.amount,
+          description: m.description,
+        })),
+        status: 'draft',
+        portfolioLinks: data.portfolioLinks,
+      };
+      setProposals((prev) => prev.map((p) => (p.id === draftId ? updated : p)));
+      return updated;
+    }
+
     const newPropId = `prop_${Date.now()}`;
     const targetReq = jobs.find((r) => r.id === data.jobId);
-
     const newProposal: Proposal = {
       id: newPropId,
       jobId: data.jobId,
@@ -338,41 +514,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         amount: m.amount,
         description: m.description,
       })),
-      status: 'submitted',
+      status: 'draft',
       submittedAt: new Date().toISOString(),
+      portfolioLinks: data.portfolioLinks,
     };
-
     setProposals((prev) => [newProposal, ...prev]);
-
-    // Increment proposals count on job
-    setJobs((prev) =>
-      prev.map((r) =>
-        r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r
-      )
-    );
-
-    addAuditLog(
-      'Proposal Submitted',
-      `Proposal ${newPropId} for Job ${data.jobId}`,
-      'None',
-      `Submitted ($${data.bidAmount.toLocaleString()})`
-    );
-
-    if (targetReq) {
-      addNotification(
-        targetReq.clientId,
-        'New Proposal Received',
-        `${currentUser.name} submitted a proposal ($${data.bidAmount.toLocaleString()}) for "${targetReq.title}"`,
-        'proposal',
-        `/client/jobs/${targetReq.id}`
-      );
-    }
-
     return newProposal;
   };
 
-  // 3. Hire & Deposit Escrow
-  const hireVendorAndDepositEscrow = async (
+  // 3. Hire Vendor & Confirm Booking
+  const hireVendor = async (
     jobId: string,
     proposalId: string
   ): Promise<{ contract: Contract; success: boolean }> => {
@@ -405,7 +556,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       eventEndTime: req.eventEndTime,
       location: req.location,
       bookingState: 'Confirmed',
-      escrowStatus: 'HELD',
       createdAt: new Date().toISOString(),
       acknowledgementNumber: ackNumber,
     };
@@ -436,18 +586,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Write audit logs
-    addAuditLog(
-      'Simulated Escrow Deposit Success',
-      `Booking ${req.id} / Contract ${contractId}`,
-      'Pending Payment',
-      `Escrow Held ($${prop.bidAmount.toLocaleString()})`
-    );
-
+    // Write audit log
     addAuditLog(
       'Vendor Hired & Contract Confirmed',
       `Contract ${contractId} with ${prop.vendorName}`,
-      'Escrow Held',
+      'Open',
       'Confirmed'
     );
 
@@ -455,7 +598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification(
       prop.vendorId,
       'You Have Been Hired!',
-      `Congratulations! ${req.clientName} accepted your proposal ($${prop.bidAmount.toLocaleString()}) for "${req.title}". Funds held in escrow.`,
+      `Congratulations! ${req.clientName} accepted your proposal (₹${prop.bidAmount.toLocaleString('en-IN')}) for "${req.title}". Your booking is confirmed.`,
       'contract',
       `/contracts/${contractId}`
     );
@@ -496,14 +639,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification(
       ctr.clientId,
       'Event Marked Delivered',
-      `${ctr.vendorName} marked the event "${ctr.jobTitle}" as completed. Please confirm to release $${ctr.amount.toLocaleString()} escrow.`,
-      'escrow',
+      `${ctr.vendorName} marked the event "${ctr.jobTitle}" as completed. Please confirm to close out the booking.`,
+      'contract',
       `/contracts/${contractId}`
     );
   };
 
-  // 5. Client Confirms Completion & Releases Escrow
-  const clientConfirmCompletionAndReleaseEscrow = (contractId: string) => {
+  // 5. Client Confirms Completion
+  const clientConfirmCompletion = (contractId: string) => {
     const ctr = contracts.find((c) => c.id === contractId);
     if (!ctr) return;
 
@@ -513,9 +656,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? {
               ...c,
               bookingState: 'Closed',
-              escrowStatus: 'RELEASED',
               clientConfirmedAt: new Date().toISOString(),
-              escrowReleasedAt: new Date().toISOString(),
             }
           : c
       )
@@ -528,17 +669,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     addAuditLog(
-      'Escrow Released & Booking Closed',
+      'Booking Completed & Closed',
       `Contract ${contractId}`,
-      'Escrow Held',
-      'Escrow RELEASED ($' + ctr.amount.toLocaleString() + ')'
+      'Completed',
+      'Closed'
     );
 
     addNotification(
       ctr.vendorId,
-      'Escrow Released!',
-      `Payout of $${ctr.amount.toLocaleString()} for "${ctr.jobTitle}" has been released from escrow to your payout account.`,
-      'escrow',
+      'Booking Completed!',
+      `${ctr.clientName} confirmed "${ctr.jobTitle}" is complete. Payment of ₹${ctr.amount.toLocaleString('en-IN')} is confirmed.`,
+      'contract',
       `/contracts/${contractId}`
     );
   };
@@ -561,14 +702,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (ctr) {
-      let newEscrow = ctr.escrowStatus;
-      if (targetState === 'Escrow Released') newEscrow = 'RELEASED';
-      if (targetState === 'Cancelled' || targetState === 'Expired') newEscrow = 'none';
-
       setContracts((prev) =>
-        prev.map((c) =>
-          c.id === ctr.id ? { ...c, bookingState: targetState, escrowStatus: newEscrow } : c
-        )
+        prev.map((c) => (c.id === ctr.id ? { ...c, bookingState: targetState } : c))
       );
     }
 
@@ -619,7 +754,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((r) => {
         if (r.id === id) {
           const isPaused = r.status === 'Draft' || r.isPaused;
-          const newStatus = isPaused ? 'Escrow Held' : 'Draft';
+          const newStatus = isPaused ? 'Open' : 'Draft';
           addAuditLog(
             'Job Status Changed',
             `Job ${id}`,
@@ -676,10 +811,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedLocationFilter,
         setSelectedLocationFilter,
         createJob,
+        saveJobDraft,
+        publishJobDraft,
         submitProposal,
-        hireVendorAndDepositEscrow,
+        saveProposalDraft,
+        hireVendor,
         vendorMarkCompleted,
-        clientConfirmCompletionAndReleaseEscrow,
+        clientConfirmCompletion,
         adminOverrideBookingState,
         markNotificationRead,
         markAllNotificationsRead,

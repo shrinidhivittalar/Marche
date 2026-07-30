@@ -63,7 +63,7 @@ export const ContractsPage: React.FC = () => {
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-sm">
               <span className="text-ink-muted">Earnings available now:</span>
-              <span className="font-bold text-primary">$0.00</span>
+              <span className="font-bold text-primary">₹0.00</span>
             </div>
 
             <EmptyState

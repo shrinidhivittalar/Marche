@@ -4,7 +4,7 @@ import {
   ChevronLeft,
   FileCheck,
   ShieldCheck,
-  DollarSign,
+  IndianRupee,
   CheckCircle2,
   Lock,
 } from 'lucide-react';
@@ -140,16 +140,16 @@ export const ProviderDashboard: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-primary" />
           </div>
           <p className="text-2xl font-bold text-ink">{myContracts.length}</p>
-          <p className="text-[11px] text-ink-muted mt-1">In escrow or completed</p>
+          <p className="text-[11px] text-ink-muted mt-1">Confirmed or completed</p>
         </Card>
 
         <Card className="p-5">
           <div className="flex items-center justify-between text-ink-muted mb-2">
             <span className="text-xs font-medium">Total Revenue Won</span>
-            <DollarSign className="w-4 h-4 text-primary" />
+            <IndianRupee className="w-4 h-4 text-primary" />
           </div>
           <p className="text-2xl font-bold text-ink">
-            ${totalEarnings.toLocaleString()}
+            ₹{totalEarnings.toLocaleString('en-IN')}
           </p>
           <p className="text-[11px] text-ink-muted mt-1">0% vendor commission</p>
         </Card>
@@ -176,7 +176,7 @@ export const ProviderDashboard: React.FC = () => {
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >
-              My Submitted Proposals ({myProposals.length})
+              My Proposals ({myProposals.length})
             </button>
 
             <button
@@ -216,12 +216,14 @@ export const ProviderDashboard: React.FC = () => {
             ) : (
               myProposals.map((proposal) => {
                 const req = jobs.find((r) => r.id === proposal.jobId);
+                const isDraft = proposal.status === 'draft';
                 return (
                   <div
                     key={proposal.id}
-                    onClick={() =>
-                      req && navigate(`/provider/jobs/${req.id}`)
-                    }
+                    onClick={() => {
+                      if (!req) return;
+                      navigate(isDraft ? `/provider/submit-proposal/${req.id}` : `/provider/jobs/${req.id}`);
+                    }}
                     className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
@@ -229,7 +231,7 @@ export const ProviderDashboard: React.FC = () => {
                         <div className="flex items-center gap-2 mb-1">
                           <StatusBadge status={proposal.status} />
                           <span className="text-xs font-mono text-ink-muted">
-                            Submitted {new Date(proposal.submittedAt).toLocaleDateString()}
+                            {isDraft ? 'Last saved' : 'Submitted'} {new Date(proposal.submittedAt).toLocaleDateString()}
                           </span>
                         </div>
                         <h3 className="text-base font-bold text-ink">
@@ -242,7 +244,7 @@ export const ProviderDashboard: React.FC = () => {
                           Your Proposed Quote
                         </span>
                         <span className="text-xl font-bold text-primary">
-                          ${proposal.bidAmount.toLocaleString()}
+                          ₹{proposal.bidAmount.toLocaleString('en-IN')}
                         </span>
                       </div>
                     </div>
@@ -270,7 +272,7 @@ export const ProviderDashboard: React.FC = () => {
             {myContracts.length === 0 ? (
               <EmptyState
                 title="No active contracts yet"
-                description="When a client accepts your proposal and deposits escrow, your contract will appear here."
+                description="When a client accepts your proposal, your contract will appear here."
                 actionLabel="Explore Jobs"
                 onAction={() => navigate('/provider/dashboard')}
               />
@@ -285,7 +287,6 @@ export const ProviderDashboard: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <StatusBadge status={ctr.bookingState} />
-                        <StatusBadge status={ctr.escrowStatus} />
                       </div>
                       <h3 className="text-base font-bold text-ink">
                         {ctr.jobTitle}
@@ -297,10 +298,10 @@ export const ProviderDashboard: React.FC = () => {
 
                     <div className="text-right">
                       <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                        Escrow Value
+                        Contract Value
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ${ctr.amount.toLocaleString()}
+                        ₹{ctr.amount.toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>

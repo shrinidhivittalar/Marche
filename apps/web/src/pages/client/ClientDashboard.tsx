@@ -125,12 +125,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const completedContracts = contracts.filter(
     (c) =>
       c.clientId === currentUser.id &&
-      (c.bookingState === 'Completed' || c.bookingState === 'Escrow Released')
+      (c.bookingState === 'Completed' || c.bookingState === 'Closed')
   );
-
-  const totalEscrowManaged = contracts
-    .filter((c) => c.clientId === currentUser.id)
-    .reduce((sum, c) => sum + c.amount, 0);
 
   // Filtered Jobs for Jobs View
   const filteredJobs = myJobs.filter((r) => {
@@ -143,7 +139,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       if (reqProposals.length === 0 || hasActiveContract) return false;
     } else if (activeTab === 'progress') {
       const ctr = contracts.find((c) => c.jobId === r.id);
-      if (!ctr && r.status !== 'In Progress' && r.status !== 'Escrow Held') return false;
+      if (!ctr && r.status !== 'In Progress' && r.status !== 'Open') return false;
     } else if (activeTab === 'completed') {
       if (r.status !== 'Completed' && r.status !== 'Closed') return false;
     }
@@ -353,9 +349,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                   <div className="p-3 rounded-xl bg-bg border border-border flex items-center justify-between text-xs">
                     <div>
-                      <span className="block text-[10px] text-ink-muted">Escrow Amount</span>
+                      <span className="block text-[10px] text-ink-muted">Booking Amount</span>
                       <span className="text-sm font-extrabold text-ink">
-                        ${ctr.amount.toLocaleString()}
+                        ₹{ctr.amount.toLocaleString('en-IN')}
                       </span>
                     </div>
                     <Button size="sm" onClick={() => navigate(`/contracts/${ctr.id}`)}>
@@ -495,7 +491,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             {filteredJobs.map((req) => {
               const reqProposals = proposals.filter((p) => p.jobId === req.id);
               const activeContract = contracts.find((c) => c.jobId === req.id);
-              const isPaused = req.status === 'Draft' || req.isPaused;
+              const isDraftPost = !!req.isDraftPost;
+              const isPaused = (!isDraftPost && req.status === 'Draft') || req.isPaused;
 
               return (
                 <div
@@ -521,7 +518,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                       <h3
                         onClick={() => {
-                          if (activeContract) {
+                          if (isDraftPost) {
+                            navigate(`/client/jobs/new/manual/${req.id}`);
+                          } else if (activeContract) {
                             navigate(`/contracts/${activeContract.id}`);
                           } else {
                             navigate(`/client/jobs/${req.id}`);
@@ -529,7 +528,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                         }}
                         className="text-base font-bold text-ink hover:text-primary cursor-pointer transition-colors"
                       >
-                        {req.title}
+                        {req.title || 'Untitled draft job'}
                       </h3>
                     </div>
 
@@ -538,7 +537,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                         Budget Range
                       </span>
                       <span className="text-sm font-extrabold text-ink">
-                        ${req.budgetMin.toLocaleString()} - ${req.budgetMax.toLocaleString()}
+                        ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>
@@ -563,7 +562,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     <div className="flex items-center gap-2">
                       {activeContract ? (
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-primary text-xs font-semibold border border-emerald-200">
-                          Contract Active (${activeContract.amount.toLocaleString()})
+                          Contract Active (₹{activeContract.amount.toLocaleString('en-IN')})
                         </span>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold border border-amber-200">
@@ -574,63 +573,83 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   </div>
 
                   {/* Actions Row */}
-                  <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2 bg-bg/60 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
-                    <div className="flex items-center gap-2">
+                  {isDraftPost ? (
+                    <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2 bg-bg/60 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
                       <button
-                        onClick={() => {
-                          if (activeContract) {
-                            navigate(`/contracts/${activeContract.id}`);
-                          } else {
-                            navigate(`/client/jobs/${req.id}`);
-                          }
-                        }}
+                        onClick={() => navigate(`/client/jobs/new/manual/${req.id}`)}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-semibold text-ink transition-all cursor-pointer"
                       >
-                        <Eye className="w-3.5 h-3.5 text-primary" />
-                        <span>View Bids ({reqProposals.length})</span>
+                        <Edit3 className="w-3.5 h-3.5 text-primary" />
+                        <span>Continue Editing</span>
                       </button>
 
                       <button
-                        onClick={() => openEditModal(req)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
+                        onClick={() => setDeleteConfirmReq(req)}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 text-xs font-medium text-rose-600 transition-all cursor-pointer"
                       >
-                        <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Edit</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          togglePauseJob(req.id);
-                          showToast(
-                            isPaused
-                              ? 'Job resumed & published on marketplace.'
-                              : 'Job paused from receiving new bids.'
-                          );
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
-                      >
-                        {isPaused ? (
-                          <>
-                            <Play className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Resume</span>
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Pause</span>
-                          </>
-                        )}
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
                       </button>
                     </div>
+                  ) : (
+                    <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2 bg-bg/60 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            if (activeContract) {
+                              navigate(`/contracts/${activeContract.id}`);
+                            } else {
+                              navigate(`/client/jobs/${req.id}`);
+                            }
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-semibold text-ink transition-all cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-primary" />
+                          <span>View Bids ({reqProposals.length})</span>
+                        </button>
 
-                    <button
-                      onClick={() => setDeleteConfirmReq(req)}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 text-xs font-medium text-rose-600 transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete</span>
-                    </button>
-                  </div>
+                        <button
+                          onClick={() => openEditModal(req)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            togglePauseJob(req.id);
+                            showToast(
+                              isPaused
+                                ? 'Job resumed & published on marketplace.'
+                                : 'Job paused from receiving new bids.'
+                            );
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
+                        >
+                          {isPaused ? (
+                            <>
+                              <Play className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Resume</span>
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Pause</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => setDeleteConfirmReq(req)}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 text-xs font-medium text-rose-600 transition-all cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -692,7 +711,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-ink mb-1">
-                      Min Budget ($)
+                      Min Budget (₹)
                     </label>
                     <Input
                       type="number"
@@ -705,7 +724,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-ink mb-1">
-                      Max Budget ($)
+                      Max Budget (₹)
                     </label>
                     <Input
                       type="number"
@@ -794,7 +813,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             Client Account Settings
           </h1>
           <p className="text-xs text-ink-muted mt-1">
-            Configure notifications, escrow default parameters, and security preferences.
+            Configure notifications and security preferences.
           </p>
         </div>
 
@@ -808,16 +827,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" defaultChecked className="rounded text-primary" />
-                <span>Send milestone release reminders 24h before event date</span>
+                <span>Send milestone reminders 24h before event date</span>
               </label>
             </div>
-          </div>
-
-          <div className="pt-4 border-t border-border space-y-4">
-            <h2 className="text-sm font-bold text-ink">Escrow Guarantee Policy</h2>
-            <p className="text-xs text-ink-muted leading-relaxed">
-              All Marché transactions lock payment in a zero-fee simulated escrow account until both Client and Provider confirm milestone completion.
-            </p>
           </div>
         </Card>
       </div>
@@ -926,7 +938,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               Add a payment method
             </p>
             <p className="text-[11px] text-ink-muted leading-relaxed">
-              Funds your escrow before a proposal is accepted. No cost until you hire.
+              Used to pay for your booking once a proposal is accepted. No cost until you hire.
             </p>
           </button>
 
@@ -1156,7 +1168,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                       </div>
                       <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-border">
                         <span>
-                          ${req.budgetMin.toLocaleString()}–${req.budgetMax.toLocaleString()}
+                          ₹{req.budgetMin.toLocaleString('en-IN')}–₹{req.budgetMax.toLocaleString('en-IN')}
                         </span>
                         <span>
                           <strong className="text-ink">{pCount}</strong> proposal{pCount !== 1 ? 's' : ''}
@@ -1219,7 +1231,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                       <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
                         <span className="font-semibold text-ink">{req.category}</span>
                         <span>•</span>
-                        <span>Budget: <strong className="text-ink">${req.budgetMin.toLocaleString()} - ${req.budgetMax.toLocaleString()}</strong></span>
+                        <span>Budget: <strong className="text-ink">₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}</strong></span>
                         <span>•</span>
                         <span><strong className="text-ink">{pCount}</strong> proposal{pCount !== 1 ? 's' : ''}</span>
                       </div>
@@ -1381,7 +1393,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-ink mb-1">Min Budget ($)</label>
+                  <label className="block font-bold text-ink mb-1">Min Budget (₹)</label>
                   <Input
                     type="number"
                     value={editBudgetMin}
@@ -1391,7 +1403,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-ink mb-1">Max Budget ($)</label>
+                  <label className="block font-bold text-ink mb-1">Max Budget (₹)</label>
                   <Input
                     type="number"
                     value={editBudgetMax}
