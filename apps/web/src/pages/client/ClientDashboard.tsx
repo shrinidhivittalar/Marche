@@ -35,10 +35,22 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input, IconTile } from '@marche/ui';
+import {
+  Button,
+  Card,
+  Input,
+  IconTile,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Job, Proposal, Contract } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { formatBudget } from '../../lib/formatBudget';
+import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
 
 interface ClientDashboardProps {
   view?: 'dashboard' | 'jobs' | 'settings';
@@ -54,12 +66,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     contracts,
     notifications,
     navigate,
-    createJob,
+    saveJobDraft,
     togglePauseJob,
     deleteJob,
     updateJob,
+    updateCurrentUser,
     markNotificationRead,
   } = useApp();
+
+  const isProfileComplete = computeIsProfileComplete(currentUser);
+  const isSetupComplete = Boolean(currentUser.paymentMethodAdded) && isProfileComplete && currentUser.verified;
 
   // Top-level tab for Jobs View (matches "All job posts" / "All contracts")
   const [jobsTab, setJobsTab] = useState<'posts' | 'contracts'>('posts');
@@ -79,7 +95,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteVendorName, setInviteVendorName] = useState('');
   const [messageModalOpen, setMessageModalOpen] = useState(false);
-  const [messageRecipient, setMessageRecipient] = useState('Julian Vance (Photography)');
+  const [messageRecipient, setMessageRecipient] = useState('Arjun Verma (Photography)');
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -111,7 +127,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   // Stats calculation
   const receivingProposalsCount = myJobs.filter((r) => {
     const pCount = proposals.filter((p) => p.jobId === r.id).length;
-    return pCount > 0 && r.status !== 'Completed' && r.status !== 'Closed';
+    const hasActiveContract = contracts.some((c) => c.jobId === r.id);
+    return pCount > 0 && !hasActiveContract;
   }).length;
 
   const activeJobsCount = myJobs.filter(
@@ -139,7 +156,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       if (reqProposals.length === 0 || hasActiveContract) return false;
     } else if (activeTab === 'progress') {
       const ctr = contracts.find((c) => c.jobId === r.id);
-      if (!ctr && r.status !== 'In Progress' && r.status !== 'Open') return false;
+      if (!ctr || ctr.bookingState !== 'Confirmed') return false;
     } else if (activeTab === 'completed') {
       if (r.status !== 'Completed' && r.status !== 'Closed') return false;
     }
@@ -188,10 +205,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalReq) return;
+    const isFixed = editModalReq.budgetMode === 'fixed';
     updateJob(editModalReq.id, {
       title: editTitle,
       budgetMin: Number(editBudgetMin),
-      budgetMax: Number(editBudgetMax),
+      // Fixed-budget jobs must keep max mirrored to min so provider bid validation stays consistent.
+      budgetMax: isFixed ? Number(editBudgetMin) : Number(editBudgetMax),
       location: editLocation,
     });
     setEditModalReq(null);
@@ -212,7 +231,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     return (
       <div className="space-y-6 w-full">
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+          <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>{toastMessage}</span>
           </div>
@@ -261,7 +280,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             {/* Search, Filters, Sort */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-ink-muted pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="Search by contract, freelancer, or agency name"
@@ -287,9 +306,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => setContractSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bg border border-border hover:border-zinc-300 font-semibold text-ink transition-all cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-bg border border-border hover:border-border-strong font-semibold text-ink transition-all cursor-pointer"
                 >
-                  <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
+                  <ArrowUpDown className="w-3.5 h-3.5 text-ink-muted" />
                   {contractSortDir === 'asc' ? 'Ascending' : 'Descending'}
                 </button>
               </div>
@@ -300,8 +319,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             </div>
 
             {filteredContracts.length === 0 ? (
-              <div className="bg-white border border-border rounded-3xl p-16 text-center space-y-4 shadow-xs">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-primary flex items-center justify-center mx-auto">
+              <div className="bg-surface border border-border rounded-3xl p-16 text-center space-y-4 shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-primary flex items-center justify-center mx-auto">
                   <FileSignature className="w-8 h-8" />
                 </div>
                 <div className="max-w-md mx-auto space-y-1.5">
@@ -335,7 +354,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     <span className="text-xs font-mono font-bold text-primary">
                       REF: {ctr.acknowledgementNumber}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-primary text-[10px] font-extrabold">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-primary text-[10px] font-extrabold">
                       {ctr.bookingState}
                     </span>
                   </div>
@@ -366,13 +385,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         ) : (
         <>
         {/* Filters and Search Bar */}
-        <div className="space-y-4 bg-white p-4 border border-border rounded-2xl shadow-xs">
+        <div className="space-y-4 bg-surface p-4 border border-border rounded-2xl shadow-xs">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setActiveTab('all')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'all'
-                  ? 'bg-primary text-white shadow-xs font-bold'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -383,7 +402,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               onClick={() => setActiveTab('active')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'active'
-                  ? 'bg-primary text-white shadow-xs font-bold'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -394,7 +413,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               onClick={() => setActiveTab('proposals')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'proposals'
-                  ? 'bg-primary text-white shadow-xs font-bold'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -405,7 +424,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               onClick={() => setActiveTab('progress')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'progress'
-                  ? 'bg-primary text-white shadow-xs font-bold'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'bg-bg text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -415,7 +434,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
           <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-ink-muted pointer-events-none" />
               <Input
                 type="text"
                 placeholder="Search jobs by title or location..."
@@ -426,46 +445,47 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-2.5 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                  className="absolute right-2.5 top-2.5 text-ink-muted hover:text-ink cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-bg border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-ink focus:outline-none focus:border-primary"
-            >
-              <option value="All">All Categories</option>
-              {Array.from(
-                new Set([
-                  'Website Design',
-                  'Mobile Development',
-                  'Digital Marketing',
-                  'Brand Identity',
-                  'Software Development',
-                  'Photography',
-                  'Catering',
-                  'DJ & Sound',
-                  'Videography',
-                  'Floral & Decor',
-                  ...myJobs.map((r) => r.category),
-                ])
-              ).map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-1.5 text-xs font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Categories</SelectItem>
+                {Array.from(
+                  new Set([
+                    'Website Design',
+                    'Mobile Development',
+                    'Digital Marketing',
+                    'Brand Identity',
+                    'Software Development',
+                    'Photography',
+                    'Catering',
+                    'DJ & Sound',
+                    'Videography',
+                    'Floral & Decor',
+                    ...myJobs.map((r) => r.category),
+                  ])
+                ).map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {/* Jobs Cards List */}
         {filteredJobs.length === 0 ? (
-          <div className="bg-white border border-border rounded-3xl p-12 text-center space-y-4 shadow-xs">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-primary flex items-center justify-center mx-auto">
+          <div className="bg-surface border border-border rounded-3xl p-12 text-center space-y-4 shadow-xs">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-primary flex items-center justify-center mx-auto">
               <Inbox className="w-8 h-8" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
@@ -497,7 +517,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               return (
                 <div
                   key={req.id}
-                  className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all space-y-4"
+                  className="bg-surface border border-border rounded-2xl p-5 hover:border-border-strong hover:shadow-md transition-all space-y-4"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-1">
@@ -537,7 +557,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                         Budget Range
                       </span>
                       <span className="text-sm font-extrabold text-ink">
-                        ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
+                        {formatBudget(req)}
                       </span>
                     </div>
                   </div>
@@ -549,23 +569,23 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border text-xs text-ink-muted">
                     <div className="flex flex-wrap items-center gap-4">
                       <span className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                        <Calendar className="w-3.5 h-3.5 text-ink-muted" />
                         <span>{formatEventSchedule(req.eventDate, req.timingMode, req.eventStartTime, req.eventEndTime)}</span>
                       </span>
 
                       <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-zinc-400" />
+                        <MapPin className="w-3.5 h-3.5 text-ink-muted" />
                         <span>{req.location}</span>
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {activeContract ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-primary text-xs font-semibold border border-emerald-200">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-primary text-xs font-semibold border border-emerald-200 dark:border-emerald-500/20">
                           Contract Active (₹{activeContract.amount.toLocaleString('en-IN')})
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold border border-amber-200">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-400 text-xs font-semibold border border-amber-200 dark:border-amber-500/20">
                           {reqProposals.length} Bids Received
                         </span>
                       )}
@@ -577,7 +597,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2 bg-bg/60 -mx-5 -mb-5 px-5 py-3 rounded-b-2xl">
                       <button
                         onClick={() => navigate(`/client/jobs/new/manual/${req.id}`)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-semibold text-ink transition-all cursor-pointer"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface border border-border hover:border-border-strong text-xs font-semibold text-ink transition-all cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5 text-primary" />
                         <span>Continue Editing</span>
@@ -585,7 +605,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                       <button
                         onClick={() => setDeleteConfirmReq(req)}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 text-xs font-medium text-rose-600 transition-all cursor-pointer"
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-xs font-medium text-rose-600 transition-all cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete</span>
@@ -602,7 +622,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                               navigate(`/client/jobs/${req.id}`);
                             }
                           }}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-semibold text-ink transition-all cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface border border-border hover:border-border-strong text-xs font-semibold text-ink transition-all cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5 text-primary" />
                           <span>View Bids ({reqProposals.length})</span>
@@ -610,9 +630,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                         <button
                           onClick={() => openEditModal(req)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface border border-border hover:border-border-strong text-xs font-medium text-ink transition-all cursor-pointer"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
+                          <Edit3 className="w-3.5 h-3.5 text-ink-muted" />
                           <span>Edit</span>
                         </button>
 
@@ -625,7 +645,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                                 : 'Job paused from receiving new bids.'
                             );
                           }}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-border hover:border-zinc-300 text-xs font-medium text-ink transition-all cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface border border-border hover:border-border-strong text-xs font-medium text-ink transition-all cursor-pointer"
                         >
                           {isPaused ? (
                             <>
@@ -643,7 +663,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
                       <button
                         onClick={() => setDeleteConfirmReq(req)}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 text-xs font-medium text-rose-600 transition-all cursor-pointer"
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-xs font-medium text-rose-600 transition-all cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete</span>
@@ -665,7 +685,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center">
+            <span className="w-7 h-7 rounded-full bg-inverse text-inverse-fg text-xs font-bold flex items-center justify-center">
               1
             </span>
             <button
@@ -681,14 +701,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         {/* Edit Modal */}
         {editModalReq && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div className="bg-surface border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="text-base font-bold text-ink">
                   Edit Job
                 </h3>
                 <button
                   onClick={() => setEditModalReq(null)}
-                  className="p-1 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                  className="p-1 text-ink-muted hover:text-ink cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -715,8 +735,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     </label>
                     <Input
                       type="number"
+                      min={0}
                       value={editBudgetMin}
-                      onChange={(e) => setEditBudgetMin(Number(e.target.value))}
+                      onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
                       className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
                       required
                     />
@@ -728,11 +749,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     </label>
                     <Input
                       type="number"
-                      value={editBudgetMax}
-                      onChange={(e) => setEditBudgetMax(Number(e.target.value))}
-                      className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+                      min={0}
+                      value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
+                      onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
+                      disabled={editModalReq?.budgetMode === 'fixed'}
+                      className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
                       required
                     />
+                    {editModalReq?.budgetMode === 'fixed' && (
+                      <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
+                    )}
                   </div>
                 </div>
 
@@ -770,7 +796,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         {/* Delete Confirmation Modal */}
         {deleteConfirmReq && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="bg-surface border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
               <h3 className="text-base font-bold text-rose-600">
                 Delete Job?
               </h3>
@@ -850,10 +876,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   }).length;
 
   const handleDuplicateJob = (req: Job) => {
-    createJob({
+    // Saved as a draft (not republished live) so the client can update the stale
+    // event date / proposal deadline before it goes back out to the marketplace.
+    saveJobDraft(null, {
       title: `${req.title} (Copy)`,
       category: req.category,
       description: req.description,
+      budgetMode: req.budgetMode,
       budgetMin: req.budgetMin,
       budgetMax: req.budgetMax,
       location: req.location,
@@ -864,7 +893,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       proposalDeadline: req.proposalDeadline,
       deliverables: req.deliverables,
     });
-    showToast(`Job "${req.title}" duplicated.`);
+    showToast(`Job "${req.title}" duplicated as a draft — review the date before publishing.`);
   };
 
   // Generate insight line
@@ -884,7 +913,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   return (
     <div className="space-y-5 w-full transition-all">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
@@ -907,7 +936,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => navigate('/client/jobs/new')}
-            className="flex items-center gap-2 px-3.5 py-2 bg-primary text-white hover:bg-primary-hover rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Create Job</span>
@@ -915,81 +944,114 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         </div>
       </div>
 
-      {/* Setup Checklist */}
-      <div className="bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <h2 className="text-sm font-extrabold text-ink tracking-tight mb-3">
-          Finish setting up your account
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={() =>
-              showToast("Payment methods aren't wired up yet — Marché is still a frontend preview.")
-            }
-            className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-zinc-300 hover:bg-white transition-all cursor-pointer space-y-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                Required to hire
-              </span>
-              <CreditCard className="w-4 h-4 text-ink-muted" />
-            </div>
-            <p className="text-xs font-bold text-primary underline underline-offset-2">
-              Add a payment method
-            </p>
-            <p className="text-[11px] text-ink-muted leading-relaxed">
-              Used to pay for your booking once a proposal is accepted. No cost until you hire.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/client/profile')}
-            className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-zinc-300 hover:bg-white transition-all cursor-pointer space-y-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                Required to publish
-              </span>
-              <User className="w-4 h-4 text-ink-muted" />
-            </div>
-            <p className="text-xs font-bold text-primary underline underline-offset-2">
-              Complete your profile
-            </p>
-            <p className="text-[11px] text-ink-muted leading-relaxed">
-              Add your company details so vendors know who they're proposing to.
-            </p>
-          </button>
-
-          <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                Required to hire
-              </span>
-              <Mail className="w-4 h-4 text-ink-muted" />
-            </div>
-            {currentUser.verified ? (
-              <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Email address verified
-              </p>
+      {/* Setup Checklist — disappears once every item below is complete */}
+      {!isSetupComplete && (
+        <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-2xs">
+          <h2 className="text-sm font-extrabold text-ink tracking-tight mb-3">
+            Finish setting up your account
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {currentUser.paymentMethodAdded ? (
+              <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                    Required to hire
+                  </span>
+                  <CreditCard className="w-4 h-4 text-ink-muted" />
+                </div>
+                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Payment method added
+                </p>
+              </div>
             ) : (
-              <p className="text-xs font-bold text-ink">Email not verified</p>
+              <button
+                type="button"
+                onClick={() => {
+                  updateCurrentUser({ paymentMethodAdded: true });
+                  showToast("Payment methods aren't wired up yet — Marché is still a frontend preview.");
+                }}
+                className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-border-strong hover:bg-surface transition-all cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                    Required to hire
+                  </span>
+                  <CreditCard className="w-4 h-4 text-ink-muted" />
+                </div>
+                <p className="text-xs font-bold text-primary underline underline-offset-2">
+                  Add a payment method
+                </p>
+                <p className="text-[11px] text-ink-muted leading-relaxed">
+                  Used to pay for your booking once a proposal is accepted. No cost until you hire.
+                </p>
+              </button>
             )}
+
+            {isProfileComplete ? (
+              <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                    Required to publish
+                  </span>
+                  <User className="w-4 h-4 text-ink-muted" />
+                </div>
+                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Profile complete
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/client/profile')}
+                className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-border-strong hover:bg-surface transition-all cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                    Required to publish
+                  </span>
+                  <User className="w-4 h-4 text-ink-muted" />
+                </div>
+                <p className="text-xs font-bold text-primary underline underline-offset-2">
+                  Complete your profile
+                </p>
+                <p className="text-[11px] text-ink-muted leading-relaxed">
+                  Add your company details so vendors know who they're proposing to.
+                </p>
+              </button>
+            )}
+
+            <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                  Required to hire
+                </span>
+                <Mail className="w-4 h-4 text-ink-muted" />
+              </div>
+              {currentUser.verified ? (
+                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Email address verified
+                </p>
+              ) : (
+                <p className="text-xs font-bold text-ink">Email not verified</p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Compact KPI Cards Grid (4 cards in a single row on desktop) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Active Jobs */}
         <div
           onClick={() => navigate('/client/jobs')}
-          className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
+          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-ink-muted">Active Jobs</span>
-            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
+            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-500/20">
               Active
             </span>
           </div>
@@ -1006,11 +1068,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         {/* New Proposals */}
         <div
           onClick={() => navigate('/client/jobs')}
-          className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
+          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-ink-muted">New Proposals</span>
-            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/50">
+            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-200/50 dark:border-amber-500/20">
               {pendingProposalsCount > 0 ? `${pendingProposalsCount} pending` : 'Reviewed'}
             </span>
           </div>
@@ -1027,11 +1089,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         {/* Active Projects */}
         <div
           onClick={() => navigate('/client/jobs')}
-          className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
+          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-ink-muted">Active Projects</span>
-            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/50">
+            <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-200/50 dark:border-blue-500/20">
               In progress
             </span>
           </div>
@@ -1048,11 +1110,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
         {/* Completed Projects */}
         <div
           onClick={() => navigate('/client/jobs')}
-          className="bg-white p-3.5 sm:p-4 rounded-xl border border-border hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
+          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-ink-muted">Completed Projects</span>
-            <span className="text-[10px] font-semibold text-zinc-700 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200/60">
+            <span className="text-[10px] font-semibold text-ink bg-surface-subtle px-1.5 py-0.5 rounded border border-border">
               Delivered
             </span>
           </div>
@@ -1068,7 +1130,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       </div>
 
       {/* Overview */}
-      <div className="bg-white border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+      <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between border-b border-border pb-3">
             <div>
               <h2 className="text-base font-extrabold text-ink tracking-tight">
@@ -1089,7 +1151,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   onClick={() => setOverviewLayout('grid')}
                   title="Card view"
                   className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                    overviewLayout === 'grid' ? 'bg-white shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
+                    overviewLayout === 'grid' ? 'bg-surface shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
@@ -1099,7 +1161,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   onClick={() => setOverviewLayout('list')}
                   title="List view"
                   className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                    overviewLayout === 'list' ? 'bg-white shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
+                    overviewLayout === 'list' ? 'bg-surface shadow-2xs text-primary' : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   <ListIcon className="w-3.5 h-3.5" />
@@ -1110,7 +1172,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
           {myJobs.length === 0 ? (
             <div className="py-8 px-4 text-center space-y-2 bg-bg/60 rounded-xl border border-border">
-              <Briefcase className="w-7 h-7 text-zinc-400 mx-auto" />
+              <Briefcase className="w-7 h-7 text-ink-muted mx-auto" />
               <div className="space-y-0.5">
                 <h3 className="text-xs font-bold text-ink">No Jobs Yet</h3>
                 <p className="text-[11px] text-ink-muted">
@@ -1131,7 +1193,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                 type="button"
                 onClick={() => scrollCarousel('left')}
                 aria-label="Scroll left"
-                className="hidden sm:flex absolute -left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+                className="hidden sm:flex absolute -left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-surface border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -1142,22 +1204,23 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               >
                 {myJobs.slice(0, 8).map((req) => {
                   const pCount = proposals.filter((p) => p.jobId === req.id).length;
+                  const isPaused = (!req.isDraftPost && req.status === 'Draft') || !!req.isPaused;
                   return (
                     <div
                       key={req.id}
                       onClick={() => navigate(`/client/jobs/${req.id}`)}
-                      className="group shrink-0 w-64 snap-start rounded-xl border border-border bg-white hover:border-zinc-300 hover:shadow-2xs transition-all cursor-pointer p-3.5 space-y-3"
+                      className="group shrink-0 w-64 snap-start rounded-xl border border-border bg-surface hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer p-3.5 space-y-3"
                     >
                       <div className="flex items-center justify-between">
                         <IconTile icon={<Briefcase className="w-4 h-4" />} tone="primary" size="sm" />
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                            req.status === 'Paused'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : 'bg-emerald-50 text-primary border-emerald-200'
+                            isPaused
+                              ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
+                              : 'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20'
                           }`}
                         >
-                          {req.status}
+                          {isPaused ? 'Paused' : req.status}
                         </span>
                       </div>
                       <div className="space-y-1">
@@ -1168,7 +1231,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                       </div>
                       <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-border">
                         <span>
-                          ₹{req.budgetMin.toLocaleString('en-IN')}–₹{req.budgetMax.toLocaleString('en-IN')}
+                          {formatBudget(req)}
                         </span>
                         <span>
                           <strong className="text-ink">{pCount}</strong> proposal{pCount !== 1 ? 's' : ''}
@@ -1192,7 +1255,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                 type="button"
                 onClick={() => scrollCarousel('right')}
                 aria-label="Scroll right"
-                className="hidden sm:flex absolute -right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+                className="hidden sm:flex absolute -right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-surface border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -1202,11 +1265,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               {myJobs.slice(0, 4).map((req) => {
                 const pCount = proposals.filter((p) => p.jobId === req.id).length;
                 const isMenuOpen = activeMenuReqId === req.id;
+                const isPaused = (!req.isDraftPost && req.status === 'Draft') || !!req.isPaused;
 
                 return (
                   <div
                     key={req.id}
-                    className="p-3.5 rounded-xl border border-border bg-white hover:border-zinc-300 transition-all flex items-center justify-between gap-3 relative"
+                    className="p-3.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-all flex items-center justify-between gap-3 relative"
                   >
                     {/* Information */}
                     <div className="space-y-1 min-w-0 flex-1">
@@ -1219,19 +1283,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                         </span>
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                            req.status === 'Paused'
-                              ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : 'bg-emerald-50 text-primary border-emerald-200'
+                            isPaused
+                              ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
+                              : 'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20'
                           }`}
                         >
-                          {req.status}
+                          {isPaused ? 'Paused' : req.status}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
                         <span className="font-semibold text-ink">{req.category}</span>
                         <span>•</span>
-                        <span>Budget: <strong className="text-ink">₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}</strong></span>
+                        <span>Budget: <strong className="text-ink">{formatBudget(req)}</strong></span>
                         <span>•</span>
                         <span><strong className="text-ink">{pCount}</strong> proposal{pCount !== 1 ? 's' : ''}</span>
                       </div>
@@ -1241,7 +1305,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                     <div className="flex items-center gap-1.5 shrink-0 relative">
                       <button
                         onClick={() => navigate(`/client/jobs/${req.id}`)}
-                        className="px-3 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                        className="px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
                       >
                         View
                       </button>
@@ -1252,7 +1316,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                             e.stopPropagation();
                             setActiveMenuReqId(isMenuOpen ? null : req.id);
                           }}
-                          className="px-2 py-1.5 text-zinc-600 hover:text-zinc-900 hover:bg-surface-subtle rounded-lg transition-colors cursor-pointer border border-border bg-white flex items-center justify-center"
+                          className="px-2 py-1.5 text-ink hover:text-ink hover:bg-surface-subtle rounded-lg transition-colors cursor-pointer border border-border bg-surface flex items-center justify-center"
                           title="More options"
                         >
                           <span className="text-[10px] font-bold tracking-widest leading-none">•••</span>
@@ -1264,7 +1328,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                               className="fixed inset-0 z-40"
                               onClick={() => setActiveMenuReqId(null)}
                             />
-                            <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-border py-1 z-50 text-xs text-ink animate-in fade-in zoom-in-95 duration-150">
+                            <div className="absolute right-0 mt-1 w-40 bg-surface rounded-xl shadow-xl border border-border py-1 z-50 text-xs text-ink animate-in fade-in zoom-in-95 duration-150">
                               <button
                                 onClick={() => {
                                   setActiveMenuReqId(null);
@@ -1272,7 +1336,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
                               >
-                                <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
+                                <Edit3 className="w-3.5 h-3.5 text-ink-muted" />
                                 <span>Edit</span>
                               </button>
 
@@ -1281,14 +1345,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                                   setActiveMenuReqId(null);
                                   togglePauseJob(req.id);
                                   showToast(
-                                    req.status === 'Paused'
+                                    isPaused
                                       ? `Job "${req.title}" resumed.`
                                       : `Job "${req.title}" paused.`
                                   );
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
                               >
-                                {req.status === 'Paused' ? (
+                                {isPaused ? (
                                   <>
                                     <Play className="w-3.5 h-3.5 text-emerald-600" />
                                     <span>Resume</span>
@@ -1308,7 +1372,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
                               >
-                                <Sparkles className="w-3.5 h-3.5 text-zinc-500" />
+                                <Sparkles className="w-3.5 h-3.5 text-ink-muted" />
                                 <span>Duplicate</span>
                               </button>
 
@@ -1319,7 +1383,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                                   setActiveMenuReqId(null);
                                   setDeleteConfirmReq(req);
                                 }}
-                                className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2 font-medium"
+                                className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 flex items-center gap-2 font-medium"
                               >
                                 <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                                 <span>Delete</span>
@@ -1339,7 +1403,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       {/* Delete Confirmation Modal */}
       {deleteConfirmReq && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-border">
+          <div className="bg-surface rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-border">
             <div className="space-y-1">
               <h3 className="text-base font-bold text-ink">Delete Job?</h3>
               <p className="text-xs text-ink-muted">
@@ -1368,12 +1432,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       {/* Edit Job Modal */}
       {editModalReq && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-border">
+          <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-border">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-sm font-bold text-ink">Edit Job</h3>
               <button
                 onClick={() => setEditModalReq(null)}
-                className="p-1 text-zinc-400 hover:text-zinc-700 rounded-lg cursor-pointer"
+                className="p-1 text-ink-muted hover:text-ink rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1396,8 +1460,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   <label className="block font-bold text-ink mb-1">Min Budget (₹)</label>
                   <Input
                     type="number"
+                    min={0}
                     value={editBudgetMin}
-                    onChange={(e) => setEditBudgetMin(Number(e.target.value))}
+                    onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
                     className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
                     required
                   />
@@ -1406,11 +1471,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                   <label className="block font-bold text-ink mb-1">Max Budget (₹)</label>
                   <Input
                     type="number"
-                    value={editBudgetMax}
-                    onChange={(e) => setEditBudgetMax(Number(e.target.value))}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+                    min={0}
+                    value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
+                    onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
+                    disabled={editModalReq?.budgetMode === 'fixed'}
+                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
                     required
                   />
+                  {editModalReq?.budgetMode === 'fixed' && (
+                    <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
+                  )}
                 </div>
               </div>
 

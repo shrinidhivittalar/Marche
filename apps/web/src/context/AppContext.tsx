@@ -18,8 +18,11 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
+  INITIAL_MESSAGES,
+  INITIAL_TALENT,
 } from '../data/mockData';
-import { deriveSlotFromEvent, markVendorSlotBooked } from '../lib/availability';
+import { deriveSlotFromEvent, isVendorSlotAvailable, markVendorSlotBooked } from '../lib/availability';
+import { isBidWithinBudget } from '../lib/formatBudget';
 
 type JobDraftInput = Omit<
   Job,
@@ -48,6 +51,8 @@ interface AppContextType {
   auditLogs: AuditLogEntry[];
   notifications: Notification[];
   messages: ChatMessage[];
+  favoriteConversationIds: string[];
+  toggleFavoriteConversation: (contractId: string) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedCategoryFilter: string;
@@ -120,7 +125,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'marche_app_state_v6';
+const LOCAL_STORAGE_KEY = 'marche_app_state_v8';
 
 function loadUserWithOverrides(role: UserRole): User {
   const base = DEMO_USERS[role];
@@ -169,6 +174,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_messages`);
+    return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
+  });
+
+  const [favoriteConversationIds, setFavoriteConversationIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_favorite_conversations`);
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -185,7 +195,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_audit`, JSON.stringify(auditLogs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_notifications`, JSON.stringify(notifications));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_messages`, JSON.stringify(messages));
-  }, [currentUser, jobs, proposals, contracts, auditLogs, notifications, messages]);
+    localStorage.setItem(
+      `${LOCAL_STORAGE_KEY}_favorite_conversations`,
+      JSON.stringify(favoriteConversationIds),
+    );
+  }, [currentUser, jobs, proposals, contracts, auditLogs, notifications, messages, favoriteConversationIds]);
 
   // Handle popstate for back/forward navigation
   useEffect(() => {
@@ -273,6 +287,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) => [notif, ...prev]);
   };
 
+  // Notifies every vendor in the talent directory whose category matches the new job,
+  // instead of a single hardcoded vendor id regardless of fit.
+  const notifyMatchingVendors = (job: Job) => {
+    const matchingVendors = INITIAL_TALENT.filter((v) => v.category === job.category);
+    matchingVendors.forEach((vendor) => {
+      addNotification(
+        vendor.id,
+        'New Matching Job',
+        `New job posted in ${job.category}: "${job.title}"`,
+        'job_alert',
+        `/provider/jobs/${job.id}`
+      );
+    });
+  };
+
   // 1. Create Job
   const createJob = (data: JobDraftInput): Job => {
     const newReqId = `job_${Date.now()}`;
@@ -298,13 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'Open'
     );
 
-    addNotification(
-      'user_vendor_1',
-      'New Matching Job',
-      `New job posted in ${newReq.category}: "${newReq.title}"`,
-      'job_alert',
-      `/provider/jobs/${newReq.id}`
-    );
+    notifyMatchingVendors(newReq);
 
     return newReq;
   };
@@ -350,13 +373,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     addAuditLog('Job Published', `Job ${draftId} ("${published.title}")`, 'Draft', 'Open');
 
-    addNotification(
-      'user_vendor_1',
-      'New Matching Job',
-      `New job posted in ${published.category}: "${published.title}"`,
-      'job_alert',
-      `/provider/jobs/${draftId}`
-    );
+    notifyMatchingVendors(published);
 
     return published;
   };
@@ -374,6 +391,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     draftId?: string;
   }): Proposal => {
     const targetReq = jobs.find((r) => r.id === data.jobId);
+    if (targetReq && !isBidWithinBudget(targetReq, data.bidAmount)) {
+      throw new Error("Bid amount is outside the client's allowed budget range.");
+    }
     let newProposal: Proposal;
 
     if (data.draftId) {
@@ -408,7 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         vendorRating: currentUser.rating || 4.95,
         vendorReviewCount: currentUser.reviewCount || 12,
         vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
-        vendorLocation: currentUser.location || 'New York, NY',
+        vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
         bidAmount: data.bidAmount,
         coverLetter: data.coverLetter,
         estimatedDelivery: data.estimatedDelivery,
@@ -502,7 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       vendorRating: currentUser.rating || 4.95,
       vendorReviewCount: currentUser.reviewCount || 12,
       vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
-      vendorLocation: currentUser.location || 'New York, NY',
+      vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
       bidAmount: data.bidAmount,
       coverLetter: data.coverLetter,
       estimatedDelivery: data.estimatedDelivery,
@@ -532,6 +552,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!req || !prop) {
       throw new Error('Job or proposal not found');
+    }
+
+    const slot = deriveSlotFromEvent(req.timingMode, req.eventStartTime);
+    if (!isVendorSlotAvailable(prop.vendorId, req.eventDate, slot)) {
+      throw new Error('This vendor is no longer available on the selected date.');
     }
 
     const contractId = `ctr_${Date.now()}`;
@@ -567,7 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markVendorSlotBooked(
       prop.vendorId,
       req.eventDate,
-      deriveSlotFromEvent(req.timingMode, req.eventStartTime),
+      slot,
     );
 
     // Update proposal state
@@ -609,7 +634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 4. Vendor Marks Event Completed
   const vendorMarkCompleted = (contractId: string) => {
     const ctr = contracts.find((c) => c.id === contractId);
-    if (!ctr) return;
+    if (!ctr || ctr.bookingState !== 'Confirmed') return;
 
     setContracts((prev) =>
       prev.map((c) =>
@@ -648,7 +673,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 5. Client Confirms Completion
   const clientConfirmCompletion = (contractId: string) => {
     const ctr = contracts.find((c) => c.id === contractId);
-    if (!ctr) return;
+    if (!ctr || ctr.bookingState !== 'Completed') return;
 
     setContracts((prev) =>
       prev.map((c) =>
@@ -694,6 +719,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const ctr = contracts.find((c) => c.jobId === bookingId || c.id === bookingId);
 
     const oldState = req?.status || ctr?.bookingState || 'Unknown';
+
+    // Reviving a terminal state is explicitly forbidden per the admin panel's own rule.
+    if (oldState === 'Closed' || oldState === 'Cancelled') return;
 
     if (req) {
       setJobs((prev) =>
@@ -749,10 +777,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const toggleFavoriteConversation = (contractId: string) => {
+    setFavoriteConversationIds((prev) =>
+      prev.includes(contractId) ? prev.filter((id) => id !== contractId) : [...prev, contractId]
+    );
+  };
+
   const togglePauseJob = (id: string) => {
     setJobs((prev) =>
       prev.map((r) => {
         if (r.id === id) {
+          if (r.isDraftPost) return r;
           const isPaused = r.status === 'Draft' || r.isPaused;
           const newStatus = isPaused ? 'Open' : 'Draft';
           addAuditLog(
@@ -770,15 +805,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteJob = (id: string) => {
+    const job = jobs.find((r) => r.id === id);
     setJobs((prev) => prev.filter((r) => r.id !== id));
-    addAuditLog('Job Deleted', `Job ${id}`, 'Active', 'Deleted', 'Removed by Client');
+    addAuditLog('Job Deleted', `Job ${id}`, job?.status ?? 'Unknown', 'Deleted', 'Removed by Client');
   };
 
   const updateJob = (id: string, updates: Partial<Job>) => {
+    const job = jobs.find((r) => r.id === id);
     setJobs((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
     );
-    addAuditLog('Job Updated', `Job ${id}`, 'Before Update', 'Updated', 'Edited by Client');
+    addAuditLog(
+      'Job Updated',
+      `Job ${id}`,
+      job?.status ?? 'Unknown',
+      updates.status ?? job?.status ?? 'Unknown',
+      'Edited by Client'
+    );
   };
 
   const getJobById = (id: string) => jobs.find((r) => r.id === id);
@@ -804,6 +847,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auditLogs,
         notifications,
         messages,
+        favoriteConversationIds,
+        toggleFavoriteConversation,
         searchQuery,
         setSearchQuery,
         selectedCategoryFilter,

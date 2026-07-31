@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Search, Heart, ThumbsDown, ShieldCheck, MapPin, ChevronDown } from 'lucide-react';
+import { Search, Heart, ThumbsDown, ShieldCheck, MapPin, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Input, Checkbox } from '@marche/ui';
+import { Input, Checkbox, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
+import { formatBudget } from '../../lib/formatBudget';
 
 type SortOption = 'best' | 'recent' | 'budget_high' | 'budget_low';
 
@@ -45,23 +46,37 @@ function FilterSection({ title, children }: { title: string; children: React.Rea
 }
 
 export const SearchJobsPage: React.FC = () => {
-  const { jobs, navigate } = useApp();
+  const { jobs, navigate, searchQuery, setSearchQuery, selectedCategoryFilter, setSelectedCategoryFilter } = useApp();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('best');
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  // Seeded from the shared category filter so arriving from the home feed keeps context.
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => (selectedCategoryFilter !== 'All' ? new Set([selectedCategoryFilter]) : new Set())
+  );
   const [selectedBudgets, setSelectedBudgets] = useState<Set<string>>(new Set());
   const [selectedProposalBuckets, setSelectedProposalBuckets] = useState<Set<string>>(new Set());
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const toggleInSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
+  };
+
+  // Category selection also mirrors back into the shared single-value filter (used by the
+  // home feed) so the two pages stay in sync: one category selected -> that category,
+  // anything else (none or several) -> 'All', since a single value can't represent a multi-select.
+  const toggleCategory = (value: string) => {
+    const next = new Set(selectedCategories);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    setSelectedCategories(next);
+    setSelectedCategoryFilter(next.size === 1 ? Array.from(next)[0] ?? 'All' : 'All');
   };
 
   const openJobs = jobs.filter((r) => !dismissedIds.has(r.id));
@@ -129,25 +144,37 @@ export const SearchJobsPage: React.FC = () => {
 
       {/* Search Bar */}
       <div className="relative max-w-xl">
-        <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
+        <Search className="w-4 h-4 absolute left-3.5 top-3 text-ink-muted pointer-events-none" />
         <Input
           type="text"
           placeholder="Search jobs..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+          className="w-full bg-surface border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
         />
       </div>
 
+      <button
+        type="button"
+        onClick={() => setMobileFiltersOpen((prev) => !prev)}
+        className="lg:hidden w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-semibold text-ink cursor-pointer"
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          Filters
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`} />
+      </button>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Filter Sidebar */}
-        <aside className="lg:col-span-1 space-y-4">
+        <aside className={`lg:col-span-1 space-y-4 ${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
           <FilterSection title="Category">
             {categoryCounts.map(({ value, count }) => (
               <label key={value} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
                 <Checkbox
                   checked={selectedCategories.has(value)}
-                  onCheckedChange={() => toggleInSet(selectedCategories, setSelectedCategories, value)}
+                  onCheckedChange={() => toggleCategory(value)}
                 />
                 <span className="flex-1">{value}</span>
                 <span className="text-ink-muted">({count})</span>
@@ -207,16 +234,17 @@ export const SearchJobsPage: React.FC = () => {
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-ink-muted">{sortedJobs.length} jobs found</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
-            >
-              <option value="best">Sort by: Best Matches</option>
-              <option value="recent">Sort by: Most Recent</option>
-              <option value="budget_high">Sort by: Budget High to Low</option>
-              <option value="budget_low">Sort by: Budget Low to High</option>
-            </select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-lg px-2.5 py-1.5 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="best">Sort by: Best Matches</SelectItem>
+                <SelectItem value="recent">Sort by: Most Recent</SelectItem>
+                <SelectItem value="budget_high">Sort by: Budget High to Low</SelectItem>
+                <SelectItem value="budget_low">Sort by: Budget Low to High</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {sortedJobs.length === 0 ? (
@@ -230,7 +258,7 @@ export const SearchJobsPage: React.FC = () => {
                 <div
                   key={req.id}
                   onClick={() => navigate(`/provider/jobs/${req.id}`)}
-                  className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
+                  className="bg-surface border border-border rounded-2xl p-5 hover:border-border-strong hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -248,7 +276,7 @@ export const SearchJobsPage: React.FC = () => {
                           setDismissedIds((prev) => new Set(prev).add(req.id));
                         }}
                         title="Not interested"
-                        className="text-zinc-400 hover:text-ink cursor-pointer"
+                        className="text-ink-muted hover:text-ink cursor-pointer"
                       >
                         <ThumbsDown className="w-4 h-4" />
                       </button>
@@ -258,7 +286,7 @@ export const SearchJobsPage: React.FC = () => {
                           toggleInSet(savedIds, setSavedIds, req.id);
                         }}
                         title="Save"
-                        className={`cursor-pointer ${savedIds.has(req.id) ? 'text-rose-500' : 'text-zinc-400 hover:text-rose-500'}`}
+                        className={`cursor-pointer ${savedIds.has(req.id) ? 'text-rose-500' : 'text-ink-muted hover:text-rose-500'}`}
                       >
                         <Heart className="w-4 h-4" fill={savedIds.has(req.id) ? 'currentColor' : 'none'} />
                       </button>
@@ -280,7 +308,7 @@ export const SearchJobsPage: React.FC = () => {
 
                   <p className="text-xs text-ink mt-2">
                     <span className="font-semibold text-primary">
-                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
+                      {formatBudget(req)}
                     </span>{' '}
                     · {req.category}
                   </p>

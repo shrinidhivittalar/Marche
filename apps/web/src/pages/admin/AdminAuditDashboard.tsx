@@ -64,7 +64,7 @@ export const AdminAuditDashboard: React.FC = () => {
 
       {/* Admin Quick Action Card */}
       <Card className="p-8 space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
           <div>
             <span className="text-xs font-mono uppercase font-bold text-primary">
               PRD Section 16.5 Permitted Override Set
@@ -79,6 +79,7 @@ export const AdminAuditDashboard: React.FC = () => {
             variant="danger"
             icon={AlertTriangle}
             onClick={() => setOverrideModalOpen(true)}
+            className="self-start sm:self-auto"
           >
             Launch Override Tool
           </Button>

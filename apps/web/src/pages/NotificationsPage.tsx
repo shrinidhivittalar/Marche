@@ -58,7 +58,7 @@ export const NotificationsPage: React.FC = () => {
             onClick={() => setActiveTab('activity')}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
               activeTab === 'activity'
-                ? 'bg-primary text-white shadow-xs'
+                ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'bg-white text-ink-muted hover:text-ink border border-border'
             }`}
           >
@@ -68,7 +68,7 @@ export const NotificationsPage: React.FC = () => {
             onClick={() => setActiveTab('alerts')}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
               activeTab === 'alerts'
-                ? 'bg-primary text-white shadow-xs'
+                ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'bg-white text-ink-muted hover:text-ink border border-border'
             }`}
           >

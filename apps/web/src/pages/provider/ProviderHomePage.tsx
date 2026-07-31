@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
   Search,
-  ChevronRight,
-  ChevronLeft,
   X,
   Heart,
   ThumbsDown,
@@ -29,6 +27,8 @@ import {
 } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { formatBudget } from '../../lib/formatBudget';
+import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
 import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
 
 type FeedTab = 'best' | 'recent' | 'saved' | 'invites';
@@ -43,6 +43,8 @@ export const ProviderHomePage: React.FC = () => {
     selectedCategoryFilter,
     setSelectedCategoryFilter,
   } = useApp();
+
+  const isProfileComplete = computeIsProfileComplete(currentUser);
 
   // ---- Upwork-inspired home feed state ----
   const [noticeDismissed, setNoticeDismissed] = useState(false);
@@ -132,8 +134,8 @@ export const ProviderHomePage: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Account Notice Banner */}
-      {!noticeDismissed && (
+      {/* Account Notice Banner — goes away once the profile is actually complete */}
+      {!isProfileComplete && !noticeDismissed && (
         <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl px-4 py-3 text-xs">
           <span>
             Your profile is incomplete. Complete it to increase your visibility with clients.
@@ -147,34 +149,26 @@ export const ProviderHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Promo Card */}
-      <div className="relative bg-ink text-white rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden">
-        <div className="max-w-lg">
-          <div className="flex items-center gap-2 text-xs font-mono uppercase font-semibold text-amber-400 mb-2">
-            <Megaphone className="w-4 h-4" />
-            <span>Grow Your Business</span>
+      {/* Promo Card — same as above, only shows until the profile is complete */}
+      {!isProfileComplete && (
+        <div className="relative bg-inverse text-inverse-fg rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden">
+          <div className="max-w-lg">
+            <div className="flex items-center gap-2 text-xs font-mono uppercase font-semibold text-amber-400 mb-2">
+              <Megaphone className="w-4 h-4" />
+              <span>Grow Your Business</span>
+            </div>
+            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight mb-2">
+              Complete your profile to win more proposals.
+            </h2>
+            <p className="text-xs text-zinc-300 mb-4">
+              Vendors with a complete profile and verified badge appear higher in client searches.
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/provider/profile')}>
+              Complete Profile
+            </Button>
           </div>
-          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight mb-2">
-            Complete your profile to win more proposals.
-          </h2>
-          <p className="text-xs text-zinc-300 mb-4">
-            Vendors with a complete profile and verified badge appear higher in client searches.
-          </p>
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/profile/${currentUser.id}`)}>
-            Complete Profile
-          </Button>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button className="p-1 text-zinc-500 hover:text-white cursor-pointer">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="w-6 h-1 rounded-full bg-white" />
-          <span className="w-6 h-1 rounded-full bg-zinc-600" />
-          <button className="p-1 text-zinc-500 hover:text-white cursor-pointer">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Search Bar */}
       <div className="relative">
@@ -203,7 +197,7 @@ export const ProviderHomePage: React.FC = () => {
               [
                 ['best', 'Best matches'],
                 ['recent', 'Most recent'],
-                ['saved', `Saved (${savedIds.size})`],
+                ['saved', `Saved (${filteredFeed.filter((r) => savedIds.has(r.id)).length})`],
                 ['invites', 'Invites'],
               ] as [FeedTab, string][]
             ).map(([tab, label]) => (
@@ -212,7 +206,7 @@ export const ProviderHomePage: React.FC = () => {
                 onClick={() => setFeedTab(tab)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                   feedTab === tab
-                    ? 'bg-primary text-white shadow-xs'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'bg-white text-ink-muted hover:text-ink border border-border'
                 }`}
               >
@@ -292,7 +286,7 @@ export const ProviderHomePage: React.FC = () => {
                 <div className="space-y-1.5 text-xs text-ink-muted pt-2 border-t border-border">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-primary">
-                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
+                      {formatBudget(req)}
                     </span>
                     <span className="shrink-0">{req.proposalsCount} proposals</span>
                   </div>
@@ -341,8 +335,7 @@ export const ProviderHomePage: React.FC = () => {
                   <div className="p-3 bg-bg border border-border rounded-xl">
                     <span className="block text-[10px] text-ink-muted uppercase font-mono">Budget</span>
                     <span className="font-bold text-primary">
-                      ₹{selectedJob.budgetMin.toLocaleString('en-IN')} - ₹
-                      {selectedJob.budgetMax.toLocaleString('en-IN')}
+                      {formatBudget(selectedJob)}
                     </span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl">

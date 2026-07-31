@@ -48,7 +48,7 @@ export const FinancesPage: React.FC = () => {
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                 activeTab === tab
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >

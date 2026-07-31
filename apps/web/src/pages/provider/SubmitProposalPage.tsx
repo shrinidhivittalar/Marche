@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   IndianRupee,
+  Lock,
   Send,
   Trash2,
   CheckCircle2,
-  Calendar,
+  Calendar as CalendarIcon,
   MapPin,
   ShieldCheck,
   Paperclip,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input, Textarea } from '@marche/ui';
+import { Button, Card, Input, Textarea, TimePicker } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { formatBudget, isBidWithinBudget } from '../../lib/formatBudget';
 import { INITIAL_PORTFOLIO_ITEMS } from '../../data/mockData';
 
 interface SubmitProposalPageProps {
@@ -84,6 +86,18 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Fixed-budget jobs only accept one bid amount — keep the field pinned to it,
+  // even if a stale draft or a later job edit left bidAmount out of sync.
+  // Called unconditionally (before the `!job` early return below) so hook order
+  // never changes between renders; guards internally for a missing job instead.
+  useEffect(() => {
+    if (!job) return;
+    if (job.budgetMode === 'fixed' && bidAmount !== job.budgetMin) {
+      setBidAmount(job.budgetMin);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.budgetMode, job?.budgetMin]);
+
   if (!job) {
     return (
       <div className="max-w-4xl mx-auto py-12">
@@ -96,6 +110,10 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
       </div>
     );
   }
+
+  const bidOutOfRange = !isBidWithinBudget(job, bidAmount);
+  const milestoneTotal = milestones.reduce((sum, m) => sum + m.amount, 0);
+  const milestonesMismatch = milestones.length > 0 && milestoneTotal !== bidAmount;
 
   const portfolioItems = INITIAL_PORTFOLIO_ITEMS.filter((p) => p.vendorId === currentUser.id);
 
@@ -146,6 +164,8 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     e.preventDefault();
     if (!coverLetter || !bidAmount) return;
     if (job.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
+    if (bidOutOfRange) return;
+    if (milestonesMismatch) return;
 
     submitProposal({
       ...buildProposalData(),
@@ -155,7 +175,6 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     navigate('/provider/dashboard');
   };
 
-  const milestoneTotal = milestones.reduce((sum, m) => sum + m.amount, 0);
   const serviceFee = Math.round(bidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;
   const youReceive = bidAmount - serviceFee;
 
@@ -168,7 +187,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -240,14 +259,14 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               <div className="flex items-start gap-2.5">
                 <IndianRupee className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-bold text-ink">
-                    ₹{job.budgetMin.toLocaleString('en-IN')} – ₹{job.budgetMax.toLocaleString('en-IN')}
+                  <p className="text-xs font-bold text-ink">{formatBudget(job)}</p>
+                  <p className="text-[11px] text-ink-muted">
+                    {job.budgetMode === 'fixed' ? 'Fixed budget' : 'Budget range'}
                   </p>
-                  <p className="text-[11px] text-ink-muted">Budget range</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
-                <Calendar className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                <CalendarIcon className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-ink">
                     {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
@@ -276,17 +295,49 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 <label className="block text-xs font-semibold text-ink mb-1">
                   What's your total bid for this job?
                 </label>
-                <div className="relative max-w-xs">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
-                  <Input
-                    type="number"
-                    step={50}
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(Number(e.target.value))}
-                    className="w-full bg-bg border border-border rounded-xl pl-7 pr-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
-                    required
-                  />
-                </div>
+                {job.budgetMode === 'fixed' ? (
+                  <>
+                    <div className="relative max-w-xs">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
+                      <Input
+                        type="number"
+                        value={bidAmount}
+                        disabled
+                        className="w-full bg-bg border border-border rounded-xl pl-7 pr-9 py-2.5 text-xs text-ink font-mono font-bold disabled:opacity-100 disabled:cursor-not-allowed"
+                      />
+                      <Lock className="w-3.5 h-3.5 text-ink-muted absolute right-4 top-1/2 -translate-y-1/2" />
+                    </div>
+                    <p className="text-[11px] text-ink-muted mt-1.5">
+                      This client set a fixed budget — bids are locked to this exact amount.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative max-w-xs">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
+                      <Input
+                        type="number"
+                        step={50}
+                        min={job.budgetMin}
+                        max={job.budgetMax}
+                        value={bidAmount}
+                        onChange={(e) => setBidAmount(Math.max(0, Number(e.target.value)))}
+                        className="w-full bg-bg border border-border rounded-xl pl-7 pr-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
+                        aria-invalid={bidOutOfRange}
+                        required
+                      />
+                    </div>
+                    {bidOutOfRange ? (
+                      <p className="text-[11px] text-destructive mt-1.5 font-medium">
+                        Your bid must be within the client's budget range ({formatBudget(job)}).
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-ink-muted mt-1.5">
+                        Must fall within the client's budget range ({formatBudget(job)}).
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -297,18 +348,16 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                   {job.timingMode === 'fixed' ? (
                     <>
                       <div className="flex items-center gap-2">
-                        <Input
-                          type="time"
+                        <TimePicker
                           value={proposedStartTime}
-                          onChange={(e) => setProposedStartTime(e.target.value)}
-                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+                          onChange={setProposedStartTime}
+                          className="bg-bg h-auto py-2.5 text-xs"
                         />
                         <span className="text-ink-muted text-xs shrink-0">to</span>
-                        <Input
-                          type="time"
+                        <TimePicker
                           value={proposedEndTime}
-                          onChange={(e) => setProposedEndTime(e.target.value)}
-                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+                          onChange={setProposedEndTime}
+                          className="bg-bg h-auto py-2.5 text-xs"
                         />
                       </div>
                       {proposedEndTime <= proposedStartTime && (
@@ -380,10 +429,15 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
         <Card className="p-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-ink">Milestone breakdown</h2>
-            <span className="text-xs font-mono font-bold text-primary">
+            <span className={`text-xs font-mono font-bold ${milestonesMismatch ? 'text-destructive' : 'text-primary'}`}>
               Milestones Total: ₹{milestoneTotal.toLocaleString('en-IN')} / ₹{bidAmount.toLocaleString('en-IN')}
             </span>
           </div>
+          {milestonesMismatch && (
+            <p className="text-[11px] text-destructive font-medium">
+              Milestone amounts must add up to your total bid before you can submit.
+            </p>
+          )}
 
           <div className="space-y-3">
             {milestones.map((ms, idx) => (
@@ -425,9 +479,10 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               />
               <Input
                 type="number"
+                min={0}
                 placeholder="Amount (₹)"
                 value={msAmount}
-                onChange={(e) => setMsAmount(Number(e.target.value))}
+                onChange={(e) => setMsAmount(Math.max(0, Number(e.target.value)))}
                 className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
               />
               <Input
@@ -524,7 +579,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
 
         {/* Submit Action */}
         <div className="flex items-center gap-4 pt-4">
-          <Button type="submit" size="lg" icon={Send}>
+          <Button type="submit" size="lg" icon={Send} disabled={bidOutOfRange || milestonesMismatch}>
             Submit proposal
           </Button>
           <Button type="button" variant="ghost" onClick={handleSaveDraft}>

@@ -15,7 +15,7 @@ export interface User {
   memberSince: string;
   hourlyRate?: number;
   completedJobsCount?: number;
-  category?: EventCategory;
+  categories?: EventCategory[];
   skills?: string[];
   workExperience?: {
     title: string;
@@ -27,6 +27,7 @@ export interface User {
   }[];
   education?: { school: string; degree?: string }[];
   languages?: { language: string; proficiency: EnglishLevel }[];
+  paymentMethodAdded?: boolean;
   phone?: string;
   dateOfBirth?: string; // YYYY-MM-DD
   website?: string;
@@ -65,6 +66,14 @@ export type BookingState =
   | 'Expired'
   | 'Paused';
 
+export interface JobAttachment {
+  id: string;
+  name: string;
+  size: number; // bytes
+  type: string; // MIME type
+  dataUrl: string; // base64-encoded file contents (frontend-only, no upload backend)
+}
+
 export interface Job {
   id: string;
   clientId: string;
@@ -81,12 +90,14 @@ export interface Job {
   eventStartTime?: string; // HH:MM, 24h — only when timingMode is 'fixed'
   eventEndTime?: string; // HH:MM, 24h — only when timingMode is 'fixed'
   proposalDeadline: string; // YYYY-MM-DD — cutoff for vendors to submit proposals
+  budgetMode: 'fixed' | 'range'; // 'fixed': providers may only bid budgetMin (budgetMax mirrors it); 'range': bids must fall within [budgetMin, budgetMax]
   budgetMin: number;
   budgetMax: number;
   status: BookingState;
   proposalsCount: number;
   createdAt: string;
   deliverables: string[];
+  attachments?: JobAttachment[]; // reference documents (briefs, spec sheets, contracts) attached at posting time
   featured?: boolean;
   isPaused?: boolean;
   isDraftPost?: boolean; // true only for a job saved from the wizard that has never been published
@@ -193,7 +204,7 @@ export interface TalentProfile {
   rating: number;
   reviewCount: number;
   location: string;
-  timezone: string; // IANA time zone id, e.g. 'America/New_York'
+  timezone: string; // IANA time zone id, e.g. 'Asia/Kolkata'
   hourlyRate: number;
   verified: boolean;
   availableNow: boolean;
@@ -205,6 +216,7 @@ export interface TalentProfile {
   hoursPerWeek: string;
   openToContractToHire: boolean;
   avgResponseHours: string;
+  education?: { school: string; degree?: string }[];
 }
 
 export type WorkHistoryStatus = 'completed' | 'in_progress';

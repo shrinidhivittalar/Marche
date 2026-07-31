@@ -9,6 +9,7 @@ import {
   User,
   Star,
   FileCheck,
+  FileText,
   CheckCircle2,
   ShieldCheck,
   ChevronRight,
@@ -20,6 +21,8 @@ import { Button, Card } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatTimeRange } from '../../lib/formatTime';
+import { formatFileSize } from '../../lib/formatFile';
+import { formatBudget } from '../../lib/formatBudget';
 
 interface JobDetailPageProps {
   id: string;
@@ -102,10 +105,10 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
 
           <div className="bg-bg border border-border rounded-2xl p-4 text-right shrink-0">
             <span className="block text-[10px] font-mono uppercase text-ink-muted">
-              Budget Bounds
+              {job.budgetMode === 'fixed' ? 'Fixed Budget' : 'Budget Bounds'}
             </span>
             <span className="text-xl font-bold text-primary">
-              ₹{job.budgetMin.toLocaleString('en-IN')} - ₹{job.budgetMax.toLocaleString('en-IN')}
+              {formatBudget(job)}
             </span>
           </div>
         </div>
@@ -312,6 +315,28 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               ))}
             </div>
           </div>
+
+          {job.attachments && job.attachments.length > 0 && (
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-xs font-mono uppercase font-bold text-primary mb-4">
+                Reference Documents ({job.attachments.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {job.attachments.map((att) => (
+                  <a
+                    key={att.id}
+                    href={att.dataUrl}
+                    download={att.name}
+                    className="p-3 bg-bg border border-border rounded-xl text-xs text-ink flex items-center gap-2.5 hover:border-zinc-300 hover:shadow-xs transition-all"
+                  >
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                    <span className="truncate flex-1">{att.name}</span>
+                    <span className="text-ink-muted shrink-0">{formatFileSize(att.size)}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

@@ -11,12 +11,15 @@ import {
   Send,
   Building,
   DollarSign,
+  FileText,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { formatFileSize } from '../../lib/formatFile';
+import { formatBudget } from '../../lib/formatBudget';
 
 interface JobDetailProviderViewProps {
   id: string;
@@ -110,6 +113,28 @@ export const JobDetailProviderView: React.FC<
                 ))}
               </div>
             </div>
+
+            {job.attachments && job.attachments.length > 0 && (
+              <div>
+                <h3 className="text-xs font-mono uppercase font-bold text-primary mb-3">
+                  Reference Documents
+                </h3>
+                <div className="space-y-2">
+                  {job.attachments.map((att) => (
+                    <a
+                      key={att.id}
+                      href={att.dataUrl}
+                      download={att.name}
+                      className="p-3 bg-white border border-border rounded-xl text-xs text-ink flex items-center gap-2.5 hover:border-zinc-300 hover:shadow-xs transition-all"
+                    >
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <span className="truncate flex-1">{att.name}</span>
+                      <span className="text-ink-muted shrink-0">{formatFileSize(att.size)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 
@@ -118,10 +143,10 @@ export const JobDetailProviderView: React.FC<
           <Card className="p-6 space-y-6 sticky top-24">
             <div>
               <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                Client Budget Range
+                {job.budgetMode === 'fixed' ? 'Client Fixed Budget' : 'Client Budget Range'}
               </span>
               <p className="text-2xl font-extrabold text-primary">
-                ₹{job.budgetMin.toLocaleString('en-IN')} - ₹{job.budgetMax.toLocaleString('en-IN')}
+                {formatBudget(job)}
               </p>
             </div>
 

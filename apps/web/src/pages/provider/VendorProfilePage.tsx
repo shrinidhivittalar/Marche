@@ -58,7 +58,7 @@ function getLocalTime(timezone: string): string {
 }
 
 export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
-  const { goBack } = useApp();
+  const { goBack, currentUser } = useApp();
   const [isSaved, setIsSaved] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [jobsTab, setJobsTab] = useState<JobsTab>('completed');
@@ -70,9 +70,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const talent = INITIAL_TALENT.find((t) => t.id === id);
+  const baseTalent = INITIAL_TALENT.find((t) => t.id === id);
 
-  if (!talent) {
+  if (!baseTalent) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <button
@@ -89,6 +89,24 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
       </div>
     );
   }
+
+  // Viewing your own public profile should reflect what you've actually edited via
+  // onboarding/EditProfilePage, not the frozen mock snapshot — there's no real backend
+  // to fetch a live profile from, so currentUser is the only source of truth for your own edits.
+  const talent =
+    id === currentUser.id
+      ? {
+          ...baseTalent,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          headline: currentUser.companyOrTitle || baseTalent.headline,
+          bio: currentUser.bio || baseTalent.bio,
+          location: currentUser.location || baseTalent.location,
+          hourlyRate: currentUser.hourlyRate || baseTalent.hourlyRate,
+          skills: currentUser.skills?.length ? currentUser.skills : baseTalent.skills,
+          verified: currentUser.verified,
+        }
+      : baseTalent;
 
   const workHistory = INITIAL_WORK_HISTORY.filter((w) => w.vendorId === talent.id);
   const completedJobs = workHistory.filter((w) => w.status === 'completed');
@@ -124,7 +142,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -405,7 +423,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                     key={i}
                     onClick={() => setPortfolioPage(i)}
                     className={`w-6 h-6 rounded-full text-[11px] font-semibold cursor-pointer ${
-                      i === portfolioPage ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface-subtle'
+                      i === portfolioPage ? 'bg-primary text-primary-foreground' : 'text-ink-muted hover:bg-surface-subtle'
                     }`}
                   >
                     {i + 1}
@@ -529,6 +547,21 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                 <p className="text-[11px] text-ink-muted mt-0.5">
                   {e.company} • {formatMonthYear(e.startDate)} – {e.endDate ? formatMonthYear(e.endDate) : 'Present'}
                 </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Education — full width */}
+      {talent.education && talent.education.length > 0 && (
+        <Card padding="lg" className="space-y-2">
+          <h3 className="text-base font-bold text-ink">Education</h3>
+          <div className="divide-y divide-border">
+            {talent.education.map((edu, idx) => (
+              <div key={idx} className="py-3">
+                <p className="text-xs font-semibold text-ink">{edu.school}</p>
+                {edu.degree && <p className="text-[11px] text-ink-muted mt-0.5">{edu.degree}</p>}
               </div>
             ))}
           </div>

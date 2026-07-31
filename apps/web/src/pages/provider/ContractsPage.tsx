@@ -35,7 +35,7 @@ export const ContractsPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-border pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none border-b border-border pb-3">
           {(
             [
               ['active', 'Active Contracts'],
@@ -47,9 +47,9 @@ export const ContractsPage: React.FC = () => {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === tab
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >

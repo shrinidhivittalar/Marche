@@ -68,7 +68,7 @@ export const PostJobIntroPage: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-4">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}

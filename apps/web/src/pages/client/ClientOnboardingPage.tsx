@@ -19,7 +19,7 @@ export const ClientOnboardingPage: React.FC = () => {
     <div className="min-h-screen bg-bg">
       <div className="px-6 sm:px-10 py-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg tracking-tight shadow-xs shrink-0">M</div>
+          <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg tracking-tight shadow-xs shrink-0">M</div>
           <span className="text-lg font-extrabold tracking-tight text-ink">MARCHÉ</span>
         </div>
       </div>

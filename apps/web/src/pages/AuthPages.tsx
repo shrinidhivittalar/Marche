@@ -17,6 +17,18 @@ import { useApp } from '../context/AppContext';
 import { Button, Input } from '@marche/ui';
 import { UserRole } from '../types';
 
+function AuthBrandPanel() {
+  return (
+    <div className="hidden lg:flex lg:w-[45%] xl:w-[42%] shrink-0 relative overflow-hidden border-r border-border bg-[#eef2ec] items-center justify-center">
+      <img
+        src="/images/auth-hero.png"
+        alt="Marché — search services, browse popular categories, and connect with top-rated event professionals"
+        className="w-full h-full object-contain"
+      />
+    </div>
+  );
+}
+
 export const AuthSignInPage: React.FC = () => {
   const { navigate, setCurrentUserRole } = useApp();
   const [email, setEmail] = useState('sarah.jenkins@luminaevents.co');
@@ -27,7 +39,11 @@ export const AuthSignInPage: React.FC = () => {
 
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    const isVendor = email.toLowerCase().includes('julian') || email.toLowerCase().includes('vendor') || email.toLowerCase().includes('provider');
+    const normalizedEmail = email.toLowerCase();
+    const isVendor =
+      normalizedEmail === 'arjun@vermaimagery.com' ||
+      normalizedEmail.includes('vendor') ||
+      normalizedEmail.includes('provider');
     const role: UserRole = isVendor ? 'vendor' : 'client';
     setCurrentUserRole(role);
     if (role === 'vendor') {
@@ -38,22 +54,25 @@ export const AuthSignInPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col justify-between p-3 sm:p-4 font-sans">
+    <div className="min-h-screen bg-[#eef2ec] flex font-sans">
+      <AuthBrandPanel />
+      <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-y-auto">
       {/* Top Bar Navigation */}
-      <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
+      <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors cursor-pointer"
+          aria-label="Back to Home"
+          className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
+          <ArrowLeft className="w-4 h-4" />
         </button>
       </div>
 
       {/* Main Card */}
-      <div className="w-full max-w-md mx-auto my-auto bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-4">
+      <div className="flex-1 flex items-center justify-center py-6">
+      <div className="w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-4">
         <div className="text-center space-y-1">
-          <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
+          <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
             M
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
@@ -70,12 +89,12 @@ export const AuthSignInPage: React.FC = () => {
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                 required
               />
             </div>
@@ -93,18 +112,18 @@ export const AuthSignInPage: React.FC = () => {
               </button>
             </div>
             <div className="relative">
-              <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <Input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl pl-9 pr-9 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-9 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -195,9 +214,11 @@ export const AuthSignInPage: React.FC = () => {
           </button>
         </div>
       </div>
+      </div>
 
-      <div className="text-center text-[10px] text-ink-muted py-1">
+      <div className="shrink-0 text-center text-[10px] text-ink-muted py-1">
         &copy; {new Date().getFullYear()} Marché Event Talent Marketplace Inc. All rights reserved.
+      </div>
       </div>
     </div>
   );
@@ -225,22 +246,25 @@ export const AuthSignUpPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col justify-between p-3 sm:p-4 font-sans">
+    <div className="min-h-screen bg-[#eef2ec] flex font-sans">
+      <AuthBrandPanel />
+      <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-y-auto">
       {/* Top Bar Navigation */}
-      <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
+      <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors cursor-pointer"
+          aria-label="Back to Home"
+          className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
+          <ArrowLeft className="w-4 h-4" />
         </button>
       </div>
 
       {/* Main Card */}
-      <div className="w-full max-w-lg mx-auto my-auto bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-3.5">
+      <div className="flex-1 flex items-center justify-center py-6">
+      <div className="w-full max-w-lg bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-3.5">
         <div className="text-center space-y-1">
-          <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
+          <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
             M
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
@@ -302,13 +326,13 @@ export const AuthSignUpPage: React.FC = () => {
                 Full Name
               </label>
               <div className="relative">
-                <User className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+                <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 <Input
                   type="text"
-                  placeholder="e.g. Sarah Jenkins"
+                  placeholder="e.g. Priya Menon"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                   required
                 />
               </div>
@@ -319,13 +343,13 @@ export const AuthSignUpPage: React.FC = () => {
                 Company / Studio
               </label>
               <div className="relative">
-                <Building className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+                <Building className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="e.g. Lumina Events"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                 />
               </div>
             </div>
@@ -336,13 +360,13 @@ export const AuthSignUpPage: React.FC = () => {
               Work Email Address
             </label>
             <div className="relative">
-              <Mail className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <Input
                 type="email"
                 placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                 required
               />
             </div>
@@ -353,19 +377,19 @@ export const AuthSignUpPage: React.FC = () => {
               Password
             </label>
             <div className="relative">
-              <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <Input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl pl-9 pr-9 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-white transition-all"
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-9 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -411,9 +435,11 @@ export const AuthSignUpPage: React.FC = () => {
           </button>
         </div>
       </div>
+      </div>
 
-      <div className="text-center text-[10px] text-ink-muted py-1">
+      <div className="shrink-0 text-center text-[10px] text-ink-muted py-1">
         &copy; {new Date().getFullYear()} Marché Event Talent Marketplace Inc. All rights reserved.
+      </div>
       </div>
     </div>
   );

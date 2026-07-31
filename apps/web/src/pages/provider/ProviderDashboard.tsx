@@ -116,7 +116,7 @@ export const ProviderDashboard: React.FC = () => {
       {/* Header Banner */}
       <div className="pb-6 border-b border-border">
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-          Dashboard
+          My Work
         </h1>
         <p className="text-xs text-ink-muted mt-1">
           Track your bids, manage active event deliveries, and manage your availability calendar.
@@ -167,12 +167,12 @@ export const ProviderDashboard: React.FC = () => {
       {/* Main Content Tabs */}
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab('bids')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'bids'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -181,9 +181,9 @@ export const ProviderDashboard: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('contracts')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'contracts'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >
@@ -192,9 +192,9 @@ export const ProviderDashboard: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('calendar')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'calendar'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >

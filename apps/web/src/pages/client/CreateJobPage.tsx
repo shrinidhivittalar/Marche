@@ -1,20 +1,37 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  Calendar,
+  Calendar as CalendarIcon,
   Check,
   CheckCircle2,
   Clock,
+  FileText,
   IndianRupee,
   MapPin,
+  Paperclip,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input, Textarea } from '@marche/ui';
-import { EventCategory, EventTimingMode } from '../../types';
+import { Button, Card, DatePicker, Input, TimePicker, Textarea } from '@marche/ui';
+import { EventCategory, EventTimingMode, JobAttachment } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { formatFileSize } from '../../lib/formatFile';
+import { formatBudget } from '../../lib/formatBudget';
+
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB — kept modest since files are stored as base64 in localStorage
+const MAX_ATTACHMENTS = 5;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 const CATEGORIES: EventCategory[] = [
   'Photography',
@@ -45,7 +62,7 @@ const TITLE_EXAMPLES: Record<EventCategory, string[]> = {
     'Minimalist Stage & Backdrop Decor for Brand Activation',
   ],
   Venue: [
-    'Loft Venue for 100-Guest Product Launch, Manhattan',
+    'Loft Venue for 100-Guest Product Launch, Bandra, Mumbai',
     'Outdoor Garden Venue for 150-Guest Summer Wedding',
   ],
   'Event Planning': [
@@ -109,12 +126,13 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   const [title, setTitle] = useState(existingDraft?.title ?? '');
   const [category, setCategory] = useState<EventCategory>(existingDraft?.category ?? 'Photography');
   const [description, setDescription] = useState(existingDraft?.description ?? '');
-  const [location, setLocation] = useState(existingDraft?.location ?? 'Manhattan, New York, NY');
+  const [location, setLocation] = useState(existingDraft?.location ?? 'Bandra, Mumbai, Maharashtra');
   const [eventDate, setEventDate] = useState(existingDraft?.eventDate ?? '2026-09-25');
   const [timingMode, setTimingMode] = useState<EventTimingMode>(existingDraft?.timingMode ?? 'fixed');
   const [eventStartTime, setEventStartTime] = useState(existingDraft?.eventStartTime ?? '18:00');
   const [eventEndTime, setEventEndTime] = useState(existingDraft?.eventEndTime ?? '22:00');
   const [proposalDeadline, setProposalDeadline] = useState(existingDraft?.proposalDeadline ?? '2026-09-10');
+  const [budgetMode, setBudgetMode] = useState<'fixed' | 'range'>(existingDraft?.budgetMode ?? 'range');
   const [budgetMin, setBudgetMin] = useState<number>(existingDraft?.budgetMin ?? 2500);
   const [budgetMax, setBudgetMax] = useState<number>(existingDraft?.budgetMax ?? 4000);
   const [deliverables, setDeliverables] = useState<string[]>(
@@ -125,6 +143,45 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     ]
   );
   const [newDeliverableInput, setNewDeliverableInput] = useState('');
+  const [attachments, setAttachments] = useState<JobAttachment[]>(
+    existingDraft?.attachments ?? []
+  );
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFilesSelected = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setAttachmentError(null);
+
+    const files = Array.from(fileList);
+    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+      setAttachmentError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      return;
+    }
+
+    const oversized = files.find((f) => f.size > MAX_ATTACHMENT_SIZE);
+    if (oversized) {
+      setAttachmentError(`"${oversized.name}" exceeds the ${formatFileSize(MAX_ATTACHMENT_SIZE)} limit.`);
+      return;
+    }
+
+    const newAttachments = await Promise.all(
+      files.map(async (file) => ({
+        id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        dataUrl: await readFileAsDataUrl(file),
+      }))
+    );
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
 
   const handleAddDeliverable = () => {
     if (newDeliverableInput.trim()) {
@@ -153,7 +210,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime))
         );
       case 5:
-        return budgetMax >= budgetMin;
+        return budgetMin > 0 && (budgetMode === 'fixed' || budgetMax >= budgetMin);
     }
   };
 
@@ -192,9 +249,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     eventStartTime: timingMode === 'fixed' ? eventStartTime : undefined,
     eventEndTime: timingMode === 'fixed' ? eventEndTime : undefined,
     proposalDeadline,
+    budgetMode,
     budgetMin,
-    budgetMax,
+    budgetMax: budgetMode === 'fixed' ? budgetMin : budgetMax,
     deliverables,
+    attachments,
   });
 
   const handleSaveDraft = () => {
@@ -222,7 +281,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-4">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -390,6 +449,63 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               {showDescriptionError && (
                 <p className="text-[11px] text-destructive mt-1.5 font-medium">Description is required</p>
               )}
+
+              {/* Reference Attachments */}
+              <div className="mt-6 space-y-2.5">
+                <label className="block text-xs font-semibold text-ink">
+                  Reference documents <span className="font-normal text-ink-muted">(optional)</span>
+                </label>
+                <p className="text-[11px] text-ink-muted leading-relaxed">
+                  Attach briefs, mood boards, floor plans, or spec sheets so providers have full context.
+                  Up to {MAX_ATTACHMENTS} files, {formatFileSize(MAX_ATTACHMENT_SIZE)} each.
+                </p>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFilesSelected(e.target.files)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={Paperclip}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={attachments.length >= MAX_ATTACHMENTS}
+                >
+                  Attach Files
+                </Button>
+
+                {attachmentError && (
+                  <p className="text-[11px] text-destructive font-medium">{attachmentError}</p>
+                )}
+
+                {attachments.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between p-2.5 bg-bg border border-border rounded-xl text-xs text-ink"
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
+                          <span className="truncate">{att.name}</span>
+                          <span className="text-ink-muted shrink-0">({formatFileSize(att.size)})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          className="text-zinc-400 hover:text-rose-600 p-1 transition-colors cursor-pointer shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
@@ -443,13 +559,12 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
-                <Calendar className="w-3.5 h-3.5 text-ink-muted" />
+                <CalendarIcon className="w-3.5 h-3.5 text-ink-muted" />
                 {timingMode === 'fixed' ? 'Event Date' : 'Complete By Date'}
               </label>
-              <Input
-                type="date"
+              <DatePicker
                 value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
+                onChange={setEventDate}
                 min={todayISODate()}
               />
             </div>
@@ -461,10 +576,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     <Clock className="w-3.5 h-3.5 text-ink-muted" />
                     Start Time
                   </label>
-                  <Input
-                    type="time"
+                  <TimePicker
                     value={eventStartTime}
-                    onChange={(e) => setEventStartTime(e.target.value)}
+                    onChange={setEventStartTime}
                   />
                 </div>
 
@@ -473,10 +587,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     <Clock className="w-3.5 h-3.5 text-ink-muted" />
                     End Time
                   </label>
-                  <Input
-                    type="time"
+                  <TimePicker
                     value={eventEndTime}
-                    onChange={(e) => setEventEndTime(e.target.value)}
+                    onChange={setEventEndTime}
                     aria-invalid={attemptedNext && eventEndTime <= eventStartTime}
                   />
                   {attemptedNext && eventEndTime <= eventStartTime && (
@@ -491,10 +604,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
 
           <div>
             <label className="block text-xs font-semibold text-ink mb-1">Proposal Deadline</label>
-            <Input
-              type="date"
+            <DatePicker
               value={proposalDeadline}
-              onChange={(e) => setProposalDeadline(e.target.value)}
+              onChange={setProposalDeadline}
               min={todayISODate()}
               max={eventDate}
               className="w-full md:w-1/3"
@@ -509,7 +621,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             </label>
             <Input
               type="text"
-              placeholder="e.g. Spring Studios, 50 Varick St, New York, NY"
+              placeholder="e.g. The Oberoi, Nariman Point, Mumbai, Maharashtra"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
             />
@@ -566,44 +678,98 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 Set your target budget.
               </h2>
               <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-sm">
-                Give a realistic range — this is what talent sees when deciding whether to propose.
+                Set a fixed amount or a realistic range — this is what talent sees when deciding whether to propose,
+                and it determines what they're allowed to bid.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-4">
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
-                  <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
-                  Minimum Budget (₹)
+                <label className="block text-xs font-semibold text-ink mb-2">
+                  How do you want to set the budget?
                 </label>
-                <Input
-                  type="number"
-                  step={100}
-                  value={budgetMin}
-                  onChange={(e) => setBudgetMin(Number(e.target.value))}
-                  className="font-mono"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setBudgetMode('fixed')}
+                    className={`p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                      budgetMode === 'fixed'
+                        ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                        : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
+                    }`}
+                  >
+                    Fixed budget
+                    <span className="block font-normal mt-0.5">Providers must bid this exact amount</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBudgetMode('range')}
+                    className={`p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                      budgetMode === 'range'
+                        ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                        : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
+                    }`}
+                  >
+                    Budget range
+                    <span className="block font-normal mt-0.5">Providers may bid anywhere within range</span>
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
-                  <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
-                  Maximum Budget (₹)
-                </label>
-                <Input
-                  type="number"
-                  step={100}
-                  value={budgetMax}
-                  onChange={(e) => setBudgetMax(Number(e.target.value))}
-                  className="font-mono"
-                  aria-invalid={attemptedNext && budgetMax < budgetMin}
-                />
-                {attemptedNext && budgetMax < budgetMin && (
-                  <p className="text-[11px] text-destructive mt-1 font-medium">
-                    Maximum must be at least the minimum.
-                  </p>
-                )}
-              </div>
+              {budgetMode === 'fixed' ? (
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
+                    <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
+                    Fixed Budget (₹)
+                  </label>
+                  <Input
+                    type="number"
+                    step={100}
+                    min={0}
+                    value={budgetMin}
+                    onChange={(e) => setBudgetMin(Math.max(0, Number(e.target.value)))}
+                    className="font-mono"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
+                      <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
+                      Minimum Budget (₹)
+                    </label>
+                    <Input
+                      type="number"
+                      step={100}
+                      min={0}
+                      value={budgetMin}
+                      onChange={(e) => setBudgetMin(Math.max(0, Number(e.target.value)))}
+                      className="font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
+                      <IndianRupee className="w-3.5 h-3.5 text-ink-muted" />
+                      Maximum Budget (₹)
+                    </label>
+                    <Input
+                      type="number"
+                      step={100}
+                      min={0}
+                      value={budgetMax}
+                      onChange={(e) => setBudgetMax(Math.max(0, Number(e.target.value)))}
+                      className="font-mono"
+                      aria-invalid={attemptedNext && budgetMax < budgetMin}
+                    />
+                    {attemptedNext && budgetMax < budgetMin && (
+                      <p className="text-[11px] text-destructive mt-1 font-medium">
+                        Maximum must be at least the minimum.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -632,10 +798,16 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 <span className="text-ink-muted">Proposal Deadline:</span>
                 <span className="font-medium text-ink">{proposalDeadline}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Budget:</span>
                 <span className="font-bold text-primary">
-                  ₹{budgetMin.toLocaleString('en-IN')} - ₹{budgetMax.toLocaleString('en-IN')}
+                  {formatBudget({ budgetMode, budgetMin, budgetMax })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Reference Documents:</span>
+                <span className="font-medium text-ink">
+                  {attachments.length > 0 ? `${attachments.length} attached` : 'None'}
                 </span>
               </div>
             </div>

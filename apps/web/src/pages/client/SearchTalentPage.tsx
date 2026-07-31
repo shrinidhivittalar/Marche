@@ -18,10 +18,20 @@ import {
   Globe,
   CheckCircle2,
   ZoomIn,
+  SlidersHorizontal,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Input, Checkbox, Button } from '@marche/ui';
+import {
+  Input,
+  Checkbox,
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
 import { INITIAL_TALENT } from '../../data/mockData';
@@ -40,6 +50,8 @@ const RATE_BUCKETS = [
 ];
 
 const ENGLISH_LEVELS: EnglishLevel[] = ['Basic', 'Conversational', 'Fluent', 'Native or bilingual'];
+const ANY_LOCATION = '__any_location__';
+const ANY_SKILL = '__any_skill__';
 const ALL_SKILLS = Array.from(new Set(INITIAL_TALENT.flatMap((t) => t.skills))).sort();
 
 interface TalentBadge {
@@ -50,13 +62,13 @@ interface TalentBadge {
 
 function getTalentBadge(t: TalentProfile): TalentBadge | null {
   if (t.rating >= 4.95 && t.jobsCompleted >= 30) {
-    return { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 bg-pink-50 border-pink-200' };
+    return { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20' };
   }
   if (t.rating >= 4.85) {
-    return { label: 'Top Rated', icon: Award, className: 'text-sky-600 bg-sky-50 border-sky-200' };
+    return { label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/20' };
   }
   if (t.jobsCompleted < 20) {
-    return { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
+    return { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' };
   }
   return null;
 }
@@ -132,6 +144,7 @@ export const SearchTalentPage: React.FC = () => {
   const [otherLanguages, setOtherLanguages] = useState('');
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -232,7 +245,7 @@ export const SearchTalentPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -246,76 +259,91 @@ export const SearchTalentPage: React.FC = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-xl">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Search talent..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => showToast("Advanced search isn't wired up yet — Marché is still a frontend preview.")}
-          className="text-xs font-semibold text-primary hover:underline cursor-pointer whitespace-nowrap"
-        >
-          Advanced search
-        </button>
+      <div className="relative max-w-xl">
+        <Search className="w-4 h-4 absolute left-3.5 top-3 text-ink-muted pointer-events-none" />
+        <Input
+          type="text"
+          placeholder="Search talent..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-surface border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+        />
       </div>
 
       {/* Quick Filter Bar */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <select
-          value={quickLocationValue}
-          onChange={(e) => setSelectedLocations(e.target.value ? new Set([e.target.value]) : new Set())}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+        <Select
+          value={quickLocationValue || ANY_LOCATION}
+          onValueChange={(v) => setSelectedLocations(v === ANY_LOCATION ? new Set() : new Set([v]))}
         >
-          <option value="">Location</option>
-          {LOCATIONS.map((loc) => (
-            <option key={loc.value} value={loc.value}>
-              {loc.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY_LOCATION}>Location</SelectItem>
+            {LOCATIONS.map((loc) => (
+              <SelectItem key={loc.value} value={loc.value}>
+                {loc.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <select
-          value={quickSkillValue}
-          onChange={(e) => setSelectedSkills(e.target.value ? new Set([e.target.value]) : new Set())}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+        <Select
+          value={quickSkillValue || ANY_SKILL}
+          onValueChange={(v) => setSelectedSkills(v === ANY_SKILL ? new Set() : new Set([v]))}
         >
-          <option value="">Skills</option>
-          {ALL_SKILLS.map((skill) => (
-            <option key={skill} value={skill}>
-              {skill}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY_SKILL}>Skills</SelectItem>
+            {ALL_SKILLS.map((skill) => (
+              <SelectItem key={skill} value={skill}>
+                {skill}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <select
+        <Select
           value={englishLevelFilter}
-          onChange={(e) => setEnglishLevelFilter(e.target.value as 'any' | EnglishLevel)}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+          onValueChange={(v) => setEnglishLevelFilter(v as 'any' | EnglishLevel)}
         >
-          <option value="any">English level</option>
-          {ENGLISH_LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>
-              {lvl}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">English level</SelectItem>
+            {ENGLISH_LEVELS.map((lvl) => (
+              <SelectItem key={lvl} value={lvl}>
+                {lvl}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setMobileFiltersOpen((prev) => !prev)}
+        className="lg:hidden w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-semibold text-ink cursor-pointer"
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          Filters
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`} />
+      </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Filter Sidebar */}
-        <aside className="lg:col-span-1 space-y-4">
+        <aside className={`lg:col-span-1 space-y-4 ${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
           <FilterSection title="Talent badge">
             {[
-              { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 bg-pink-50' },
-              { label: 'Top Rated', icon: Award, className: 'text-sky-600 bg-sky-50' },
-              { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 bg-emerald-50' },
+              { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10' },
+              { label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10' },
+              { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' },
             ].map(({ label, icon: Icon, className }) => (
               <label key={label} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
                 <Checkbox />
@@ -424,7 +452,7 @@ export const SearchTalentPage: React.FC = () => {
               value={otherLanguages}
               onChange={(e) => setOtherLanguages(e.target.value)}
               onFocus={() => showToast("Other-language filtering isn't wired up yet — Marché is still a frontend preview.")}
-              className="w-full bg-white border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
             />
           </FilterSection>
 
@@ -457,16 +485,17 @@ export const SearchTalentPage: React.FC = () => {
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-ink-muted">{sortedTalent.length} providers found</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
-            >
-              <option value="best">Sort by: Best Matches</option>
-              <option value="rating">Sort by: Highest Rated</option>
-              <option value="rate_low">Sort by: Rate Low to High</option>
-              <option value="rate_high">Sort by: Rate High to Low</option>
-            </select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-lg px-2.5 py-1.5 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="best">Sort by: Best Matches</SelectItem>
+                <SelectItem value="rating">Sort by: Highest Rated</SelectItem>
+                <SelectItem value="rate_low">Sort by: Rate Low to High</SelectItem>
+                <SelectItem value="rate_high">Sort by: Rate High to Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {sortedTalent.length === 0 ? (
@@ -487,7 +516,7 @@ export const SearchTalentPage: React.FC = () => {
                   <div
                     key={t.id}
                     onClick={() => navigate(`/profile/${t.id}`)}
-                    className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer space-y-3"
+                    className="bg-surface border border-border rounded-2xl p-5 hover:border-border-strong hover:shadow-md transition-all cursor-pointer space-y-3"
                   >
                     <div className="flex items-start gap-4">
                       <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-xl overflow-hidden border border-border group/thumb">
@@ -505,11 +534,11 @@ export const SearchTalentPage: React.FC = () => {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               {isBoosted && (
-                                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-full px-2 py-0.5">
                                   <Zap className="w-3 h-3" />
                                   Boosted
                                 </span>
@@ -535,7 +564,7 @@ export const SearchTalentPage: React.FC = () => {
                                 toggleInSet(savedIds, setSavedIds, t.id);
                               }}
                               title="Save"
-                              className={`cursor-pointer ${isSaved ? 'text-rose-500' : 'text-zinc-400 hover:text-rose-500'}`}
+                              className={`cursor-pointer ${isSaved ? 'text-rose-500' : 'text-ink-muted hover:text-rose-500'}`}
                             >
                               <Heart className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
                             </button>
@@ -615,7 +644,7 @@ export const SearchTalentPage: React.FC = () => {
                           <Sparkles className="w-3.5 h-3.5 text-primary" />
                           Insights about {t.name.split(' ')[0]}
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-400">
+                        <span className="flex items-center gap-2 text-ink-muted">
                           <ThumbsUp className="w-3.5 h-3.5" />
                           <ThumbsDown className="w-3.5 h-3.5" />
                         </span>

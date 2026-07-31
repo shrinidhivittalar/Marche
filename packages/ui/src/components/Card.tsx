@@ -23,7 +23,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         onClick={onClick}
         className={cn(
           "bg-surface border border-border rounded-2xl shadow-card transition-all duration-200",
-          (hoverable || onClick) && "hover:border-zinc-300 hover:shadow-md cursor-pointer",
+          (hoverable || onClick) && "hover:border-border-strong hover:shadow-md cursor-pointer",
           paddingClasses[padding],
           className,
         )}
