@@ -38,6 +38,11 @@ type JobDraftInput = Omit<
   | 'isDraftPost'
 >;
 
+// The only fields a client can edit on an already-published job — status/proposalsCount/
+// isDraftPost etc. must only ever change via the dedicated transition functions
+// (hireVendor, vendorMarkCompleted, togglePauseJob, ...), not through a generic update.
+type EditableJobFields = Pick<Job, 'title' | 'budgetMin' | 'budgetMax' | 'location'>;
+
 interface AppContextType {
   currentUser: User;
   setCurrentUserRole: (role: UserRole) => void;
@@ -96,7 +101,7 @@ interface AppContextType {
   hireVendor: (
     jobId: string,
     proposalId: string
-  ) => Promise<{ contract: Contract; success: boolean }>;
+  ) => { contract: Contract };
 
   vendorMarkCompleted: (contractId: string) => void;
   clientConfirmCompletion: (contractId: string) => void;
@@ -114,7 +119,7 @@ interface AppContextType {
   // Job quick actions
   togglePauseJob: (id: string) => void;
   deleteJob: (id: string) => void;
-  updateJob: (id: string, updates: Partial<Job>) => void;
+  updateJob: (id: string, updates: Partial<EditableJobFields>) => void;
   
   // Helper helpers
   getJobById: (id: string) => Job | undefined;
@@ -126,6 +131,23 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'marche_app_state_v8';
+const ACK_NUMBER_MIN = 1000;
+const ACK_NUMBER_RANGE = 9000; // yields a random 4-digit suffix (1000-9999)
+
+// Timestamp alone can collide if two records are created in the same millisecond;
+// the random suffix (matching the pattern already used for notifications) avoids that.
+function generateId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
+}
+
+// Fixed-budget jobs must keep max mirrored to min so provider bid validation stays
+// consistent — enforced once here instead of separately in every place a job is
+// created or edited.
+function normalizeJobBudget<T extends { budgetMode: 'fixed' | 'range'; budgetMin: number; budgetMax: number }>(
+  data: T
+): T {
+  return data.budgetMode === 'fixed' ? { ...data, budgetMax: data.budgetMin } : data;
+}
 
 function loadUserWithOverrides(role: UserRole): User {
   const base = DEMO_USERS[role];
@@ -253,7 +275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reason?: string
   ) => {
     const newLog: AuditLogEntry = {
-      id: `log_${Date.now()}`,
+      id: generateId('log'),
       timestamp: new Date().toISOString(),
       actorId: currentUser.id,
       actorName: currentUser.name,
@@ -275,7 +297,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     linkRoute?: string
   ) => {
     const notif: Notification = {
-      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      id: generateId('notif'),
       userId,
       title,
       message,
@@ -302,20 +324,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // Shared "new job" base fields between createJob/saveJobDraft's create branches.
+  const buildNewJobBase = () => ({
+    clientId: currentUser.id,
+    clientName: currentUser.name,
+    clientAvatar: currentUser.avatar,
+    clientCompany: currentUser.companyOrTitle,
+    clientVerified: currentUser.verified,
+    proposalsCount: 0,
+    createdAt: new Date().toISOString(),
+  });
+
   // 1. Create Job
   const createJob = (data: JobDraftInput): Job => {
-    const newReqId = `job_${Date.now()}`;
+    const newReqId = generateId('job');
     const newReq: Job = {
-      ...data,
+      ...normalizeJobBudget(data),
       id: newReqId,
-      clientId: currentUser.id,
-      clientName: currentUser.name,
-      clientAvatar: currentUser.avatar,
-      clientCompany: currentUser.companyOrTitle,
-      clientVerified: currentUser.verified,
+      ...buildNewJobBase(),
       status: 'Open', // Active for proposals
-      proposalsCount: 0,
-      createdAt: new Date().toISOString(),
     };
 
     setJobs((prev) => [newReq, ...prev]);
@@ -337,24 +364,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (draftId) {
       const existing = jobs.find((r) => r.id === draftId);
       if (!existing) throw new Error('Draft not found');
-      const updated: Job = { ...existing, ...data, status: 'Draft', isDraftPost: true };
+      const updated: Job = { ...existing, ...normalizeJobBudget(data), status: 'Draft', isDraftPost: true };
       setJobs((prev) => prev.map((r) => (r.id === draftId ? updated : r)));
       return updated;
     }
 
-    const newReqId = `job_${Date.now()}`;
+    const newReqId = generateId('job');
     const newReq: Job = {
-      ...data,
+      ...normalizeJobBudget(data),
       id: newReqId,
-      clientId: currentUser.id,
-      clientName: currentUser.name,
-      clientAvatar: currentUser.avatar,
-      clientCompany: currentUser.companyOrTitle,
-      clientVerified: currentUser.verified,
+      ...buildNewJobBase(),
       status: 'Draft',
       isDraftPost: true,
-      proposalsCount: 0,
-      createdAt: new Date().toISOString(),
     };
 
     setJobs((prev) => [newReq, ...prev]);
@@ -368,7 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = jobs.find((r) => r.id === draftId);
     if (!existing) throw new Error('Draft not found');
 
-    const published: Job = { ...existing, ...data, status: 'Open', isDraftPost: false };
+    const published: Job = { ...existing, ...normalizeJobBudget(data), status: 'Open', isDraftPost: false };
     setJobs((prev) => prev.map((r) => (r.id === draftId ? published : r)));
 
     addAuditLog('Job Published', `Job ${draftId} ("${published.title}")`, 'Draft', 'Open');
@@ -377,6 +398,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return published;
   };
+
+  // Shared by submitProposal/saveProposalDraft's four create/update branches, so the vendor
+  // snapshot fields (and their magic fallback defaults) and milestone-id mapping only exist
+  // in one place instead of drifting across four copies.
+  const buildVendorSnapshot = (targetReq: Job | undefined) => ({
+    vendorId: currentUser.id,
+    vendorName: currentUser.name,
+    vendorAvatar: currentUser.avatar,
+    vendorRating: currentUser.rating || 4.95,
+    vendorReviewCount: currentUser.reviewCount || 12,
+    vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
+    vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
+  });
+
+  const buildMilestones = (
+    proposalId: string,
+    milestones: { title: string; amount: number; description: string }[]
+  ) =>
+    milestones.map((m, idx) => ({
+      id: `ms_${proposalId}_${idx}`,
+      title: m.title,
+      amount: m.amount,
+      description: m.description,
+    }));
 
   // 2. Submit Proposal
   const submitProposal = (data: {
@@ -391,6 +436,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     draftId?: string;
   }): Proposal => {
     const targetReq = jobs.find((r) => r.id === data.jobId);
+    if (targetReq && targetReq.status !== 'Open') {
+      throw new Error('This job is no longer accepting proposals.');
+    }
     if (targetReq && !isBidWithinBudget(targetReq, data.bidAmount)) {
       throw new Error("Bid amount is outside the client's allowed budget range.");
     }
@@ -406,40 +454,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         estimatedDelivery: data.estimatedDelivery,
         proposedStartTime: data.proposedStartTime,
         proposedEndTime: data.proposedEndTime,
-        milestones: data.milestones.map((m, idx) => ({
-          id: `ms_${existing.id}_${idx}`,
-          title: m.title,
-          amount: m.amount,
-          description: m.description,
-        })),
+        milestones: buildMilestones(existing.id, data.milestones),
         status: 'submitted',
         submittedAt: new Date().toISOString(),
         portfolioLinks: data.portfolioLinks,
       };
       setProposals((prev) => prev.map((p) => (p.id === data.draftId ? newProposal : p)));
     } else {
-      const newPropId = `prop_${Date.now()}`;
+      const newPropId = generateId('prop');
       newProposal = {
         id: newPropId,
         jobId: data.jobId,
-        vendorId: currentUser.id,
-        vendorName: currentUser.name,
-        vendorAvatar: currentUser.avatar,
-        vendorRating: currentUser.rating || 4.95,
-        vendorReviewCount: currentUser.reviewCount || 12,
-        vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
-        vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
+        ...buildVendorSnapshot(targetReq),
         bidAmount: data.bidAmount,
         coverLetter: data.coverLetter,
         estimatedDelivery: data.estimatedDelivery,
         proposedStartTime: data.proposedStartTime,
         proposedEndTime: data.proposedEndTime,
-        milestones: data.milestones.map((m, idx) => ({
-          id: `ms_${newPropId}_${idx}`,
-          title: m.title,
-          amount: m.amount,
-          description: m.description,
-        })),
+        milestones: buildMilestones(newPropId, data.milestones),
         status: 'submitted',
         submittedAt: new Date().toISOString(),
         portfolioLinks: data.portfolioLinks,
@@ -498,12 +530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         estimatedDelivery: data.estimatedDelivery,
         proposedStartTime: data.proposedStartTime,
         proposedEndTime: data.proposedEndTime,
-        milestones: data.milestones.map((m, idx) => ({
-          id: `ms_${existing.id}_${idx}`,
-          title: m.title,
-          amount: m.amount,
-          description: m.description,
-        })),
+        milestones: buildMilestones(existing.id, data.milestones),
         status: 'draft',
         portfolioLinks: data.portfolioLinks,
       };
@@ -511,29 +538,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     }
 
-    const newPropId = `prop_${Date.now()}`;
+    const newPropId = generateId('prop');
     const targetReq = jobs.find((r) => r.id === data.jobId);
     const newProposal: Proposal = {
       id: newPropId,
       jobId: data.jobId,
-      vendorId: currentUser.id,
-      vendorName: currentUser.name,
-      vendorAvatar: currentUser.avatar,
-      vendorRating: currentUser.rating || 4.95,
-      vendorReviewCount: currentUser.reviewCount || 12,
-      vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
-      vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
+      ...buildVendorSnapshot(targetReq),
       bidAmount: data.bidAmount,
       coverLetter: data.coverLetter,
       estimatedDelivery: data.estimatedDelivery,
       proposedStartTime: data.proposedStartTime,
       proposedEndTime: data.proposedEndTime,
-      milestones: data.milestones.map((m, idx) => ({
-        id: `ms_${newPropId}_${idx}`,
-        title: m.title,
-        amount: m.amount,
-        description: m.description,
-      })),
+      milestones: buildMilestones(newPropId, data.milestones),
       status: 'draft',
       submittedAt: new Date().toISOString(),
       portfolioLinks: data.portfolioLinks,
@@ -543,10 +559,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 3. Hire Vendor & Confirm Booking
-  const hireVendor = async (
+  const hireVendor = (
     jobId: string,
     proposalId: string
-  ): Promise<{ contract: Contract; success: boolean }> => {
+  ): { contract: Contract } => {
     const req = jobs.find((r) => r.id === jobId);
     const prop = proposals.find((p) => p.id === proposalId);
 
@@ -559,8 +575,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('This vendor is no longer available on the selected date.');
     }
 
-    const contractId = `ctr_${Date.now()}`;
-    const ackNumber = `MARCHE-ACK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const contractId = generateId('ctr');
+    const ackNumber = `MARCHE-ACK-${new Date().getFullYear()}-${Math.floor(ACK_NUMBER_MIN + Math.random() * ACK_NUMBER_RANGE)}`;
 
     const newContract: Contract = {
       id: contractId,
@@ -628,7 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `/contracts/${contractId}`
     );
 
-    return { contract: newContract, success: true };
+    return { contract: newContract };
   };
 
   // 4. Vendor Marks Event Completed
@@ -756,7 +772,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendMessage = (contractId: string, text: string) => {
     const newMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: generateId('msg'),
       contractId,
       senderId: currentUser.id,
       senderName: currentUser.name,
@@ -788,6 +804,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((r) => {
         if (r.id === id) {
           if (r.isDraftPost) return r;
+          // Only an Open (or already-paused/Draft) job can be paused/resumed — once a job
+          // has a contract (status flips to Confirmed/Completed/Closed), pausing it would
+          // silently desync the job's own status from the contract that's actually running.
+          if (r.status !== 'Open' && r.status !== 'Draft') return r;
           const isPaused = r.status === 'Draft' || r.isPaused;
           const newStatus = isPaused ? 'Open' : 'Draft';
           addAuditLog(
@@ -805,21 +825,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteJob = (id: string) => {
+    // A job with a contract is actively running (or finished) — deleting it would orphan
+    // the contract's parent job while the contract keeps existing on its own.
+    if (contracts.some((c) => c.jobId === id)) return;
     const job = jobs.find((r) => r.id === id);
     setJobs((prev) => prev.filter((r) => r.id !== id));
     addAuditLog('Job Deleted', `Job ${id}`, job?.status ?? 'Unknown', 'Deleted', 'Removed by Client');
   };
 
-  const updateJob = (id: string, updates: Partial<Job>) => {
+  const updateJob = (id: string, updates: Partial<EditableJobFields>) => {
     const job = jobs.find((r) => r.id === id);
+    // Reuses the same normalizeJobBudget() the job-creation functions use, by normalizing
+    // a full merged (job + updates) object and taking just the resulting budgetMax back —
+    // updateJob's `updates` alone isn't a full Job (missing budgetMode), so it can't be
+    // passed to normalizeJobBudget directly.
+    const normalizedUpdates = job
+      ? { ...updates, budgetMax: normalizeJobBudget({ ...job, ...updates }).budgetMax }
+      : updates;
     setJobs((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
+      prev.map((r) => (r.id === id ? { ...r, ...normalizedUpdates } : r))
     );
     addAuditLog(
       'Job Updated',
       `Job ${id}`,
       job?.status ?? 'Unknown',
-      updates.status ?? job?.status ?? 'Unknown',
+      job?.status ?? 'Unknown',
       'Edited by Client'
     );
   };

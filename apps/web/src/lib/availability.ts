@@ -34,16 +34,18 @@ export function deriveSlotFromEvent(timingMode: EventTimingMode, startTime?: str
   return 'Evening';
 }
 
-// A slot is unavailable if it's already booked directly, or if a Full Day booking already
-// covers the day (or, for a Full Day request, if any individual slot that day is booked).
+// A slot is unavailable if it's already booked or manually blocked by the vendor, or if a
+// Full Day booking already covers the day (or, for a Full Day request, if any individual
+// slot that day is booked/blocked).
 export function isVendorSlotAvailable(vendorId: string, dateISO: string, slot: TimeSlot): boolean {
   const availability = getVendorAvailability(vendorId);
   const day = availability[dateISO] ?? DEFAULT_DAY_AVAILABILITY;
-  if (day[slot] === 'booked') return false;
+  const isUnavailable = (status: SlotStatus) => status === 'booked' || status === 'blocked';
+  if (isUnavailable(day[slot])) return false;
   if (slot === 'Full Day') {
-    return (['Morning', 'Afternoon', 'Evening'] as TimeSlot[]).every((s) => day[s] !== 'booked');
+    return (['Morning', 'Afternoon', 'Evening'] as TimeSlot[]).every((s) => !isUnavailable(day[s]));
   }
-  return day['Full Day'] !== 'booked';
+  return !isUnavailable(day['Full Day']);
 }
 
 // Marks a vendor's calendar slot as booked from a confirmed contract. Never downgrades an

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MapPin, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Badge, Button, Card, DatePicker, Input, PhoneInput, Textarea } from '@marche/ui';
+import { todayISODate } from '../lib/formatTime';
 
 interface EducationEntry {
   school: string;
@@ -20,14 +21,6 @@ interface ProfileDraftFields {
 
 function draftKey(userId: string): string {
   return `marche_profile_draft_${userId}`;
-}
-
-function todayISODate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 function loadDraft(userId: string): ProfileDraftFields | null {

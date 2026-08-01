@@ -3,14 +3,9 @@ import {
   ArrowLeft,
   Calendar,
   CalendarClock,
-  Clock,
   MapPin,
   CheckCircle2,
-  ShieldCheck,
-  User,
   Send,
-  Building,
-  DollarSign,
   FileText,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';

@@ -8,7 +8,9 @@ const CATEGORY_COLORS = ['bg-primary', 'bg-sky-500', 'bg-amber-500', 'bg-rose-40
 export const StatsPage: React.FC = () => {
   const { currentUser, proposals, contracts } = useApp();
 
-  const myProposals = proposals.filter((p) => p.vendorId === currentUser.id);
+  // Excludes drafts — a draft was never actually submitted, so it shouldn't count toward
+  // win rate, the "Submitted" funnel stage, or the category breakdown.
+  const myProposals = proposals.filter((p) => p.vendorId === currentUser.id && p.status !== 'draft');
   const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
 
   const hiredCount = myProposals.filter((p) => p.status === 'accepted').length;

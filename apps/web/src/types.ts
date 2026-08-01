@@ -47,8 +47,7 @@ export type EventCategory =
   | 'Venue'
   | 'Event Planning'
   | 'Lighting & FX'
-  | 'Entertainment'
-  | string;
+  | 'Entertainment';
 
 export type TimeSlot = 'Morning' | 'Afternoon' | 'Evening' | 'Full Day';
 

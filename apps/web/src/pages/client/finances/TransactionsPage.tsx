@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronRight, Folder, Lock, Sliders, X } from 'lucide-react';
 import { Card } from '@marche/ui';
 
 type TransactionsTab = 'payments' | 'charges';
 
 export const TransactionsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TransactionsTab>('payments');
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-
   return (
     <div className="relative min-h-[70vh] max-w-5xl mx-auto">
       {/* Coming Soon overlay */}
@@ -40,9 +37,8 @@ export const TransactionsPage: React.FC = () => {
           {(['payments', 'charges'] as TransactionsTab[]).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
               className={`pb-3 text-sm font-semibold capitalize border-b-2 -mb-px ${
-                activeTab === tab ? 'text-ink border-primary' : 'text-ink-muted border-transparent'
+                tab === 'payments' ? 'text-ink border-primary' : 'text-ink-muted border-transparent'
               }`}
             >
               {tab}
@@ -50,17 +46,15 @@ export const TransactionsPage: React.FC = () => {
           ))}
         </div>
 
-        {!bannerDismissed && (
-          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/10 border border-primary/20 text-xs">
-            <span className="flex items-center gap-2 text-ink">
-              <Sliders className="w-3.5 h-3.5 text-primary" />
-              Looking for filtered totals? Go to the "Charges" tab
-            </span>
-            <button onClick={() => setBannerDismissed(true)} className="text-ink-muted">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/10 border border-primary/20 text-xs">
+          <span className="flex items-center gap-2 text-ink">
+            <Sliders className="w-3.5 h-3.5 text-primary" />
+            Looking for filtered totals? Go to the "Charges" tab
+          </span>
+          <button className="text-ink-muted">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
         <div className="flex flex-wrap items-end gap-4">
           {[

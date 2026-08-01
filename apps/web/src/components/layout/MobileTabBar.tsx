@@ -34,7 +34,7 @@ export const MobileTabBar: React.FC = () => {
 
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-border pb-[env(safe-area-inset-bottom)]">
-      <div className="grid grid-cols-5">
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = route === tab.path;

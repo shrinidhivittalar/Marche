@@ -3,16 +3,10 @@ import {
   ArrowLeft,
   ShieldCheck,
   CheckCircle2,
-  Calendar,
   Clock,
-  MapPin,
   FileCheck,
-  Download,
   Printer,
-  Sparkles,
-  DollarSign,
   User,
-  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';

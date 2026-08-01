@@ -2,28 +2,19 @@ import React, { useRef, useState } from 'react';
 import {
   Plus,
   Briefcase,
-  FileText,
-  Clock,
-  ShieldCheck,
   Calendar,
   MapPin,
-  DollarSign,
   Search,
-  MessageSquare,
   CheckCircle2,
   Pause,
   Play,
   Trash2,
   Edit3,
-  UserPlus,
-  Bell,
   Sparkles,
   X,
   Eye,
   Inbox,
-  Settings as SettingsIcon,
   User,
-  Shield,
   CreditCard,
   Sliders,
   ChevronRight,
@@ -47,8 +38,9 @@ import {
   SelectValue,
 } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { Job, Proposal, Contract } from '../../types';
+import { Job } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
+import { CATEGORIES } from '../../data/categoryOptions';
 import { formatBudget } from '../../lib/formatBudget';
 import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
 
@@ -64,14 +56,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     jobs,
     proposals,
     contracts,
-    notifications,
     navigate,
     saveJobDraft,
     togglePauseJob,
     deleteJob,
     updateJob,
     updateCurrentUser,
-    markNotificationRead,
   } = useApp();
 
   const isProfileComplete = computeIsProfileComplete(currentUser);
@@ -84,7 +74,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
   // Filter tabs for Jobs View
   const [activeTab, setActiveTab] = useState<
-    'all' | 'active' | 'proposals' | 'progress' | 'completed'
+    'all' | 'active' | 'proposals' | 'progress'
   >('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -92,10 +82,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   // Modals state
   const [editModalReq, setEditModalReq] = useState<Job | null>(null);
   const [deleteConfirmReq, setDeleteConfirmReq] = useState<Job | null>(null);
-  const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [inviteVendorName, setInviteVendorName] = useState('');
-  const [messageModalOpen, setMessageModalOpen] = useState(false);
-  const [messageRecipient, setMessageRecipient] = useState('Arjun Verma (Photography)');
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -157,8 +143,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     } else if (activeTab === 'progress') {
       const ctr = contracts.find((c) => c.jobId === r.id);
       if (!ctr || ctr.bookingState !== 'Confirmed') return false;
-    } else if (activeTab === 'completed') {
-      if (r.status !== 'Completed' && r.status !== 'Closed') return false;
     }
 
     if (searchQuery.trim()) {
@@ -205,12 +189,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalReq) return;
-    const isFixed = editModalReq.budgetMode === 'fixed';
+    // AppContext's updateJob normalizes budgetMax to budgetMin for fixed-budget jobs.
     updateJob(editModalReq.id, {
       title: editTitle,
       budgetMin: Number(editBudgetMin),
-      // Fixed-budget jobs must keep max mirrored to min so provider bid validation stays consistent.
-      budgetMax: isFixed ? Number(editBudgetMin) : Number(editBudgetMax),
+      budgetMax: Number(editBudgetMax),
       location: editLocation,
     });
     setEditModalReq(null);
@@ -222,6 +205,137 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     deleteJob(deleteConfirmReq.id);
     setDeleteConfirmReq(null);
     showToast('Job removed from marketplace.');
+  };
+
+  // Shared by every view below — previously copy-pasted once per view and had drifted
+  // (different button styles) between the copies.
+  const renderEditJobModal = () => {
+    if (!editModalReq) return null;
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="bg-surface border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <h3 className="text-base font-bold text-ink">
+              Edit Job
+            </h3>
+            <button
+              onClick={() => setEditModalReq(null)}
+              className="p-1 text-ink-muted hover:text-ink cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveEdit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">
+                Title
+              </label>
+              <Input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  Min Budget (₹)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editBudgetMin}
+                  onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
+                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  Max Budget (₹)
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
+                  onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
+                  disabled={editModalReq?.budgetMode === 'fixed'}
+                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
+                  required
+                />
+                {editModalReq?.budgetMode === 'fixed' && (
+                  <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">
+                Location
+              </label>
+              <Input
+                type="text"
+                value={editLocation}
+                onChange={(e) => setEditLocation(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+                required
+              />
+            </div>
+
+            <div className="pt-3 border-t border-border flex items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditModalReq(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm">
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDeleteJobModal = () => {
+    if (!deleteConfirmReq) return null;
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="bg-surface border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <h3 className="text-base font-bold text-rose-600">
+            Delete Job?
+          </h3>
+          <p className="text-xs text-ink-muted">
+            Are you sure you want to remove <strong>"{deleteConfirmReq.title}"</strong>?
+          </p>
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteConfirmReq(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={handleConfirmDelete}
+            >
+              Delete Job
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // ---------------------------------------------------------------------
@@ -458,21 +572,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All Categories</SelectItem>
-                {Array.from(
-                  new Set([
-                    'Website Design',
-                    'Mobile Development',
-                    'Digital Marketing',
-                    'Brand Identity',
-                    'Software Development',
-                    'Photography',
-                    'Catering',
-                    'DJ & Sound',
-                    'Videography',
-                    'Floral & Decor',
-                    ...myJobs.map((r) => r.category),
-                  ])
-                ).map((cat) => (
+                {CATEGORIES.filter((cat) => cat !== 'All').map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>
@@ -698,130 +798,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           </div>
         )}
 
-        {/* Edit Modal */}
-        {editModalReq && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-surface border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-base font-bold text-ink">
-                  Edit Job
-                </h3>
-                <button
-                  onClick={() => setEditModalReq(null)}
-                  className="p-1 text-ink-muted hover:text-ink cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveEdit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">
-                    Title
-                  </label>
-                  <Input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">
-                      Min Budget (₹)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={editBudgetMin}
-                      onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
-                      className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">
-                      Max Budget (₹)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
-                      onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
-                      disabled={editModalReq?.budgetMode === 'fixed'}
-                      className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
-                      required
-                    />
-                    {editModalReq?.budgetMode === 'fixed' && (
-                      <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">
-                    Location
-                  </label>
-                  <Input
-                    type="text"
-                    value={editLocation}
-                    onChange={(e) => setEditLocation(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                    required
-                  />
-                </div>
-
-                <div className="pt-3 border-t border-border flex items-center justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditModalReq(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm">
-                    Save Changes
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmReq && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-surface border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-              <h3 className="text-base font-bold text-rose-600">
-                Delete Job?
-              </h3>
-              <p className="text-xs text-ink-muted">
-                Are you sure you want to remove <strong>"{deleteConfirmReq.title}"</strong>?
-              </p>
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeleteConfirmReq(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-rose-600 hover:bg-rose-700 text-white"
-                  onClick={handleConfirmDelete}
-                >
-                  Delete Job
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderEditJobModal()}
+        {renderDeleteJobModal()}
         </>
         )}
       </div>
@@ -1400,118 +1378,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           )}
         </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmReq && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-border">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-ink">Delete Job?</h3>
-              <p className="text-xs text-ink-muted">
-                Are you sure you want to delete "{deleteConfirmReq.title}"? This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmReq(null)}
-              >
-                Cancel
-              </Button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Job Modal */}
-      {editModalReq && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-border">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-sm font-bold text-ink">Edit Job</h3>
-              <button
-                onClick={() => setEditModalReq(null)}
-                className="p-1 text-ink-muted hover:text-ink rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-ink mb-1">Title</label>
-                <Input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-ink mb-1">Min Budget (₹)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={editBudgetMin}
-                    onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-ink mb-1">Max Budget (₹)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
-                    onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
-                    disabled={editModalReq?.budgetMode === 'fixed'}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
-                    required
-                  />
-                  {editModalReq?.budgetMode === 'fixed' && (
-                    <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-ink mb-1">Location</label>
-                <Input
-                  type="text"
-                  value={editLocation}
-                  onChange={(e) => setEditLocation(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditModalReq(null)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm">
-                  Save Changes
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {renderDeleteJobModal()}
+      {renderEditJobModal()}
     </div>
   );
 };

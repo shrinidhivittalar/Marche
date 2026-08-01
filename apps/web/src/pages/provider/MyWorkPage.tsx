@@ -44,13 +44,15 @@ function getMonthCells(monthDate: Date): (Date | null)[] {
   return cells;
 }
 
-export const ProviderDashboard: React.FC = () => {
+export const MyWorkPage: React.FC = () => {
   const { currentUser, proposals, contracts, jobs, navigate } = useApp();
 
   const [activeTab, setActiveTab] = useState<'bids' | 'contracts' | 'calendar'>('bids');
 
-  // Vendor's submitted proposals
+  // Vendor's proposals (includes drafts — the "My Proposals" tab intentionally lists those too)
   const myProposals = proposals.filter((p) => p.vendorId === currentUser.id);
+  // A draft isn't actually submitted yet — the stat card specifically should not count it.
+  const submittedProposals = myProposals.filter((p) => p.status !== 'draft');
 
   // Vendor's active or completed contracts
   const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
@@ -130,7 +132,7 @@ export const ProviderDashboard: React.FC = () => {
             <span className="text-xs font-medium">Submitted Proposals</span>
             <FileCheck className="w-4 h-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-ink">{myProposals.length}</p>
+          <p className="text-2xl font-bold text-ink">{submittedProposals.length}</p>
           <p className="text-[11px] text-ink-muted mt-1">Active client bids</p>
         </Card>
 

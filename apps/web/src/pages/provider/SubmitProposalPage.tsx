@@ -25,6 +25,7 @@ interface SubmitProposalPageProps {
 const MARCHE_SERVICE_FEE_RATE = 0.1;
 const MAX_HIGHLIGHTS = 4;
 const DESCRIPTION_TRUNCATE_LENGTH = 180;
+const DEFAULT_BID_AMOUNT = 3200;
 
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   jobId,
@@ -39,7 +40,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(existingDraft?.id ?? null);
 
   // Form State — pre-filled from an existing draft proposal when resuming one
-  const [bidAmount, setBidAmount] = useState<number>(existingDraft?.bidAmount ?? job?.budgetMin ?? 3200);
+  const [bidAmount, setBidAmount] = useState<number>(existingDraft?.bidAmount ?? job?.budgetMin ?? DEFAULT_BID_AMOUNT);
   const [proposedStartTime, setProposedStartTime] = useState<string>(
     existingDraft?.proposedStartTime ?? job?.eventStartTime ?? '18:00'
   );
@@ -167,12 +168,15 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     if (bidOutOfRange) return;
     if (milestonesMismatch) return;
 
-    submitProposal({
-      ...buildProposalData(),
-      draftId: currentDraftId ?? undefined,
-    });
-
-    navigate('/provider/dashboard');
+    try {
+      submitProposal({
+        ...buildProposalData(),
+        draftId: currentDraftId ?? undefined,
+      });
+      navigate('/provider/dashboard');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not submit this proposal.');
+    }
   };
 
   const serviceFee = Math.round(bidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;

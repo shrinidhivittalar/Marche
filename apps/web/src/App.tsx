@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ArrowLeft, CreditCard, Clock, UserPlus } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
@@ -8,7 +9,7 @@ import { MobileTabBar } from './components/layout/MobileTabBar';
 // e.g. /notifications is a tab only for admin, so client/vendor still need a back button on it.
 const CLIENT_ROOT_ROUTES = new Set(['/client/dashboard', '/client/search', '/client/jobs', '/messages', '/menu']);
 const VENDOR_ROOT_ROUTES = new Set(['/provider/dashboard', '/provider/search', '/provider/contracts', '/messages', '/menu']);
-const ADMIN_ROOT_ROUTES = new Set(['/admin/audit', '/provider/dashboard', '/client/dashboard', '/notifications', '/menu']);
+const ADMIN_ROOT_ROUTES = new Set(['/admin/audit', '/provider/dashboard', '/notifications', '/menu']);
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
@@ -30,7 +31,7 @@ import { BudgetsPage } from './pages/client/finances/BudgetsPage';
 
 import { ProviderHomePage } from './pages/provider/ProviderHomePage';
 import { SearchJobsPage } from './pages/provider/SearchJobsPage';
-import { ProviderDashboard } from './pages/provider/ProviderDashboard';
+import { MyWorkPage } from './pages/provider/MyWorkPage';
 import { FinancesPage } from './pages/provider/FinancesPage';
 import { ContractsPage } from './pages/provider/ContractsPage';
 import { StatsPage } from './pages/provider/StatsPage';
@@ -44,6 +45,68 @@ import { MobileMenuPage } from './pages/MobileMenuPage';
 import { AdminAuditDashboard } from './pages/admin/AdminAuditDashboard';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { MessagesPage } from './pages/MessagesPage';
+
+// Exact-path routes. A plain object can't have a duplicate key silently shadow another
+// (TS flags it), which is the shadowing risk the old sequential if/else chain had.
+const EXACT_ROUTES: Record<string, () => ReactNode> = {
+  '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
+  '/client/search': () => <SearchTalentPage />,
+  '/client/freelancers/hired': () => <YourHiresPage />,
+  '/client/freelancers/saved': () => <SavedTalentPage />,
+  '/client/freelancers/refer': () => (
+    <ComingSoonPage
+      title="Bring Freelancers to Marché"
+      description="Inviting providers you already work with outside Marché to join the platform will be available here soon."
+      icon={UserPlus}
+    />
+  ),
+  '/client/jobs': () => <ClientDashboard key="jobs" view="jobs" />,
+  '/client/settings': () => <ClientDashboard key="settings" view="settings" />,
+  '/client/jobs/new': () => <PostJobIntroPage />,
+  '/client/jobs/new/manual': () => <CreateJobPage />,
+  '/client/profile': () => <EditProfilePage />,
+  '/client/payments': () => (
+    <ComingSoonPage
+      title="Payments"
+      description="Payment history, invoices, and transaction records will be available here soon."
+      icon={CreditCard}
+    />
+  ),
+  '/client/finances/weekly-summary': () => <WeeklySummaryPage />,
+  '/client/finances/transactions': () => <TransactionsPage />,
+  '/client/finances/budgets': () => <BudgetsPage />,
+  '/client/work-diaries': () => (
+    <ComingSoonPage
+      title="Work Diaries"
+      description="Time-tracking and work diary records aren't available yet in this preview."
+      icon={Clock}
+    />
+  ),
+  '/provider/dashboard': () => <ProviderHomePage />,
+  '/provider/search': () => <SearchJobsPage />,
+  '/provider/analytics': () => <MyWorkPage />,
+  '/provider/profile': () => <EditProfilePage />,
+  '/provider/finances': () => <FinancesPage />,
+  '/provider/contracts': () => <ContractsPage />,
+  '/provider/stats': () => <StatsPage />,
+  '/admin/audit': () => <AdminAuditDashboard />,
+  '/admin/profile': () => <EditProfilePage />,
+  '/messages': () => <MessagesPage />,
+  '/notifications': () => <NotificationsPage />,
+  '/menu': () => <MobileMenuPage />,
+};
+
+// Prefix routes (path + trailing id). Order matters — first matching prefix wins, so
+// the more specific '/client/jobs/new/manual/' must come before the general '/client/jobs/'.
+const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
+  { prefix: '/client/jobs/new/manual/', render: (draftId) => <CreateJobPage draftId={draftId} /> },
+  { prefix: '/client/jobs/', render: (id) => <JobDetailPage id={id} /> },
+  { prefix: '/client/proposals/', render: (id) => <ProposalDetailPage id={id} /> },
+  { prefix: '/provider/jobs/', render: (id) => <JobDetailProviderView id={id} /> },
+  { prefix: '/provider/submit-proposal/', render: (id) => <SubmitProposalPage jobId={id} /> },
+  { prefix: '/profile/', render: (id) => <VendorProfilePage id={id} /> },
+  { prefix: '/contracts/', render: (id) => <ContractDetailPage id={id} /> },
+];
 
 function AppContent() {
   const { route, goBack, currentUser } = useApp();
@@ -106,98 +169,14 @@ function AppContent() {
       return roleHome();
     }
 
-    // Client routes
-    if (route === '/client/dashboard' || route === '/dashboard') return <ClientDashboard key="dashboard" view="dashboard" />;
-    if (route === '/client/search') return <SearchTalentPage />;
-    if (route === '/client/freelancers/hired') return <YourHiresPage />;
-    if (route === '/client/freelancers/saved') return <SavedTalentPage />;
-    if (route === '/client/freelancers/refer') {
-      return (
-        <ComingSoonPage
-          title="Bring Freelancers to Marché"
-          description="Inviting providers you already work with outside Marché to join the platform will be available here soon."
-          icon={UserPlus}
-        />
-      );
-    }
-    if (route === '/client/jobs' || route === '/client/projects') return <ClientDashboard key="jobs" view="jobs" />;
-    if (route === '/client/settings') return <ClientDashboard key="settings" view="settings" />;
-    if (route === '/client/jobs/new') return <PostJobIntroPage />;
-    if (route === '/client/jobs/new/manual') return <CreateJobPage />;
-    if (route.startsWith('/client/jobs/new/manual/')) {
-      const draftId = route.replace('/client/jobs/new/manual/', '');
-      return <CreateJobPage draftId={draftId} />;
-    }
-    if (route === '/client/profile') return <EditProfilePage />;
-    if (route === '/client/payments') {
-      return (
-        <ComingSoonPage
-          title="Payments"
-          description="Payment history, invoices, and transaction records will be available here soon."
-          icon={CreditCard}
-        />
-      );
-    }
+    const exact = EXACT_ROUTES[route];
+    if (exact) return exact();
 
-    if (route === '/client/finances/weekly-summary') return <WeeklySummaryPage />;
-    if (route === '/client/finances/transactions') return <TransactionsPage />;
-    if (route === '/client/finances/budgets') return <BudgetsPage />;
-
-    if (route === '/client/work-diaries') {
-      return (
-        <ComingSoonPage
-          title="Work Diaries"
-          description="Time-tracking and work diary records aren't available yet in this preview."
-          icon={Clock}
-        />
-      );
+    for (const { prefix, render } of PREFIX_ROUTES) {
+      if (route.startsWith(prefix)) {
+        return render(route.slice(prefix.length));
+      }
     }
-
-    if (route.startsWith('/client/jobs/')) {
-      const id = route.replace('/client/jobs/', '');
-      return <JobDetailPage id={id} />;
-    }
-
-    if (route.startsWith('/client/proposals/')) {
-      const id = route.replace('/client/proposals/', '');
-      return <ProposalDetailPage id={id} />;
-    }
-
-    // Provider routes
-    if (route === '/provider/dashboard') return <ProviderHomePage />;
-    if (route === '/provider/search') return <SearchJobsPage />;
-    if (route === '/provider/analytics') return <ProviderDashboard />;
-    if (route === '/provider/profile') return <EditProfilePage />;
-    if (route === '/provider/finances') return <FinancesPage />;
-    if (route === '/provider/contracts') return <ContractsPage />;
-    if (route === '/provider/stats') return <StatsPage />;
-
-    if (route.startsWith('/provider/jobs/')) {
-      const id = route.replace('/provider/jobs/', '');
-      return <JobDetailProviderView id={id} />;
-    }
-
-    if (route.startsWith('/provider/submit-proposal/')) {
-      const id = route.replace('/provider/submit-proposal/', '');
-      return <SubmitProposalPage jobId={id} />;
-    }
-
-    if (route.startsWith('/profile/')) {
-      const id = route.replace('/profile/', '');
-      return <VendorProfilePage id={id} />;
-    }
-
-    // Shared & Admin routes
-    if (route.startsWith('/contracts/')) {
-      const id = route.replace('/contracts/', '');
-      return <ContractDetailPage id={id} />;
-    }
-
-    if (route === '/admin/audit') return <AdminAuditDashboard />;
-    if (route === '/admin/profile') return <EditProfilePage />;
-    if (route === '/messages') return <MessagesPage />;
-    if (route === '/notifications') return <NotificationsPage />;
-    if (route === '/menu') return <MobileMenuPage />;
 
     // Fallback default — send each role back to its own home, not just the client's
     return roleHome();

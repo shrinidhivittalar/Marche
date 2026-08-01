@@ -1,19 +1,13 @@
 import React, { useState } from 'react';
 import {
   ShieldAlert,
-  Layers,
-  History,
   AlertTriangle,
-  Lock,
   Search,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Filter,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card, Input, Textarea } from '@marche/ui';
 import { Modal } from '../../components/common/Modal';
+import { StatusBadge } from '../../components/common/StatusBadge';
 import { BookingState } from '../../types';
 
 export const AdminAuditDashboard: React.FC = () => {
@@ -22,7 +16,6 @@ export const AdminAuditDashboard: React.FC = () => {
     contracts,
     auditLogs,
     adminOverrideBookingState,
-    navigate,
   } = useApp();
 
   const [selectedBookingId, setSelectedBookingId] = useState<string>('job_101');
@@ -170,8 +163,10 @@ export const AdminAuditDashboard: React.FC = () => {
                   </td>
                   <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
                     {log.beforeState && log.afterState ? (
-                      <span className="px-2 py-1 rounded-md bg-emerald-50 text-primary">
-                        {log.beforeState} → {log.afterState}
+                      <span className="inline-flex items-center gap-1.5">
+                        <StatusBadge status={log.beforeState} />
+                        <span className="text-zinc-400">→</span>
+                        <StatusBadge status={log.afterState} />
                       </span>
                     ) : (
                       <span className="text-zinc-400">—</span>

@@ -5,16 +5,12 @@ import {
   CalendarClock,
   Clock,
   MapPin,
-  DollarSign,
-  User,
   Star,
   FileCheck,
   FileText,
   CheckCircle2,
   ShieldCheck,
   ChevronRight,
-  Send,
-  Building,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';

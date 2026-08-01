@@ -4,12 +4,6 @@ import {
   Star,
   ShieldCheck,
   CheckCircle2,
-  Calendar,
-  Clock,
-  MapPin,
-  Building,
-  DollarSign,
-  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
@@ -28,6 +22,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   const [hireModalOpen, setHireModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmedContractId, setConfirmedContractId] = useState<string | null>(null);
+  const [hireError, setHireError] = useState<string | null>(null);
 
   const proposal = proposals.find((p) => p.id === id);
   const job = proposal ? getJobById(proposal.jobId) : undefined;
@@ -45,16 +40,23 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     );
   }
 
-  const handleConfirmHire = async () => {
+  const handleConfirmHire = () => {
     setIsProcessing(true);
-    const { contract } = await hireVendor(job.id, proposal.id);
-    setIsProcessing(false);
-    setConfirmedContractId(contract.id);
+    setHireError(null);
+    try {
+      const { contract } = hireVendor(job.id, proposal.id);
+      setConfirmedContractId(contract.id);
+    } catch (err) {
+      setHireError(err instanceof Error ? err.message : 'Could not confirm this hire.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const closeHireModal = () => {
     setHireModalOpen(false);
     setConfirmedContractId(null);
+    setHireError(null);
   };
 
   return (
@@ -275,6 +277,10 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
                 </span>
               </div>
             </div>
+
+            {hireError && (
+              <p className="text-xs text-destructive font-medium">{hireError}</p>
+            )}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={closeHireModal}>

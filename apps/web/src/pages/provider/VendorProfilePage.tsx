@@ -102,9 +102,10 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           headline: currentUser.companyOrTitle || baseTalent.headline,
           bio: currentUser.bio || baseTalent.bio,
           location: currentUser.location || baseTalent.location,
-          hourlyRate: currentUser.hourlyRate || baseTalent.hourlyRate,
+          hourlyRate: currentUser.hourlyRate ?? baseTalent.hourlyRate,
           skills: currentUser.skills?.length ? currentUser.skills : baseTalent.skills,
           verified: currentUser.verified,
+          education: currentUser.education?.length ? currentUser.education : baseTalent.education,
         }
       : baseTalent;
 

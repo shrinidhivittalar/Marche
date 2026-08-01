@@ -3,8 +3,9 @@ import { Search, Heart, ThumbsDown, ShieldCheck, MapPin, ChevronDown, SlidersHor
 import { useApp } from '../../context/AppContext';
 import { Input, Checkbox, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
-import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
+import { LOCATIONS } from '../../data/categoryOptions';
 import { formatBudget } from '../../lib/formatBudget';
+import { useJobFacets } from '../../hooks/useJobFacets';
 
 type SortOption = 'best' | 'recent' | 'budget_high' | 'budget_low';
 
@@ -79,19 +80,7 @@ export const SearchJobsPage: React.FC = () => {
     setSelectedCategoryFilter(next.size === 1 ? Array.from(next)[0] ?? 'All' : 'All');
   };
 
-  const openJobs = jobs.filter((r) => !dismissedIds.has(r.id));
-
-  const searchMatched = openJobs.filter(
-    (r) =>
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const categoryCounts = CATEGORIES.filter((c) => c !== 'All').map((cat) => ({
-    value: cat,
-    count: searchMatched.filter((r) => r.category === cat).length,
-  }));
+  const { searchMatched, categoryCounts, locationCounts } = useJobFacets(jobs, dismissedIds, searchQuery);
 
   const budgetCounts = BUDGET_BUCKETS.map((b) => ({
     ...b,
@@ -101,11 +90,6 @@ export const SearchJobsPage: React.FC = () => {
   const proposalCounts = PROPOSAL_BUCKETS.map((b) => ({
     ...b,
     count: searchMatched.filter((r) => b.test(r.proposalsCount)).length,
-  }));
-
-  const locationCounts = LOCATIONS.map((loc) => ({
-    ...loc,
-    count: searchMatched.filter((r) => r.location.toLowerCase().includes(loc.value.toLowerCase())).length,
   }));
 
   const verifiedCount = searchMatched.filter((r) => r.clientVerified).length;

@@ -29,7 +29,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
 import { formatBudget } from '../../lib/formatBudget';
 import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
-import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
+import { useJobFacets } from '../../hooks/useJobFacets';
 
 type FeedTab = 'best' | 'recent' | 'saved' | 'invites';
 
@@ -76,18 +76,18 @@ export const ProviderHomePage: React.FC = () => {
     setDismissedIds((prev) => new Set(prev).add(id));
   };
 
-  const openJobs = jobs.filter((r) => !dismissedIds.has(r.id));
+  const { searchMatched, categoryCounts, locationCounts } = useJobFacets(
+    jobs,
+    dismissedIds,
+    searchQuery,
+  );
 
-  const filteredFeed = openJobs.filter((req) => {
+  const filteredFeed = searchMatched.filter((req) => {
     const matchesCategory =
       selectedCategoryFilter === 'All' || req.category === selectedCategoryFilter;
-    const matchesSearch =
-      req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesLocation =
       locationFilter === 'All' || req.location.toLowerCase().includes(locationFilter.toLowerCase());
-    return matchesCategory && matchesSearch && matchesLocation;
+    return matchesCategory && matchesLocation;
   });
 
   const feedItems =
@@ -96,24 +96,6 @@ export const ProviderHomePage: React.FC = () => {
       : feedTab === 'recent'
       ? [...filteredFeed].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       : filteredFeed; // 'best' — default relevance order; 'invites' handled separately below
-
-  // Search-only match set (ignoring category/location) — used to compute facet counts
-  const searchMatched = openJobs.filter(
-    (req) =>
-      req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.location.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const categoryCounts = CATEGORIES.filter((cat) => cat !== 'All').map((cat) => ({
-    value: cat,
-    count: searchMatched.filter((r) => r.category === cat).length,
-  }));
-
-  const locationCounts = LOCATIONS.map((loc) => ({
-    ...loc,
-    count: searchMatched.filter((r) => r.location.toLowerCase().includes(loc.value.toLowerCase())).length,
-  }));
 
   const openFiltersModal = () => {
     setPendingCategory(selectedCategoryFilter);

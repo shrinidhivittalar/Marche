@@ -69,8 +69,6 @@ export const ContractsPage: React.FC = () => {
             <EmptyState
               title="There are no active contracts."
               description="Contracts you're actively working on will appear here."
-              actionLabel="Search for new projects"
-              onAction={() => {}}
             />
           </div>
         )}

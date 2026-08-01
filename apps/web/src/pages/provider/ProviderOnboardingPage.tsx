@@ -17,6 +17,7 @@ import {
   Textarea,
 } from '@marche/ui';
 import { EventCategory, EnglishLevel } from '../../types';
+import { todayISODate } from '../../lib/formatTime';
 
 type Step =
   | 'welcome' | 'q1' | 'q2' | 'q3' | 'profile'
@@ -57,14 +58,6 @@ const Q3_OPTIONS = [
 ];
 
 const CATEGORIES: EventCategory[] = ['Photography', 'Catering', 'DJ & Sound', 'Floral & Decor', 'Venue', 'Event Planning', 'Lighting & FX', 'Entertainment'];
-
-function todayISODate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 const SKILL_SUGGESTIONS: Record<string, string[]> = {
   Photography: ['Event Photography', 'Photo Editing', 'Lightroom'],
@@ -121,9 +114,11 @@ function OptionCard({
   );
 }
 
-interface ExperienceEntry { title: string; company: string; location?: string; startDate?: string; endDate?: string; current?: boolean }
-interface EducationEntry { school: string; degree?: string }
-interface LanguageEntry { language: string; proficiency: EnglishLevel }
+// `key` is a locally-generated id for stable React list keys — stripped before saving,
+// since it isn't part of the actual User profile shape.
+interface ExperienceEntry { key: string; title: string; company: string; location?: string; startDate?: string; endDate?: string; current?: boolean }
+interface EducationEntry { key: string; school: string; degree?: string }
+interface LanguageEntry { key: string; language: string; proficiency: EnglishLevel }
 
 function StepFooter({
   onBack, onSkip, onNext, nextLabel, nextDisabled,
@@ -163,17 +158,23 @@ export const ProviderOnboardingPage: React.FC = () => {
   const [skills, setSkills] = useState<string[]>(currentUser.skills ?? []);
   const [skillInput, setSkillInput] = useState('');
   const [title, setTitle] = useState(currentUser.companyOrTitle ?? '');
-  const [experience, setExperience] = useState<ExperienceEntry[]>(currentUser.workExperience ?? []);
+  const [experience, setExperience] = useState<ExperienceEntry[]>(
+    () => (currentUser.workExperience ?? []).map((e) => ({ ...e, key: crypto.randomUUID() }))
+  );
   const [expTitle, setExpTitle] = useState('');
   const [expCompany, setExpCompany] = useState('');
   const [expLocation, setExpLocation] = useState('');
   const [expStart, setExpStart] = useState('');
   const [expEnd, setExpEnd] = useState('');
   const [expCurrent, setExpCurrent] = useState(false);
-  const [education, setEducation] = useState<EducationEntry[]>(currentUser.education ?? []);
+  const [education, setEducation] = useState<EducationEntry[]>(
+    () => (currentUser.education ?? []).map((e) => ({ ...e, key: crypto.randomUUID() }))
+  );
   const [eduSchool, setEduSchool] = useState('');
   const [eduDegree, setEduDegree] = useState('');
-  const [languages, setLanguages] = useState<LanguageEntry[]>(currentUser.languages ?? []);
+  const [languages, setLanguages] = useState<LanguageEntry[]>(
+    () => (currentUser.languages ?? []).map((l) => ({ ...l, key: crypto.randomUUID() }))
+  );
   const [langName, setLangName] = useState('');
   const [langProf, setLangProf] = useState<EnglishLevel>('Basic');
   const [bio, setBio] = useState(currentUser.bio ?? '');
@@ -209,6 +210,7 @@ export const ProviderOnboardingPage: React.FC = () => {
   const addExperience = () => {
     if (!expTitle.trim() || !expCompany.trim()) return;
     setExperience([...experience, {
+      key: crypto.randomUUID(),
       title: expTitle, company: expCompany, location: expLocation || undefined,
       startDate: expStart || undefined, endDate: expCurrent ? undefined : expEnd || undefined, current: expCurrent,
     }]);
@@ -217,13 +219,13 @@ export const ProviderOnboardingPage: React.FC = () => {
 
   const addEducation = () => {
     if (!eduSchool.trim()) return;
-    setEducation([...education, { school: eduSchool, degree: eduDegree || undefined }]);
+    setEducation([...education, { key: crypto.randomUUID(), school: eduSchool, degree: eduDegree || undefined }]);
     setEduSchool(''); setEduDegree('');
   };
 
   const addLanguage = () => {
     if (!langName.trim()) return;
-    setLanguages([...languages, { language: langName, proficiency: langProf }]);
+    setLanguages([...languages, { key: crypto.randomUUID(), language: langName, proficiency: langProf }]);
     setLangName('');
   };
 
@@ -232,9 +234,9 @@ export const ProviderOnboardingPage: React.FC = () => {
       categories,
       skills,
       companyOrTitle: title,
-      workExperience: experience,
-      education,
-      languages,
+      workExperience: experience.map(({ key: _key, ...e }) => e),
+      education: education.map(({ key: _key, ...e }) => e),
+      languages: languages.map(({ key: _key, ...l }) => l),
       bio,
       hourlyRate,
       phone,
@@ -455,13 +457,13 @@ export const ProviderOnboardingPage: React.FC = () => {
         <div className="space-y-6">
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">Tell us about your work experience.</h2>
           <div className="space-y-2">
-            {experience.map((exp, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {experience.map((exp) => (
+              <div key={exp.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <div>
                   <span className="font-semibold text-ink">{exp.title}</span>
                   <span className="text-ink-muted"> · {exp.company}{exp.location ? ` · ${exp.location}` : ''}</span>
                 </div>
-                <button type="button" onClick={() => setExperience(experience.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setExperience(experience.filter((e) => e.key !== exp.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>
@@ -489,13 +491,13 @@ export const ProviderOnboardingPage: React.FC = () => {
         <div className="space-y-6">
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">And your education?</h2>
           <div className="space-y-2">
-            {education.map((edu, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {education.map((edu) => (
+              <div key={edu.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <div>
                   <span className="font-semibold text-ink">{edu.school}</span>
                   {edu.degree && <span className="text-ink-muted"> · {edu.degree}</span>}
                 </div>
-                <button type="button" onClick={() => setEducation(education.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setEducation(education.filter((e) => e.key !== edu.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>
@@ -515,10 +517,10 @@ export const ProviderOnboardingPage: React.FC = () => {
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">Which languages do you speak?</h2>
           <p className="text-xs text-ink-muted">English is a must — do you speak any others?</p>
           <div className="space-y-2">
-            {languages.map((l, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {languages.map((l) => (
+              <div key={l.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <span className="font-semibold text-ink">{l.language} <span className="text-ink-muted font-normal">— {l.proficiency}</span></span>
-                <button type="button" onClick={() => setLanguages(languages.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setLanguages(languages.filter((lang) => lang.key !== l.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>

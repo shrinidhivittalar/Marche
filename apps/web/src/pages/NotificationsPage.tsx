@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, FileText, Megaphone, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Bell, CheckCheck, FileText, Megaphone, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Button, Card } from '@marche/ui';
+import { Button } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const NotificationsPage: React.FC = () => {

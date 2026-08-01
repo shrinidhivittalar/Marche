@@ -17,9 +17,10 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Button, Card, DatePicker, Input, TimePicker, Textarea } from '@marche/ui';
 import { EventCategory, EventTimingMode, JobAttachment } from '../../types';
-import { formatEventSchedule } from '../../lib/formatTime';
+import { formatEventSchedule, todayISODate } from '../../lib/formatTime';
 import { formatFileSize } from '../../lib/formatFile';
 import { formatBudget } from '../../lib/formatBudget';
+import { CATEGORIES as ALL_CATEGORIES } from '../../data/categoryOptions';
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB — kept modest since files are stored as base64 in localStorage
 const MAX_ATTACHMENTS = 5;
@@ -33,18 +34,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-const CATEGORIES: EventCategory[] = [
-  'Photography',
-  'Catering',
-  'DJ & Sound',
-  'Floral & Decor',
-  'Venue',
-  'Event Planning',
-  'Lighting & FX',
-  'Entertainment',
-];
+const CATEGORIES = ALL_CATEGORIES.filter((c) => c !== 'All') as EventCategory[];
 
-const TITLE_EXAMPLES: Record<EventCategory, string[]> = {
+const TITLE_EXAMPLES: Partial<Record<EventCategory, string[]>> = {
   Photography: [
     'Lead Editorial Photographer for NYC Luxury Brand Launch',
     'Wedding Photographer for 200-Guest Rooftop Ceremony',
@@ -95,13 +87,6 @@ const PHASES: { label: string; steps: WizardStep[] }[] = [
   { label: 'Budget & publish', steps: [5] },
 ];
 
-function todayISODate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 interface CreateJobPageProps {
   draftId?: string;
@@ -251,7 +236,8 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     proposalDeadline,
     budgetMode,
     budgetMin,
-    budgetMax: budgetMode === 'fixed' ? budgetMin : budgetMax,
+    // AppContext normalizes budgetMax to budgetMin for fixed-budget jobs — no need to do it here too.
+    budgetMax,
     deliverables,
     attachments,
   });

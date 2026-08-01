@@ -11,7 +11,6 @@ import {
   User,
   Building,
   ArrowLeft,
-  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button, Input } from '@marche/ui';
