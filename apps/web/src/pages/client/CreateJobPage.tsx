@@ -87,6 +87,21 @@ const PHASES: { label: string; steps: WizardStep[] }[] = [
   { label: 'Budget & publish', steps: [5] },
 ];
 
+function RephraseWithAiButton({ show, onClick }: { show: boolean; onClick: () => void }) {
+  if (!show) return null;
+
+  return (
+    <button
+      type="button"
+      title="Rephrase with AI"
+      aria-label="Rephrase with AI"
+      onClick={onClick}
+      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border border-primary/20 bg-primary-subtle text-primary shadow-sm transition-colors hover:bg-primary hover:text-primary-fg focus-visible:shadow-focus cursor-pointer"
+    >
+      <Sparkles className="h-3.5 w-3.5" />
+    </button>
+  );
+}
 
 interface CreateJobPageProps {
   draftId?: string;
@@ -248,6 +263,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     showToast('Draft saved. You can find it on your Client Dashboard.');
   };
 
+  const handleAiRephraseClick = () => {
+    showToast('AI rephrasing will be available soon.');
+  };
   const handleSubmit = () => {
     if (!isStepValid(5)) {
       setAttemptedNext(true);
@@ -377,13 +395,17 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               <label className="block text-xs font-semibold text-ink mb-1">
                 Write a title for your job
               </label>
-              <Input
-                type="text"
-                placeholder="e.g. Lead Editorial Photographer for NYC Luxury Brand Launch"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                aria-invalid={showTitleError}
-              />
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="e.g. Lead Editorial Photographer for NYC Luxury Brand Launch"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  aria-invalid={showTitleError}
+                  className={title.trim() ? 'pr-12' : undefined}
+                />
+                <RephraseWithAiButton show={!!title.trim()} onClick={handleAiRephraseClick} />
+              </div>
               {showTitleError && (
                 <p className="text-[11px] text-destructive mt-1.5 font-medium">Title is required</p>
               )}
@@ -425,13 +447,17 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
 
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Scope & specifications</label>
-              <Textarea
-                rows={7}
-                placeholder="Describe the atmosphere, attendee expectations, guest count, special technical jobs, and equipment expectations..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                aria-invalid={showDescriptionError}
-              />
+              <div className="relative">
+                <Textarea
+                  rows={7}
+                  placeholder="Describe the atmosphere, attendee expectations, guest count, special technical jobs, and equipment expectations..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  aria-invalid={showDescriptionError}
+                  className={description.trim() ? 'pr-12' : undefined}
+                />
+                <RephraseWithAiButton show={!!description.trim()} onClick={handleAiRephraseClick} />
+              </div>
               {showDescriptionError && (
                 <p className="text-[11px] text-destructive mt-1.5 font-medium">Description is required</p>
               )}
@@ -830,3 +856,4 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     </div>
   );
 };
+

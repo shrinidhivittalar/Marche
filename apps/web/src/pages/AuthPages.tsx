@@ -224,7 +224,7 @@ export const AuthSignInPage: React.FC = () => {
 };
 
 export const AuthSignUpPage: React.FC = () => {
-  const { navigate, setCurrentUserRole } = useApp();
+  const { navigate, setCurrentUserRole, acceptLegalTerms } = useApp();
   const [role, setRole] = useState<UserRole>('client');
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
@@ -236,6 +236,7 @@ export const AuthSignUpPage: React.FC = () => {
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreeTerms) return;
+    acceptLegalTerms({ role, context: 'signup', name: fullName, email, companyOrTitle: company });
     setCurrentUserRole(role);
     if (role === 'vendor') {
       navigate('/provider/onboarding');

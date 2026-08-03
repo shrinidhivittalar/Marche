@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import {
   Star,
+  Award,
+  Gem,
+  TrendingUp,
+  ShieldCheck,
   MapPin,
   BadgeCheck,
   ArrowLeft,
@@ -16,9 +20,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
+import { formatRating, getReviewStats } from '../../lib/reviews';
+import { getJobSuccessScore, getReputationBadges } from '../../lib/reputation';
+import type { ReputationBadgeKey } from '../../lib/reputation';
 import { EmptyState } from '../../components/common/EmptyState';
 import {
-  INITIAL_TALENT,
   INITIAL_WORK_HISTORY,
   INITIAL_PORTFOLIO_ITEMS,
   INITIAL_PROJECT_CATALOG,
@@ -35,10 +41,13 @@ type JobsTab = 'completed' | 'in_progress';
 const BIO_TRUNCATE_LENGTH = 220;
 const PORTFOLIO_PAGE_SIZE = 3;
 
-function getJobSuccess(rating: number): number {
-  return Math.min(100, Math.round(rating * 20));
-}
-
+const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = {
+  top_rated_plus: Gem,
+  top_rated: Award,
+  rising_talent: TrendingUp,
+  responsive: Zap,
+  verified_pro: ShieldCheck,
+};
 function formatDate(iso: string, style: 'long' | 'short' = 'long'): string {
   return new Date(iso).toLocaleDateString('en-US', { month: style, day: 'numeric', year: 'numeric' });
 }
@@ -58,8 +67,7 @@ function getLocalTime(timezone: string): string {
 }
 
 export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
-  const { goBack, currentUser } = useApp();
-  const [isSaved, setIsSaved] = useState(false);
+  const { goBack, savedTalentIds, toggleSavedTalent, getReviewsForVendor, talentProfiles } = useApp();
   const [bioExpanded, setBioExpanded] = useState(false);
   const [jobsTab, setJobsTab] = useState<JobsTab>('completed');
   const [portfolioPage, setPortfolioPage] = useState(0);
@@ -70,9 +78,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const baseTalent = INITIAL_TALENT.find((t) => t.id === id);
+  const talent = talentProfiles.find((t) => t.id === id);
 
-  if (!baseTalent) {
+  if (!talent) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <button
@@ -89,25 +97,6 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
       </div>
     );
   }
-
-  // Viewing your own public profile should reflect what you've actually edited via
-  // onboarding/EditProfilePage, not the frozen mock snapshot — there's no real backend
-  // to fetch a live profile from, so currentUser is the only source of truth for your own edits.
-  const talent =
-    id === currentUser.id
-      ? {
-          ...baseTalent,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
-          headline: currentUser.companyOrTitle || baseTalent.headline,
-          bio: currentUser.bio || baseTalent.bio,
-          location: currentUser.location || baseTalent.location,
-          hourlyRate: currentUser.hourlyRate ?? baseTalent.hourlyRate,
-          skills: currentUser.skills?.length ? currentUser.skills : baseTalent.skills,
-          verified: currentUser.verified,
-          education: currentUser.education?.length ? currentUser.education : baseTalent.education,
-        }
-      : baseTalent;
 
   const workHistory = INITIAL_WORK_HISTORY.filter((w) => w.vendorId === talent.id);
   const completedJobs = workHistory.filter((w) => w.status === 'completed');
@@ -135,7 +124,11 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
   const testimonials = INITIAL_TESTIMONIALS.filter((t) => t.vendorId === talent.id);
   const employmentHistory = INITIAL_EMPLOYMENT_HISTORY.filter((e) => e.vendorId === talent.id);
 
-  const jobSuccess = getJobSuccess(talent.rating);
+  const liveReviews = getReviewsForVendor(talent.id);
+  const reviewStats = getReviewStats(talent, liveReviews);
+  const reputationBadges = getReputationBadges(talent, reviewStats);
+  const jobSuccess = getJobSuccessScore(reviewStats.rating);
+  const isSaved = savedTalentIds.includes(talent.id);
   const bioIsLong = talent.bio.length > BIO_TRUNCATE_LENGTH;
   const displayedBio = bioIsLong && !bioExpanded ? `${talent.bio.slice(0, BIO_TRUNCATE_LENGTH).trimEnd()}…` : talent.bio;
   const activeJobs = jobsTab === 'completed' ? completedJobs : inProgressJobs;
@@ -192,6 +185,25 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                 </span>
                 <span className="text-xs font-bold text-ink">{jobSuccess}% Job Success</span>
               </div>
+              <div className="flex items-center gap-1.5 mt-1.5 text-xs font-semibold text-amber-600">
+                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                <span>{formatRating(reviewStats.rating)} ({reviewStats.reviewCount})</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {reputationBadges.map((badge) => {
+                  const BadgeIcon = REPUTATION_BADGE_ICONS[badge.key];
+                  return (
+                    <span
+                      key={badge.key}
+                      title={badge.description}
+                      className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}
+                    >
+                      <BadgeIcon className="w-3 h-3" />
+                      {badge.label}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -211,7 +223,10 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               Hire
             </Button>
             <button
-              onClick={() => setIsSaved((v) => !v)}
+              onClick={() => {
+                toggleSavedTalent(talent.id);
+                showToast(isSaved ? 'Removed from saved talent.' : 'Saved to your talent list.');
+              }}
               title={isSaved ? 'Saved' : 'Save'}
               className={`w-9 h-9 rounded-full border border-border flex items-center justify-center cursor-pointer ${
                 isSaved ? 'text-rose-500' : 'text-ink-muted hover:text-rose-500'
@@ -251,6 +266,14 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               <div className="text-sm font-extrabold text-ink">{talent.hoursBilled}</div>
               <div className="text-[10px] text-ink-muted mt-0.5">Total hours</div>
             </div>
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <h4 className="text-xs font-bold text-ink mb-1">Rating</h4>
+            <p className="text-xs text-ink-muted flex items-center gap-1.5">
+              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+              {formatRating(reviewStats.rating)} from {reviewStats.reviewCount} review{reviewStats.reviewCount === 1 ? '' : 's'}
+            </p>
           </div>
 
           <div className="border-t border-border pt-4">
@@ -302,6 +325,33 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               )}
             </p>
           </Card>
+          {liveReviews.length > 0 && (
+            <Card padding="lg" className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-ink">Client reviews</h3>
+                <p className="text-xs text-ink-muted mt-0.5">Reviews submitted after completed Marché bookings.</p>
+              </div>
+              <div className="divide-y divide-border">
+                {liveReviews.map((review) => (
+                  <div key={review.id} className="py-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{review.jobTitle}</p>
+                        <p className="text-[11px] text-ink-muted mt-0.5">
+                          {review.clientName} | {formatDate(review.createdAt, 'short')}
+                        </p>
+                      </div>
+                      <span className="flex items-center gap-1 text-xs font-semibold text-amber-600 shrink-0">
+                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                        {review.rating.toFixed(1)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink leading-relaxed">&quot;{review.comment}&quot;</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Work history */}
           <Card padding="lg" className="space-y-4">

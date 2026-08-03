@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Trash2, X } from 'lucide-react';
+import { FileCheck2, MapPin, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Badge, Button, Card, DatePicker, Input, PhoneInput, Textarea } from '@marche/ui';
 import { todayISODate } from '../lib/formatTime';
@@ -33,7 +33,7 @@ function loadDraft(userId: string): ProfileDraftFields | null {
 }
 
 export const EditProfilePage: React.FC = () => {
-  const { currentUser, updateCurrentUser, navigate } = useApp();
+  const { currentUser, updateCurrentUser, submitIdentityVerification, navigate } = useApp();
   const isVendor = currentUser.role === 'vendor';
 
   const liveFields: ProfileDraftFields = {
@@ -63,6 +63,11 @@ export const EditProfilePage: React.FC = () => {
   const [phone, setPhone] = useState(initialFields.phone);
   const [dateOfBirth, setDateOfBirth] = useState(initialFields.dateOfBirth);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [kycLegalName, setKycLegalName] = useState(currentUser.identityVerification?.legalName || currentUser.name);
+  const [kycDocumentType, setKycDocumentType] = useState(currentUser.identityVerification?.documentType || 'pan');
+  const [kycDocumentLast4, setKycDocumentLast4] = useState(currentUser.identityVerification?.documentLast4 || '');
+  const [kycAddress, setKycAddress] = useState(currentUser.identityVerification?.address || currentUser.location || '');
+  const [kycError, setKycError] = useState<string | null>(null);
 
   const addEducation = () => {
     if (!eduSchool.trim()) return;
@@ -108,6 +113,21 @@ export const EditProfilePage: React.FC = () => {
     setPhone(liveFields.phone);
     setDateOfBirth(liveFields.dateOfBirth);
     setShowDraftBanner(false);
+  };
+  const handleSubmitVerification = () => {
+    setKycError(null);
+    if (!kycLegalName.trim() || !kycDocumentLast4.trim() || !kycAddress.trim()) {
+      setKycError('Add your legal name, document last 4 characters, and address.');
+      return;
+    }
+
+    submitIdentityVerification({
+      legalName: kycLegalName,
+      documentType: kycDocumentType,
+      documentLast4: kycDocumentLast4.slice(-4),
+      address: kycAddress,
+    });
+    showStatus('Verification submitted for review.');
   };
 
   return (
@@ -170,6 +190,69 @@ export const EditProfilePage: React.FC = () => {
         </div>
       )}
 
+      {isVendor && (
+        <Card className="p-8 space-y-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-ink">Identity verification</h2>
+                <p className="text-xs text-ink-muted mt-1">
+                  Frontend-only verification intake for this preview. Real KYC still needs backend checks and a provider.
+                </p>
+              </div>
+            </div>
+            <Badge variant={currentUser.verified ? 'success' : currentUser.identityVerification?.status === 'pending' ? 'warning' : 'neutral'}>
+              {currentUser.verified ? 'Verified' : currentUser.identityVerification?.status === 'pending' ? 'Pending review' : 'Not submitted'}
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Legal name</label>
+              <Input value={kycLegalName} onChange={(event) => setKycLegalName(event.target.value)} placeholder="Name on your document" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Document type</label>
+              <select
+                value={kycDocumentType}
+                onChange={(event) => setKycDocumentType(event.target.value as typeof kycDocumentType)}
+                className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+              >
+                <option value="pan">PAN</option>
+                <option value="aadhaar">Aadhaar</option>
+                <option value="passport">Passport</option>
+                <option value="drivers_license">Driver's license</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Document last 4</label>
+              <Input value={kycDocumentLast4} maxLength={4} onChange={(event) => setKycDocumentLast4(event.target.value)} placeholder="Last 4 characters" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Residential address</label>
+              <Input value={kycAddress} onChange={(event) => setKycAddress(event.target.value)} placeholder="City, state, country" />
+            </div>
+          </div>
+
+          {currentUser.identityVerification?.submittedAt && (
+            <p className="text-xs text-ink-muted flex items-center gap-1.5">
+              <FileCheck2 className="w-3.5 h-3.5 text-primary" />
+              Submitted {new Date(currentUser.identityVerification.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          )}
+          {kycError && <p className="text-xs font-semibold text-red-600">{kycError}</p>}
+
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" icon={FileCheck2} onClick={handleSubmitVerification}>
+              Submit Verification
+            </Button>
+          </div>
+        </Card>
+      )}
       {/* Edit Form */}
       <form onSubmit={handleSave}>
         <Card className="p-8 space-y-6">

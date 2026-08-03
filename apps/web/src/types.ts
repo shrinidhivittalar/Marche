@@ -1,5 +1,44 @@
 export type UserRole = 'client' | 'vendor' | 'admin';
 
+
+export type IdentityVerificationStatus = 'not_submitted' | 'pending' | 'verified';
+
+export interface IdentityVerification {
+  legalName: string;
+  documentType: 'aadhaar' | 'pan' | 'passport' | 'drivers_license' | 'other';
+  documentLast4: string;
+  address: string;
+  status: IdentityVerificationStatus;
+  submittedAt?: string;
+}
+export interface LegalAcceptance {
+  termsVersion: string;
+  privacyVersion: string;
+  acceptedAt: string;
+  acceptedById: string;
+  acceptedByName: string;
+  acceptedByRole: UserRole;
+  context: 'signup' | 'hire';
+}
+
+export interface ContractAgreementSnapshot {
+  termsVersion: string;
+  acceptedAt: string;
+  acceptedById: string;
+  acceptedByName: string;
+  acceptedByRole: UserRole;
+  jobTitle: string;
+  category: EventCategory;
+  location: string;
+  eventDate: string;
+  timingMode: EventTimingMode;
+  eventStartTime?: string;
+  eventEndTime?: string;
+  amount: number;
+  proposalId: string;
+  acknowledgementNumber: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -32,6 +71,8 @@ export interface User {
   dateOfBirth?: string; // YYYY-MM-DD
   website?: string;
   orgSize?: string;
+  identityVerification?: IdentityVerification;
+  legalAcceptance?: LegalAcceptance;
 }
 
 export type EventCategory =
@@ -153,8 +194,38 @@ export interface Contract {
   vendorCompletedAt?: string;
   clientConfirmedAt?: string;
   acknowledgementNumber: string;
+  agreement?: ContractAgreementSnapshot;
 }
 
+
+
+export interface WorkDiaryEntry {
+  id: string;
+  contractId: string;
+  vendorId: string;
+  vendorName: string;
+  workDate: string;
+  hours: number;
+  summary: string;
+  proofUrl?: string;
+  createdAt: string;
+}
+export type DisputeStatus = 'open' | 'under_review' | 'resolved';
+
+export interface Dispute {
+  id: string;
+  contractId: string;
+  jobTitle: string;
+  raisedById: string;
+  raisedByName: string;
+  raisedAgainstId: string;
+  raisedAgainstName: string;
+  reason: string;
+  evidence: string;
+  status: DisputeStatus;
+  createdAt: string;
+  resolvedAt?: string;
+}
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -168,6 +239,29 @@ export interface AuditLogEntry {
   reason?: string;
 }
 
+
+
+export interface Referral {
+  id: string;
+  clientId: string;
+  clientName: string;
+  name: string;
+  email: string;
+  specialty: string;
+  note?: string;
+  status: 'invited' | 'joined';
+  createdAt: string;
+}
+export interface ClientSettings {
+  instantProposalAlerts: boolean;
+  milestoneReminders: boolean;
+}
+
+export interface JobAlertSettings {
+  enabled: boolean;
+  categories: EventCategory[];
+  locationMode: 'anywhere' | 'profile_location';
+}
 export interface Notification {
   id: string;
   userId: string;
@@ -177,6 +271,20 @@ export interface Notification {
   read: boolean;
   timestamp: string;
   linkRoute?: string;
+}
+
+export interface Review {
+  id: string;
+  contractId: string;
+  jobId: string;
+  jobTitle: string;
+  vendorId: string;
+  vendorName: string;
+  clientId: string;
+  clientName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
 }
 
 export interface VendorService {

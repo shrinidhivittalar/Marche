@@ -62,6 +62,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     deleteJob,
     updateJob,
     updateCurrentUser,
+    clientSettings,
+    updateClientSettings,
   } = useApp();
 
   const isProfileComplete = computeIsProfileComplete(currentUser);
@@ -812,6 +814,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
   if (view === 'settings') {
     return (
       <div className="space-y-6 max-w-4xl mx-auto">
+        {toastMessage && (
+          <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
         <div className="border-b border-border pb-4">
           <h1 className="text-2xl font-extrabold text-ink tracking-tight">
             Client Account Settings
@@ -825,12 +833,28 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-ink">Notification Preferences</h2>
             <div className="space-y-3 text-xs text-ink">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" defaultChecked className="rounded text-primary" />
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-border bg-bg px-3 py-3 transition-colors hover:border-primary/40">
+                <input
+                  type="checkbox"
+                  checked={clientSettings.instantProposalAlerts}
+                  onChange={(event) => {
+                    updateClientSettings({ instantProposalAlerts: event.target.checked });
+                    showToast('Settings saved.');
+                  }}
+                  className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                />
                 <span>Receive instant alert when a vendor submits a proposal</span>
               </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" defaultChecked className="rounded text-primary" />
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-border bg-bg px-3 py-3 transition-colors hover:border-primary/40">
+                <input
+                  type="checkbox"
+                  checked={clientSettings.milestoneReminders}
+                  onChange={(event) => {
+                    updateClientSettings({ milestoneReminders: event.target.checked });
+                    showToast('Settings saved.');
+                  }}
+                  className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                />
                 <span>Send milestone reminders 24h before event date</span>
               </label>
             </div>

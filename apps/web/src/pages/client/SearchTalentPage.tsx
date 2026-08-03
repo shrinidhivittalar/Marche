@@ -20,7 +20,6 @@ import {
   ZoomIn,
   SlidersHorizontal,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
   Input,
@@ -34,7 +33,9 @@ import {
 } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
-import { INITIAL_TALENT } from '../../data/mockData';
+import { formatRating, getReviewStats } from '../../lib/reviews';
+import { getJobSuccessScore, getReputationBadges } from '../../lib/reputation';
+import type { ReputationBadgeKey } from '../../lib/reputation';
 import type { TalentProfile, EnglishLevel } from '../../types';
 
 type SortOption = 'best' | 'rating' | 'rate_low' | 'rate_high';
@@ -52,31 +53,22 @@ const RATE_BUCKETS = [
 const ENGLISH_LEVELS: EnglishLevel[] = ['Basic', 'Conversational', 'Fluent', 'Native or bilingual'];
 const ANY_LOCATION = '__any_location__';
 const ANY_SKILL = '__any_skill__';
-const ALL_SKILLS = Array.from(new Set(INITIAL_TALENT.flatMap((t) => t.skills))).sort();
 
-interface TalentBadge {
-  label: string;
-  icon: LucideIcon;
-  className: string;
-}
+const REPUTATION_BADGE_OPTIONS: { key: ReputationBadgeKey; label: string; icon: React.ComponentType<{ className?: string }>; className: string }[] = [
+  { key: 'top_rated_plus', label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10' },
+  { key: 'top_rated', label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10' },
+  { key: 'rising_talent', label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' },
+  { key: 'responsive', label: 'Fast Response', icon: Zap, className: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10' },
+  { key: 'verified_pro', label: 'Verified Pro', icon: ShieldCheck, className: 'text-primary bg-primary/10' },
+];
 
-function getTalentBadge(t: TalentProfile): TalentBadge | null {
-  if (t.rating >= 4.95 && t.jobsCompleted >= 30) {
-    return { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20' };
-  }
-  if (t.rating >= 4.85) {
-    return { label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/20' };
-  }
-  if (t.jobsCompleted < 20) {
-    return { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' };
-  }
-  return null;
-}
-
-function getJobSuccess(t: TalentProfile): number {
-  return Math.min(100, Math.round(t.rating * 20));
-}
-
+const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = {
+  top_rated_plus: Gem,
+  top_rated: Award,
+  rising_talent: TrendingUp,
+  responsive: Zap,
+  verified_pro: ShieldCheck,
+};
 function getInsights(t: TalentProfile): string[] {
   return t.bio
     .split('.')
@@ -128,7 +120,7 @@ function RadioOption({
 }
 
 export const SearchTalentPage: React.FC = () => {
-  const { navigate } = useApp();
+  const { navigate, savedTalentIds, toggleSavedTalent, reviews, talentProfiles } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('best');
@@ -136,13 +128,13 @@ export const SearchTalentPage: React.FC = () => {
   const [selectedRates, setSelectedRates] = useState<Set<string>>(new Set());
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [selectedBadges, setSelectedBadges] = useState<Set<ReputationBadgeKey>>(new Set());
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [jobSuccessFilter, setJobSuccessFilter] = useState<JobSuccessFilter>('any');
   const [earnedFilter, setEarnedFilter] = useState<EarnedFilter>('any');
   const [hoursBilledFilter, setHoursBilledFilter] = useState<HoursBilledFilter>('any');
   const [englishLevelFilter, setEnglishLevelFilter] = useState<'any' | EnglishLevel>('any');
   const [otherLanguages, setOtherLanguages] = useState('');
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
@@ -151,14 +143,16 @@ export const SearchTalentPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const toggleInSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
+  const toggleInSet = <T,>(set: Set<T>, setter: (s: Set<T>) => void, value: T) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
   };
 
-  const searchMatched = INITIAL_TALENT.filter(
+  const allSkills = Array.from(new Set(talentProfiles.flatMap((t) => t.skills))).sort();
+
+  const searchMatched = talentProfiles.filter(
     (t) =>
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.headline.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -181,12 +175,15 @@ export const SearchTalentPage: React.FC = () => {
     count: searchMatched.filter((t) => t.location.toLowerCase().includes(loc.value.toLowerCase())).length,
   }));
 
-  const skillCounts = ALL_SKILLS.map((skill) => ({
+  const skillCounts = allSkills.map((skill) => ({
     value: skill,
     count: searchMatched.filter((t) => t.skills.includes(skill)).length,
   }));
 
   const verifiedCount = searchMatched.filter((t) => t.verified).length;
+
+  const getTalentReviewStats = (talent: TalentProfile) =>
+    getReviewStats(talent, reviews.filter((review) => review.vendorId === talent.id));
 
   const filteredTalent = searchMatched.filter((t) => {
     const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(t.category);
@@ -198,7 +195,10 @@ export const SearchTalentPage: React.FC = () => {
     const matchesSkills = selectedSkills.size === 0 || t.skills.some((s) => selectedSkills.has(s));
     const matchesVerified = !verifiedOnly || t.verified;
 
-    const jobSuccess = getJobSuccess(t);
+    const reviewStats = getTalentReviewStats(t);
+    const reputationBadges = getReputationBadges(t, reviewStats);
+    const jobSuccess = getJobSuccessScore(reviewStats.rating);
+    const matchesBadges = selectedBadges.size === 0 || reputationBadges.some((badge) => selectedBadges.has(badge.key));
     const matchesJobSuccess =
       jobSuccessFilter === 'any' || jobSuccess >= (jobSuccessFilter === '80' ? 80 : 90);
 
@@ -224,6 +224,7 @@ export const SearchTalentPage: React.FC = () => {
       matchesLocation &&
       matchesSkills &&
       matchesVerified &&
+      matchesBadges &&
       matchesJobSuccess &&
       matchesEarned &&
       matchesHoursBilled &&
@@ -232,7 +233,7 @@ export const SearchTalentPage: React.FC = () => {
   });
 
   const sortedTalent = [...filteredTalent].sort((a, b) => {
-    if (sortBy === 'rating') return b.rating - a.rating;
+    if (sortBy === 'rating') return getTalentReviewStats(b).rating - getTalentReviewStats(a).rating;
     if (sortBy === 'rate_low') return a.hourlyRate - b.hourlyRate;
     if (sortBy === 'rate_high') return b.hourlyRate - a.hourlyRate;
     return 0; // 'best' — default relevance order
@@ -298,7 +299,7 @@ export const SearchTalentPage: React.FC = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ANY_SKILL}>Skills</SelectItem>
-            {ALL_SKILLS.map((skill) => (
+            {allSkills.map((skill) => (
               <SelectItem key={skill} value={skill}>
                 {skill}
               </SelectItem>
@@ -339,14 +340,13 @@ export const SearchTalentPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Filter Sidebar */}
         <aside className={`lg:col-span-1 space-y-4 ${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
-          <FilterSection title="Talent badge">
-            {[
-              { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10' },
-              { label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10' },
-              { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' },
-            ].map(({ label, icon: Icon, className }) => (
-              <label key={label} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
-                <Checkbox />
+                    <FilterSection title="Talent badge">
+            {REPUTATION_BADGE_OPTIONS.map(({ key, label, icon: Icon, className }) => (
+              <label key={key} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                <Checkbox
+                  checked={selectedBadges.has(key)}
+                  onCheckedChange={() => toggleInSet(selectedBadges, setSelectedBadges, key)}
+                />
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center ${className}`}>
                   <Icon className="w-3 h-3" />
                 </span>
@@ -506,9 +506,10 @@ export const SearchTalentPage: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {sortedTalent.map((t, idx) => {
-                const badge = getTalentBadge(t);
-                const jobSuccess = getJobSuccess(t);
-                const isSaved = savedIds.has(t.id);
+                const reviewStats = getTalentReviewStats(t);
+                const reputationBadges = getReputationBadges(t, reviewStats);
+                const jobSuccess = getJobSuccessScore(reviewStats.rating);
+                const isSaved = savedTalentIds.includes(t.id);
                 const isBoosted = idx === 0;
                 const relatedJobs = Math.max(1, Math.round(t.jobsCompleted * 0.6));
 
@@ -543,14 +544,19 @@ export const SearchTalentPage: React.FC = () => {
                                   Boosted
                                 </span>
                               )}
-                              {badge && (
-                                <span
-                                  className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}
-                                >
-                                  <badge.icon className="w-3 h-3" />
-                                  {badge.label}
-                                </span>
-                              )}
+                              {reputationBadges.slice(0, 3).map((badge) => {
+                                const BadgeIcon = REPUTATION_BADGE_ICONS[badge.key];
+                                return (
+                                  <span
+                                    key={badge.key}
+                                    title={badge.description}
+                                    className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}
+                                  >
+                                    <BadgeIcon className="w-3 h-3" />
+                                    {badge.label}
+                                  </span>
+                                );
+                              })}
                             </div>
                             <h3 className="text-sm font-bold text-ink mt-1">{t.name.split(' ')[0]} {t.name.split(' ')[1]?.[0]}.</h3>
                             <p className="text-xs text-ink-muted mt-0.5">{t.headline}</p>
@@ -561,9 +567,10 @@ export const SearchTalentPage: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleInSet(savedIds, setSavedIds, t.id);
+                                toggleSavedTalent(t.id);
+                                showToast(isSaved ? 'Removed from saved talent.' : 'Saved to your talent list.');
                               }}
-                              title="Save"
+                              title={isSaved ? 'Unsave' : 'Save'}
                               className={`cursor-pointer ${isSaved ? 'text-rose-500' : 'text-ink-muted hover:text-rose-500'}`}
                             >
                               <Heart className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
@@ -597,7 +604,7 @@ export const SearchTalentPage: React.FC = () => {
                         <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5">
                           <span className="flex items-center gap-1 font-semibold text-amber-600">
                             <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                            {t.rating.toFixed(2)} ({t.reviewCount})
+                            {formatRating(reviewStats.rating)} ({reviewStats.reviewCount})
                           </span>
                           {t.verified && (
                             <span className="flex items-center gap-1 font-semibold text-primary">

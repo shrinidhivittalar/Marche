@@ -4,6 +4,7 @@ import {
   Star,
   ShieldCheck,
   CheckCircle2,
+  FileText,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
@@ -23,6 +24,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmedContractId, setConfirmedContractId] = useState<string | null>(null);
   const [hireError, setHireError] = useState<string | null>(null);
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
 
   const proposal = proposals.find((p) => p.id === id);
   const job = proposal ? getJobById(proposal.jobId) : undefined;
@@ -41,6 +43,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   }
 
   const handleConfirmHire = () => {
+    if (!agreementAccepted) {
+      setHireError('Accept the booking agreement before confirming this hire.');
+      return;
+    }
+
     setIsProcessing(true);
     setHireError(null);
     try {
@@ -57,6 +64,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     setHireModalOpen(false);
     setConfirmedContractId(null);
     setHireError(null);
+    setAgreementAccepted(false);
   };
 
   return (
@@ -278,6 +286,32 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
               </div>
             </div>
 
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-3 text-xs">
+              <div className="flex items-start gap-2">
+                <FileText className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-bold text-ink">Booking agreement snapshot</p>
+                  <p className="text-ink-muted mt-1 leading-relaxed">
+                    This confirmation records the selected proposal, agreed amount, event schedule, location, and the current Marché terms version against the new contract.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-ink-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreementAccepted}
+                  onChange={(event) => {
+                    setAgreementAccepted(event.target.checked);
+                    setHireError(null);
+                  }}
+                  className="mt-0.5 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="leading-relaxed">
+                  I accept the booking terms for {job.title} with {proposal.vendorName} at ₹{proposal.bidAmount.toLocaleString('en-IN')}.
+                </span>
+              </label>
+            </div>
+
             {hireError && (
               <p className="text-xs text-destructive font-medium">{hireError}</p>
             )}
@@ -286,7 +320,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
               <Button variant="outline" onClick={closeHireModal}>
                 Cancel
               </Button>
-              <Button loading={isProcessing} onClick={handleConfirmHire} icon={ShieldCheck}>
+              <Button loading={isProcessing} disabled={!agreementAccepted} onClick={handleConfirmHire} icon={ShieldCheck}>
                 Confirm & Hire
               </Button>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, FileText, Megaphone, ShieldCheck } from 'lucide-react';
+import { Bell, CheckCheck, FileText, MapPin, Megaphone, Settings2, ShieldCheck, Tags } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
@@ -11,6 +11,9 @@ export const NotificationsPage: React.FC = () => {
     markNotificationRead,
     markAllNotificationsRead,
     navigate,
+    jobs,
+    jobAlertSettings,
+    updateJobAlertSettings,
   } = useApp();
 
   const isVendor = currentUser.role === 'vendor';
@@ -19,6 +22,16 @@ export const NotificationsPage: React.FC = () => {
   const userNotifs = notifications.filter((n) => n.userId === currentUser.id);
   const activityNotifs = userNotifs.filter((n) => n.type !== 'job_alert');
   const alertNotifs = userNotifs.filter((n) => n.type === 'job_alert');
+  const availableCategories = Array.from(new Set(jobs.map((job) => job.category))).sort();
+
+  const toggleAlertCategory = (category: typeof availableCategories[number]) => {
+    const selected = jobAlertSettings.categories.includes(category);
+    updateJobAlertSettings({
+      categories: selected
+        ? jobAlertSettings.categories.filter((item) => item !== category)
+        : [...jobAlertSettings.categories, category],
+    });
+  };
 
   const visibleNotifs = !isVendor ? userNotifs : activeTab === 'alerts' ? alertNotifs : activityNotifs;
 
@@ -74,6 +87,92 @@ export const NotificationsPage: React.FC = () => {
           >
             Job Alerts
           </button>
+        </div>
+      )}
+
+      {isVendor && activeTab === 'alerts' && (
+        <div className="bg-surface border border-border rounded-2xl p-5 space-y-5 -mt-2">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Settings2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-extrabold text-ink">Job alert preferences</h2>
+                <p className="text-xs text-ink-muted mt-1">
+                  Alerts are created when newly posted jobs match these saved provider preferences.
+                </p>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-ink cursor-pointer">
+              <span>{jobAlertSettings.enabled ? 'On' : 'Off'}</span>
+              <button
+                type="button"
+                onClick={() => updateJobAlertSettings({ enabled: !jobAlertSettings.enabled })}
+                className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${jobAlertSettings.enabled ? 'bg-primary' : 'bg-surface-subtle border border-border'}`}
+                aria-pressed={jobAlertSettings.enabled}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${jobAlertSettings.enabled ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </button>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-5 pt-4 border-t border-border">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-ink">
+                <Tags className="w-4 h-4 text-primary" />
+                Categories
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableCategories.map((category) => {
+                  const selected = jobAlertSettings.categories.includes(category);
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => toggleAlertCategory(category)}
+                      className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors cursor-pointer ${
+                        selected
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-bg text-ink-muted border-border hover:text-ink hover:border-border-strong'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-ink-muted">
+                Leaving every category off will match all categories.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-ink">
+                <MapPin className="w-4 h-4 text-primary" />
+                Location
+              </div>
+              <div className="space-y-2">
+                {([
+                  ['anywhere', 'Anywhere'],
+                  ['profile_location', 'Near my profile location'],
+                ] as const).map(([mode, label]) => (
+                  <label key={mode} className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                    <input
+                      type="radio"
+                      name="job-alert-location"
+                      checked={jobAlertSettings.locationMode === mode}
+                      onChange={() => updateJobAlertSettings({ locationMode: mode })}
+                      className="text-primary focus:ring-primary"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

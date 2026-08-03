@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, CreditCard, Clock, UserPlus } from 'lucide-react';
+import { ArrowLeft, CreditCard, Clock } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
@@ -25,6 +25,7 @@ import { ContractDetailPage } from './pages/client/ContractDetailPage';
 import { SearchTalentPage } from './pages/client/SearchTalentPage';
 import { YourHiresPage } from './pages/client/freelancers/YourHiresPage';
 import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
+import { ReferFreelancersPage } from './pages/client/freelancers/ReferFreelancersPage';
 import { WeeklySummaryPage } from './pages/client/finances/WeeklySummaryPage';
 import { TransactionsPage } from './pages/client/finances/TransactionsPage';
 import { BudgetsPage } from './pages/client/finances/BudgetsPage';
@@ -53,13 +54,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/search': () => <SearchTalentPage />,
   '/client/freelancers/hired': () => <YourHiresPage />,
   '/client/freelancers/saved': () => <SavedTalentPage />,
-  '/client/freelancers/refer': () => (
-    <ComingSoonPage
-      title="Bring Freelancers to Marché"
-      description="Inviting providers you already work with outside Marché to join the platform will be available here soon."
-      icon={UserPlus}
-    />
-  ),
+  '/client/freelancers/refer': () => <ReferFreelancersPage />,
   '/client/jobs': () => <ClientDashboard key="jobs" view="jobs" />,
   '/client/settings': () => <ClientDashboard key="settings" view="settings" />,
   '/client/jobs/new': () => <PostJobIntroPage />,
