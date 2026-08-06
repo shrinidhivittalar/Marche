@@ -1,18 +1,62 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Resend } from 'resend';
 
-// docs/tech_stack1.0.0.md marks Resend as "Planned" — no email provider is
-// wired up yet, so this logs the link a real email would contain. Swap the
-// body of these two methods for a Resend call once that's set up; nothing
-// else in the Identity module needs to change.
+// Falls back to logging the link when RESEND_API_KEY isn't set, so local
+// dev never needs a real Resend account. Set RESEND_API_KEY + EMAIL_FROM
+// to send for real (see apps/api/.env.example).
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+  private readonly resend: Resend | null;
+  private readonly from: string;
+  private readonly frontendOrigin: string;
+
+  constructor() {
+    const apiKey = process.env.RESEND_API_KEY;
+    this.resend = apiKey ? new Resend(apiKey) : null;
+    this.from = process.env.EMAIL_FROM ?? 'Marche <onboarding@resend.dev>';
+    this.frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
+  }
 
   async sendVerificationEmail(email: string, rawToken: string): Promise<void> {
-    this.logger.log(`[dev] Verification link for ${email}: /auth/verify-email?token=${rawToken}`);
+    const link = `${this.frontendOrigin}/auth/verify-email?token=${rawToken}`;
+    await this.send(
+      email,
+      'Verify your Marche account',
+      `<p>Welcome to Marche. Click the link below to verify your email address:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
+      `[dev] Verification link for ${email}: ${link}`,
+    );
   }
 
   async sendPasswordResetEmail(email: string, rawToken: string): Promise<void> {
-    this.logger.log(`[dev] Password reset link for ${email}: /auth/reset-password?token=${rawToken}`);
+    // No frontend page consumes this route yet — the Identity module's
+    // reset-password endpoint exists and works (verified end-to-end), but
+    // nothing renders a form at this URL for a user to land on.
+    const link = `${this.frontendOrigin}/auth/reset-password?token=${rawToken}`;
+    await this.send(
+      email,
+      'Reset your Marche password',
+      `<p>We received a request to reset your Marche password. Click the link below to choose a new one:</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, you can safely ignore this email. This link expires in 1 hour.</p>`,
+      `[dev] Password reset link for ${email}: ${link}`,
+    );
+  }
+
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    devLogMessage: string,
+  ): Promise<void> {
+    if (!this.resend) {
+      this.logger.log(devLogMessage);
+      return;
+    }
+
+    const { error } = await this.resend.emails.send({ from: this.from, to, subject, html });
+    if (error) {
+      // Never let a downed email provider block registration/reset flows —
+      // log it and let the caller carry on; the token still exists in the DB.
+      this.logger.error(`Failed to send email to ${to}: ${error.message}`);
+    }
   }
 }

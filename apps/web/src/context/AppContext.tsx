@@ -30,7 +30,11 @@ import {
   INITIAL_MESSAGES,
   INITIAL_TALENT,
 } from '../data/mockData';
-import { deriveSlotFromEvent, isVendorSlotAvailable, markVendorSlotBooked } from '../lib/availability';
+import {
+  deriveSlotFromEvent,
+  isVendorSlotAvailable,
+  markVendorSlotBooked,
+} from '../lib/availability';
 import { isBidWithinBudget } from '../lib/formatBudget';
 import {
   BackendUser,
@@ -41,6 +45,7 @@ import {
   refreshRequest,
   registerRequest,
   resetPasswordRequest,
+  verifyEmailRequest,
 } from '../lib/api';
 
 type JobDraftInput = Omit<
@@ -68,13 +73,25 @@ interface AppContextType {
   updateCurrentUser: (updates: Partial<User>) => void;
   isAuthenticated: boolean;
   authLoading: boolean;
-  registerAccount: (data: { email: string; password: string; name: string; role: 'client' | 'vendor' }) => Promise<void>;
+  registerAccount: (data: {
+    email: string;
+    password: string;
+    name: string;
+    role: 'client' | 'vendor';
+  }) => Promise<void>;
   loginWithCredentials: (email: string, password: string) => Promise<void>;
   logoutAccount: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   submitPasswordReset: (token: string, newPassword: string) => Promise<void>;
+  verifyEmailToken: (token: string) => Promise<void>;
   submitIdentityVerification: (data: Omit<IdentityVerification, 'status' | 'submittedAt'>) => void;
-  acceptLegalTerms: (data: { role?: UserRole; context: LegalAcceptance['context']; name?: string; email?: string; companyOrTitle?: string }) => LegalAcceptance;
+  acceptLegalTerms: (data: {
+    role?: UserRole;
+    context: LegalAcceptance['context'];
+    name?: string;
+    email?: string;
+    companyOrTitle?: string;
+  }) => LegalAcceptance;
   route: string;
   navigate: (path: string) => void;
   goBack: () => void;
@@ -93,7 +110,12 @@ interface AppContextType {
   toggleFavoriteConversation: (contractId: string) => void;
   savedTalentIds: string[];
   toggleSavedTalent: (vendorId: string) => void;
-  createReferral: (data: { name: string; email: string; specialty: string; note?: string }) => Referral;
+  createReferral: (data: {
+    name: string;
+    email: string;
+    specialty: string;
+    note?: string;
+  }) => Referral;
   clientSettings: ClientSettings;
   updateClientSettings: (updates: Partial<ClientSettings>) => void;
   jobAlertSettings: JobAlertSettings;
@@ -104,25 +126,23 @@ interface AppContextType {
   setSelectedCategoryFilter: (cat: string) => void;
   selectedLocationFilter: string;
   setSelectedLocationFilter: (loc: string) => void;
-  
+
   // Actions
   createJob: (data: JobDraftInput) => Job;
   saveJobDraft: (draftId: string | null, data: JobDraftInput) => Job;
   publishJobDraft: (draftId: string, data: JobDraftInput) => Job;
 
-  submitProposal: (
-    data: {
-      jobId: string;
-      bidAmount: number;
-      coverLetter: string;
-      estimatedDelivery: string;
-      proposedStartTime?: string;
-      proposedEndTime?: string;
-      milestones: { title: string; amount: number; description: string }[];
-      portfolioLinks?: string[];
-      draftId?: string;
-    }
-  ) => Proposal;
+  submitProposal: (data: {
+    jobId: string;
+    bidAmount: number;
+    coverLetter: string;
+    estimatedDelivery: string;
+    proposedStartTime?: string;
+    proposedEndTime?: string;
+    milestones: { title: string; amount: number; description: string }[];
+    portfolioLinks?: string[];
+    draftId?: string;
+  }) => Proposal;
 
   saveProposalDraft: (
     draftId: string | null,
@@ -135,35 +155,34 @@ interface AppContextType {
       proposedEndTime?: string;
       milestones: { title: string; amount: number; description: string }[];
       portfolioLinks?: string[];
-    }
+    },
   ) => Proposal;
 
-  hireVendor: (
-    jobId: string,
-    proposalId: string
-  ) => { contract: Contract };
+  hireVendor: (jobId: string, proposalId: string) => { contract: Contract };
 
   vendorMarkCompleted: (contractId: string) => void;
   clientConfirmCompletion: (contractId: string) => void;
   submitReview: (data: { contractId: string; rating: number; comment: string }) => Review;
   raiseDispute: (data: { contractId: string; reason: string; evidence: string }) => Dispute;
-  addWorkDiaryEntry: (data: { contractId: string; workDate: string; hours: number; summary: string; proofUrl?: string }) => WorkDiaryEntry;
-  adminOverrideBookingState: (
-    bookingId: string,
-    targetState: BookingState,
-    reason: string
-  ) => void;
-  
+  addWorkDiaryEntry: (data: {
+    contractId: string;
+    workDate: string;
+    hours: number;
+    summary: string;
+    proofUrl?: string;
+  }) => WorkDiaryEntry;
+  adminOverrideBookingState: (bookingId: string, targetState: BookingState, reason: string) => void;
+
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   sendMessage: (contractId: string, text: string) => void;
   markMessagesRead: (contractId: string) => void;
-  
+
   // Job quick actions
   togglePauseJob: (id: string) => void;
   deleteJob: (id: string) => void;
   updateJob: (id: string, updates: Partial<EditableJobFields>) => void;
-  
+
   // Helper helpers
   getJobById: (id: string) => Job | undefined;
   getProposalsForJob: (reqId: string) => Proposal[];
@@ -206,9 +225,9 @@ function generateId(prefix: string): string {
 // Fixed-budget jobs must keep max mirrored to min so provider bid validation stays
 // consistent — enforced once here instead of separately in every place a job is
 // created or edited.
-function normalizeJobBudget<T extends { budgetMode: 'fixed' | 'range'; budgetMin: number; budgetMax: number }>(
-  data: T
-): T {
+function normalizeJobBudget<
+  T extends { budgetMode: 'fixed' | 'range'; budgetMin: number; budgetMax: number },
+>(data: T): T {
   return data.budgetMode === 'fixed' ? { ...data, budgetMax: data.budgetMin } : data;
 }
 
@@ -359,12 +378,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : [];
   });
 
-
   const [clientSettings, setClientSettings] = useState<ClientSettings>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_client_settings`);
     return saved ? { ...DEFAULT_CLIENT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_CLIENT_SETTINGS;
   });
-  const [jobAlertSettingsByVendor, setJobAlertSettingsByVendor] = useState<Record<string, JobAlertSettings>>(() => {
+  const [jobAlertSettingsByVendor, setJobAlertSettingsByVendor] = useState<
+    Record<string, JobAlertSettings>
+  >(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_job_alert_settings`);
     return saved ? JSON.parse(saved) : {};
   });
@@ -373,11 +393,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('All');
   const publicVendorUser = useMemo(
     () => (currentUser.role === 'vendor' ? currentUser : loadUserWithOverrides('vendor')),
-    [currentUser]
+    [currentUser],
   );
   const talentProfiles = useMemo(
     () => INITIAL_TALENT.map((talent) => applyUserToTalentProfile(talent, publicVendorUser)),
-    [publicVendorUser]
+    [publicVendorUser],
   );
   const jobAlertSettings = {
     ...getDefaultJobAlertSettings(currentUser.id),
@@ -453,7 +473,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const registerAccount = async (data: { email: string; password: string; name: string; role: 'client' | 'vendor' }) => {
+  const registerAccount = async (data: {
+    email: string;
+    password: string;
+    name: string;
+    role: 'client' | 'vendor';
+  }) => {
     await registerRequest({
       email: data.email,
       password: data.password,
@@ -491,6 +516,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await resetPasswordRequest(token, newPassword);
   };
 
+  const verifyEmailToken = async (token: string) => {
+    await verifyEmailRequest(token);
+  };
+
   const updateCurrentUser = (updates: Partial<User>) => {
     setCurrentUser((prev) => {
       const savedRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_profile_${prev.role}`);
@@ -503,7 +532,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const acceptLegalTerms = (data: { role?: UserRole; context: LegalAcceptance['context']; name?: string; email?: string; companyOrTitle?: string }): LegalAcceptance => {
+  const acceptLegalTerms = (data: {
+    role?: UserRole;
+    context: LegalAcceptance['context'];
+    name?: string;
+    email?: string;
+    companyOrTitle?: string;
+  }): LegalAcceptance => {
     const role = data.role || currentUser.role;
     const baseUser = role === currentUser.role ? currentUser : loadUserWithOverrides(role);
     const acceptedByName = data.name?.trim() || baseUser.name;
@@ -527,16 +562,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const savedRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_profile_${role}`);
     const savedOverrides = savedRaw ? JSON.parse(savedRaw) : {};
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_profile_${role}`, JSON.stringify({ ...savedOverrides, ...updates }));
+    localStorage.setItem(
+      `${LOCAL_STORAGE_KEY}_profile_${role}`,
+      JSON.stringify({ ...savedOverrides, ...updates }),
+    );
 
     if (role === currentUser.role) {
       setCurrentUser((prev) => ({ ...prev, ...updates }));
     }
 
-    addAuditLog('Legal Terms Accepted', `User ${acceptedById}`, 'Not accepted', `${TERMS_VERSION} / ${PRIVACY_VERSION}`, data.context);
+    addAuditLog(
+      'Legal Terms Accepted',
+      `User ${acceptedById}`,
+      'Not accepted',
+      `${TERMS_VERSION} / ${PRIVACY_VERSION}`,
+      data.context,
+    );
     return acceptance;
   };
-  const submitIdentityVerification = (data: Omit<IdentityVerification, 'status' | 'submittedAt'>) => {
+  const submitIdentityVerification = (
+    data: Omit<IdentityVerification, 'status' | 'submittedAt'>,
+  ) => {
     updateCurrentUser({
       identityVerification: {
         ...data,
@@ -548,13 +594,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
 
-    addAuditLog('Identity Verification Submitted', 'User ' + currentUser.id, 'Not submitted', 'Pending review');
+    addAuditLog(
+      'Identity Verification Submitted',
+      'User ' + currentUser.id,
+      'Not submitted',
+      'Pending review',
+    );
     addNotification(
       currentUser.id,
       'Identity Verification Submitted',
       'Your verification details were saved for review in this frontend preview.',
       'system',
-      currentUser.role === 'vendor' ? '/provider/profile' : '/client/profile'
+      currentUser.role === 'vendor' ? '/provider/profile' : '/client/profile',
     );
   };
 
@@ -563,7 +614,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     targetEntity: string,
     beforeState?: string,
     afterState?: string,
-    reason?: string
+    reason?: string,
   ) => {
     const newLog: AuditLogEntry = {
       id: generateId('log'),
@@ -585,7 +636,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     title: string,
     message: string,
     type: 'proposal' | 'contract' | 'system' | 'job_alert',
-    linkRoute?: string
+    linkRoute?: string,
   ) => {
     const notif: Notification = {
       id: generateId('notif'),
@@ -607,7 +658,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...getDefaultJobAlertSettings(vendor.id),
         ...jobAlertSettingsByVendor[vendor.id],
       };
-      const matchesCategory = settings.categories.length === 0 || settings.categories.includes(job.category);
+      const matchesCategory =
+        settings.categories.length === 0 || settings.categories.includes(job.category);
       const vendorProfile = vendor.id === currentUser.id ? currentUser : vendor;
       const profileLocation = vendorProfile.location?.toLowerCase().trim();
       const matchesLocation =
@@ -623,7 +675,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'New Matching Job',
         `New job posted in ${job.category}: "${job.title}"`,
         'job_alert',
-        `/provider/jobs/${job.id}`
+        `/provider/jobs/${job.id}`,
       );
     });
   };
@@ -651,12 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setJobs((prev) => [newReq, ...prev]);
 
-    addAuditLog(
-      'Job Published',
-      `Job ${newReq.id} ("${newReq.title}")`,
-      'Draft',
-      'Open'
-    );
+    addAuditLog('Job Published', `Job ${newReq.id} ("${newReq.title}")`, 'Draft', 'Open');
 
     notifyMatchingVendors(newReq);
 
@@ -668,7 +715,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (draftId) {
       const existing = jobs.find((r) => r.id === draftId);
       if (!existing) throw new Error('Draft not found');
-      const updated: Job = { ...existing, ...normalizeJobBudget(data), status: 'Draft', isDraftPost: true };
+      const updated: Job = {
+        ...existing,
+        ...normalizeJobBudget(data),
+        status: 'Draft',
+        isDraftPost: true,
+      };
       setJobs((prev) => prev.map((r) => (r.id === draftId ? updated : r)));
       return updated;
     }
@@ -683,7 +735,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setJobs((prev) => [newReq, ...prev]);
-    addAuditLog('Job Draft Saved', `Job ${newReqId} ("${newReq.title || 'Untitled job'}")`, 'None', 'Draft');
+    addAuditLog(
+      'Job Draft Saved',
+      `Job ${newReqId} ("${newReq.title || 'Untitled job'}")`,
+      'None',
+      'Draft',
+    );
 
     return newReq;
   };
@@ -693,7 +750,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = jobs.find((r) => r.id === draftId);
     if (!existing) throw new Error('Draft not found');
 
-    const published: Job = { ...existing, ...normalizeJobBudget(data), status: 'Open', isDraftPost: false };
+    const published: Job = {
+      ...existing,
+      ...normalizeJobBudget(data),
+      status: 'Open',
+      isDraftPost: false,
+    };
     setJobs((prev) => prev.map((r) => (r.id === draftId ? published : r)));
 
     addAuditLog('Job Published', `Job ${draftId} ("${published.title}")`, 'Draft', 'Open');
@@ -718,7 +780,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const buildMilestones = (
     proposalId: string,
-    milestones: { title: string; amount: number; description: string }[]
+    milestones: { title: string; amount: number; description: string }[],
   ) =>
     milestones.map((m, idx) => ({
       id: `ms_${proposalId}_${idx}`,
@@ -785,16 +847,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Increment proposals count on job
     setJobs((prev) =>
-      prev.map((r) =>
-        r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r
-      )
+      prev.map((r) => (r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r)),
     );
 
     addAuditLog(
       'Proposal Submitted',
       `Proposal ${newProposal.id} for Job ${data.jobId}`,
       'None',
-      `Submitted (₹${data.bidAmount.toLocaleString('en-IN')})`
+      `Submitted (₹${data.bidAmount.toLocaleString('en-IN')})`,
     );
 
     if (targetReq) {
@@ -803,7 +863,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'New Proposal Received',
         `${currentUser.name} submitted a proposal (₹${data.bidAmount.toLocaleString('en-IN')}) for "${targetReq.title}"`,
         'proposal',
-        `/client/jobs/${targetReq.id}`
+        `/client/jobs/${targetReq.id}`,
       );
     }
 
@@ -822,7 +882,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       proposedEndTime?: string;
       milestones: { title: string; amount: number; description: string }[];
       portfolioLinks?: string[];
-    }
+    },
   ): Proposal => {
     if (draftId) {
       const existing = proposals.find((p) => p.id === draftId);
@@ -863,10 +923,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 3. Hire Vendor & Confirm Booking
-  const hireVendor = (
-    jobId: string,
-    proposalId: string
-  ): { contract: Contract } => {
+  const hireVendor = (jobId: string, proposalId: string): { contract: Contract } => {
     const req = jobs.find((r) => r.id === jobId);
     const prop = proposals.find((p) => p.id === proposalId);
 
@@ -926,11 +983,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setContracts((prev) => [newContract, ...prev]);
 
     // Auto-block the vendor's availability calendar for the confirmed event slot
-    markVendorSlotBooked(
-      prop.vendorId,
-      req.eventDate,
-      slot,
-    );
+    markVendorSlotBooked(prop.vendorId, req.eventDate, slot);
 
     // A hired vendor is no longer just "saved for later"
     setSavedTalentIds((prev) => prev.filter((id) => id !== prop.vendorId));
@@ -941,22 +994,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (p.id === proposalId) return { ...p, status: 'accepted' };
         if (p.jobId === jobId) return { ...p, status: 'declined' };
         return p;
-      })
+      }),
     );
 
     // Update job state
-    setJobs((prev) =>
-      prev.map((r) =>
-        r.id === jobId ? { ...r, status: 'Confirmed' } : r
-      )
-    );
+    setJobs((prev) => prev.map((r) => (r.id === jobId ? { ...r, status: 'Confirmed' } : r)));
 
     // Write audit log
     addAuditLog(
       'Vendor Hired & Contract Confirmed',
       `Contract ${contractId} with ${prop.vendorName}`,
       'Open',
-      'Confirmed'
+      'Confirmed',
     );
 
     addAuditLog(
@@ -964,7 +1013,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Contract ${contractId}`,
       'Pending acceptance',
       TERMS_VERSION,
-      `Accepted by ${currentUser.name}`
+      `Accepted by ${currentUser.name}`,
     );
 
     // Notifications
@@ -973,7 +1022,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'You Have Been Hired!',
       `Congratulations! ${req.clientName} accepted your proposal (₹${prop.bidAmount.toLocaleString('en-IN')}) for "${req.title}". Your booking is confirmed.`,
       'contract',
-      `/contracts/${contractId}`
+      `/contracts/${contractId}`,
     );
 
     return { contract: newContract };
@@ -992,21 +1041,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               bookingState: 'Completed',
               vendorCompletedAt: new Date().toISOString(),
             }
-          : c
-      )
+          : c,
+      ),
     );
 
-    setJobs((prev) =>
-      prev.map((r) =>
-        r.id === ctr.jobId ? { ...r, status: 'Completed' } : r
-      )
-    );
+    setJobs((prev) => prev.map((r) => (r.id === ctr.jobId ? { ...r, status: 'Completed' } : r)));
 
     addAuditLog(
       'Vendor Marked Event Completed',
       `Contract ${contractId}`,
       'Confirmed',
-      'Completed'
+      'Completed',
     );
 
     addNotification(
@@ -1014,7 +1059,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'Event Marked Delivered',
       `${ctr.vendorName} marked the event "${ctr.jobTitle}" as completed. Please confirm to close out the booking.`,
       'contract',
-      `/contracts/${contractId}`
+      `/contracts/${contractId}`,
     );
   };
 
@@ -1031,37 +1076,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               bookingState: 'Closed',
               clientConfirmedAt: new Date().toISOString(),
             }
-          : c
-      )
+          : c,
+      ),
     );
 
-    setJobs((prev) =>
-      prev.map((r) =>
-        r.id === ctr.jobId ? { ...r, status: 'Closed' } : r
-      )
-    );
+    setJobs((prev) => prev.map((r) => (r.id === ctr.jobId ? { ...r, status: 'Closed' } : r)));
 
-    addAuditLog(
-      'Booking Completed & Closed',
-      `Contract ${contractId}`,
-      'Completed',
-      'Closed'
-    );
+    addAuditLog('Booking Completed & Closed', `Contract ${contractId}`, 'Completed', 'Closed');
 
     addNotification(
       ctr.vendorId,
       'Booking Completed!',
       `${ctr.clientName} confirmed "${ctr.jobTitle}" is complete. Payment of ₹${ctr.amount.toLocaleString('en-IN')} is confirmed.`,
       'contract',
-      `/contracts/${contractId}`
+      `/contracts/${contractId}`,
     );
   };
 
   const submitReview = (data: { contractId: string; rating: number; comment: string }): Review => {
     const ctr = contracts.find((c) => c.id === data.contractId);
     if (!ctr) throw new Error('Contract not found');
-    if (ctr.bookingState !== 'Closed') throw new Error('Reviews can only be left after a contract is closed.');
-    if (ctr.clientId !== currentUser.id) throw new Error('Only the client can review this contract.');
+    if (ctr.bookingState !== 'Closed')
+      throw new Error('Reviews can only be left after a contract is closed.');
+    if (ctr.clientId !== currentUser.id)
+      throw new Error('Only the client can review this contract.');
     if (reviews.some((review) => review.contractId === data.contractId)) {
       throw new Error('This contract already has a review.');
     }
@@ -1081,24 +1119,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setReviews((prev) => [review, ...prev]);
-    addAuditLog('Review Submitted', 'Review ' + review.id + ' for Contract ' + ctr.id, 'None', review.rating + ' stars');
+    addAuditLog(
+      'Review Submitted',
+      'Review ' + review.id + ' for Contract ' + ctr.id,
+      'None',
+      review.rating + ' stars',
+    );
     addNotification(
       ctr.vendorId,
       'New Client Review',
       ctr.clientName + ' left a ' + review.rating + '-star review for "' + ctr.jobTitle + '".',
       'contract',
-      '/contracts/' + ctr.id
+      '/contracts/' + ctr.id,
     );
 
     return review;
   };
-  const raiseDispute = (data: { contractId: string; reason: string; evidence: string }): Dispute => {
+  const raiseDispute = (data: {
+    contractId: string;
+    reason: string;
+    evidence: string;
+  }): Dispute => {
     const ctr = contracts.find((c) => c.id === data.contractId);
     if (!ctr) throw new Error('Contract not found');
     if (ctr.bookingState === 'Closed' || ctr.bookingState === 'Cancelled') {
       throw new Error('Disputes can only be raised before a contract reaches a terminal state.');
     }
-    if (disputes.some((dispute) => dispute.contractId === data.contractId && dispute.status !== 'resolved')) {
+    if (
+      disputes.some(
+        (dispute) => dispute.contractId === data.contractId && dispute.status !== 'resolved',
+      )
+    ) {
       throw new Error('This contract already has an active dispute.');
     }
 
@@ -1119,30 +1170,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setDisputes((prev) => [dispute, ...prev]);
-    addAuditLog('Dispute Raised', 'Dispute ' + dispute.id + ' for Contract ' + ctr.id, 'None', 'Open');
+    addAuditLog(
+      'Dispute Raised',
+      'Dispute ' + dispute.id + ' for Contract ' + ctr.id,
+      'None',
+      'Open',
+    );
     addNotification(
       raisedAgainstId,
       'Dispute Raised',
       currentUser.name + ' raised a dispute on "' + ctr.jobTitle + '".',
       'contract',
-      '/contracts/' + ctr.id
+      '/contracts/' + ctr.id,
     );
     addNotification(
       DEMO_USERS.admin.id,
       'Dispute Needs Review',
       'A dispute was raised on "' + ctr.jobTitle + '".',
       'system',
-      '/admin/audit'
+      '/admin/audit',
     );
 
     return dispute;
   };
-  const addWorkDiaryEntry = (data: { contractId: string; workDate: string; hours: number; summary: string; proofUrl?: string }): WorkDiaryEntry => {
+  const addWorkDiaryEntry = (data: {
+    contractId: string;
+    workDate: string;
+    hours: number;
+    summary: string;
+    proofUrl?: string;
+  }): WorkDiaryEntry => {
     const ctr = contracts.find((c) => c.id === data.contractId);
     if (!ctr) throw new Error('Contract not found');
-    if (ctr.vendorId !== currentUser.id) throw new Error('Only the hired provider can add work diary entries.');
+    if (ctr.vendorId !== currentUser.id)
+      throw new Error('Only the hired provider can add work diary entries.');
     if (ctr.bookingState !== 'Confirmed' && ctr.bookingState !== 'Completed') {
-      throw new Error('Work diary entries can only be added while a contract is active or awaiting completion review.');
+      throw new Error(
+        'Work diary entries can only be added while a contract is active or awaiting completion review.',
+      );
     }
     if (data.hours <= 0 || data.hours > 24) {
       throw new Error('Hours must be between 0 and 24.');
@@ -1161,13 +1226,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setWorkDiaryEntries((prev) => [entry, ...prev]);
-    addAuditLog('Work Diary Logged', 'Work Diary ' + entry.id + ' for Contract ' + ctr.id, 'None', entry.hours + ' hours');
+    addAuditLog(
+      'Work Diary Logged',
+      'Work Diary ' + entry.id + ' for Contract ' + ctr.id,
+      'None',
+      entry.hours + ' hours',
+    );
     addNotification(
       ctr.clientId,
       'Work Diary Updated',
-      ctr.vendorName + ' logged ' + entry.hours + ' hour' + (entry.hours === 1 ? '' : 's') + ' for "' + ctr.jobTitle + '".',
+      ctr.vendorName +
+        ' logged ' +
+        entry.hours +
+        ' hour' +
+        (entry.hours === 1 ? '' : 's') +
+        ' for "' +
+        ctr.jobTitle +
+        '".',
       'contract',
-      '/contracts/' + ctr.id
+      '/contracts/' + ctr.id,
     );
 
     return entry;
@@ -1176,7 +1253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminOverrideBookingState = (
     bookingId: string,
     targetState: BookingState,
-    reason: string
+    reason: string,
   ) => {
     const req = jobs.find((r) => r.id === bookingId);
     const ctr = contracts.find((c) => c.jobId === bookingId || c.id === bookingId);
@@ -1187,30 +1264,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (oldState === 'Closed' || oldState === 'Cancelled') return;
 
     if (req) {
-      setJobs((prev) =>
-        prev.map((r) => (r.id === bookingId ? { ...r, status: targetState } : r))
-      );
+      setJobs((prev) => prev.map((r) => (r.id === bookingId ? { ...r, status: targetState } : r)));
     }
 
     if (ctr) {
       setContracts((prev) =>
-        prev.map((c) => (c.id === ctr.id ? { ...c, bookingState: targetState } : c))
+        prev.map((c) => (c.id === ctr.id ? { ...c, bookingState: targetState } : c)),
       );
     }
 
-    addAuditLog(
-      'ADMIN OVERRIDE APPLIED',
-      `Booking ${bookingId}`,
-      oldState,
-      targetState,
-      reason
-    );
+    addAuditLog('ADMIN OVERRIDE APPLIED', `Booking ${bookingId}`, oldState, targetState, reason);
   };
 
   const markNotificationRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   const markAllNotificationsRead = () => {
@@ -1235,23 +1302,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((m) =>
         m.contractId === contractId && m.senderId !== currentUser.id && !m.read
           ? { ...m, read: true }
-          : m
-      )
+          : m,
+      ),
     );
   };
 
   const toggleFavoriteConversation = (contractId: string) => {
     setFavoriteConversationIds((prev) =>
-      prev.includes(contractId) ? prev.filter((id) => id !== contractId) : [...prev, contractId]
+      prev.includes(contractId) ? prev.filter((id) => id !== contractId) : [...prev, contractId],
     );
   };
 
   const toggleSavedTalent = (vendorId: string) => {
     setSavedTalentIds((prev) =>
-      prev.includes(vendorId) ? prev.filter((id) => id !== vendorId) : [...prev, vendorId]
+      prev.includes(vendorId) ? prev.filter((id) => id !== vendorId) : [...prev, vendorId],
     );
   };
-  const createReferral = (data: { name: string; email: string; specialty: string; note?: string }): Referral => {
+  const createReferral = (data: {
+    name: string;
+    email: string;
+    specialty: string;
+    note?: string;
+  }): Referral => {
     const referral: Referral = {
       id: generateId('ref'),
       clientId: currentUser.id,
@@ -1265,7 +1337,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setReferrals((prev) => [referral, ...prev]);
-    addAuditLog('Freelancer Referred', 'Referral ' + referral.id + ' for ' + referral.email, 'None', 'Invited');
+    addAuditLog(
+      'Freelancer Referred',
+      'Referral ' + referral.id + ' for ' + referral.email,
+      'None',
+      'Invited',
+    );
     return referral;
   };
 
@@ -1305,12 +1382,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             `Job ${id}`,
             r.status,
             newStatus,
-            isPaused ? 'Resumed by Client' : 'Paused by Client'
+            isPaused ? 'Resumed by Client' : 'Paused by Client',
           );
           return { ...r, status: newStatus, isPaused: !isPaused };
         }
         return r;
-      })
+      }),
     );
   };
 
@@ -1320,7 +1397,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (contracts.some((c) => c.jobId === id)) return;
     const job = jobs.find((r) => r.id === id);
     setJobs((prev) => prev.filter((r) => r.id !== id));
-    addAuditLog('Job Deleted', `Job ${id}`, job?.status ?? 'Unknown', 'Deleted', 'Removed by Client');
+    addAuditLog(
+      'Job Deleted',
+      `Job ${id}`,
+      job?.status ?? 'Unknown',
+      'Deleted',
+      'Removed by Client',
+    );
   };
 
   const updateJob = (id: string, updates: Partial<EditableJobFields>) => {
@@ -1332,25 +1415,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const normalizedUpdates = job
       ? { ...updates, budgetMax: normalizeJobBudget({ ...job, ...updates }).budgetMax }
       : updates;
-    setJobs((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...normalizedUpdates } : r))
-    );
+    setJobs((prev) => prev.map((r) => (r.id === id ? { ...r, ...normalizedUpdates } : r)));
     addAuditLog(
       'Job Updated',
       `Job ${id}`,
       job?.status ?? 'Unknown',
       job?.status ?? 'Unknown',
-      'Edited by Client'
+      'Edited by Client',
     );
   };
 
   const getJobById = (id: string) => jobs.find((r) => r.id === id);
-  const getProposalsForJob = (reqId: string) =>
-    proposals.filter((p) => p.jobId === reqId);
-  const getContractByJobId = (reqId: string) =>
-    contracts.find((c) => c.jobId === reqId);
-  const getContractById = (contractId: string) =>
-    contracts.find((c) => c.id === contractId);
+  const getProposalsForJob = (reqId: string) => proposals.filter((p) => p.jobId === reqId);
+  const getContractByJobId = (reqId: string) => contracts.find((c) => c.jobId === reqId);
+  const getContractById = (contractId: string) => contracts.find((c) => c.id === contractId);
 
   const getReviewForContract = (contractId: string) =>
     reviews.find((review) => review.contractId === contractId);
@@ -1361,7 +1439,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getWorkDiaryForContract = (contractId: string) =>
     workDiaryEntries
       .filter((entry) => entry.contractId === contractId)
-      .sort((a, b) => b.workDate.localeCompare(a.workDate) || b.createdAt.localeCompare(a.createdAt));
+      .sort(
+        (a, b) => b.workDate.localeCompare(a.workDate) || b.createdAt.localeCompare(a.createdAt),
+      );
 
   return (
     <AppContext.Provider
@@ -1376,6 +1456,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logoutAccount,
         requestPasswordReset,
         submitPasswordReset,
+        verifyEmailToken,
         submitIdentityVerification,
         acceptLegalTerms,
         route,

@@ -5,7 +5,10 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -43,7 +46,12 @@ export interface BackendUser {
   emailVerified: boolean;
 }
 
-export function registerRequest(data: { email: string; password: string; name: string; role: 'CLIENT' | 'PROVIDER' }) {
+export function registerRequest(data: {
+  email: string;
+  password: string;
+  name: string;
+  role: 'CLIENT' | 'PROVIDER';
+}) {
   return apiFetch<BackendUser>('/auth/register', { method: 'POST', body: JSON.stringify(data) });
 }
 
@@ -69,9 +77,19 @@ export function meRequest(accessToken: string) {
 }
 
 export function forgotPasswordRequest(email: string) {
-  return apiFetch<void>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+  return apiFetch<void>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
 }
 
 export function resetPasswordRequest(token: string, newPassword: string) {
-  return apiFetch<void>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+  return apiFetch<void>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
+export function verifyEmailRequest(token: string) {
+  return apiFetch<void>(`/auth/verify-email?token=${encodeURIComponent(token)}`, { method: 'GET' });
 }
