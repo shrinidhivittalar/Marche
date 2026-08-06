@@ -1,12 +1,43 @@
 import React, { useState } from 'react';
 import { Search, TrendingUp, Award, Wallet, IndianRupee, Medal, FileText, Package, Link2, Upload, PenLine, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Input, Textarea } from '@marche/ui';
+import {
+  Button,
+  Combobox,
+  DatePicker,
+  Input,
+  LANGUAGES,
+  MonthPicker,
+  PhoneInput,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@marche/ui';
 import { EventCategory, EnglishLevel } from '../../types';
+import { todayISODate } from '../../lib/formatTime';
 
 type Step =
   | 'welcome' | 'q1' | 'q2' | 'q3' | 'profile'
   | 'category' | 'skills' | 'title' | 'experience' | 'education' | 'languages' | 'bio' | 'rate' | 'personal';
+
+const STEP_META: Partial<Record<Step, { step: number; total: number }>> = {
+  q1: { step: 1, total: 3 },
+  q2: { step: 2, total: 3 },
+  q3: { step: 3, total: 3 },
+  profile: { step: 1, total: 10 },
+  category: { step: 2, total: 10 },
+  skills: { step: 3, total: 10 },
+  title: { step: 4, total: 10 },
+  experience: { step: 5, total: 10 },
+  education: { step: 6, total: 10 },
+  languages: { step: 7, total: 10 },
+  bio: { step: 8, total: 10 },
+  rate: { step: 9, total: 10 },
+  personal: { step: 10, total: 10 },
+};
 
 const Q1_OPTIONS = [
   { icon: Search, label: 'I am brand new to this' },
@@ -39,12 +70,24 @@ const SKILL_SUGGESTIONS: Record<string, string[]> = {
   Entertainment: ['Live Performance', 'MC Hosting', 'Show Production'],
 };
 
+const TITLE_EXAMPLES: Record<string, string[]> = {
+  Photography: ['Editorial Event Photographer | 8+ Years Experience', 'Wedding & Corporate Event Photographer'],
+  Catering: ['Boutique Event Caterer | Farm-to-Table Menus', 'Full-Service Catering for Weddings & Galas'],
+  'DJ & Sound': ['Wedding & Corporate Event DJ', 'Live Sound Engineer for Events & Concerts'],
+  'Floral & Decor': ['Luxury Event Florist & Stylist', 'Floral Designer for Weddings & Galas'],
+  Venue: ['Event Venue Manager & Coordinator', 'Venue Sourcing & Logistics Specialist'],
+  'Event Planning': ['Full-Service Event Planner & Coordinator', 'Corporate Event Planning Specialist'],
+  'Lighting & FX': ['Event Lighting Designer & Technician', 'Stage Lighting & FX Specialist'],
+  Entertainment: ['Live Entertainment & MC Hosting', 'Event Performer & Show Producer'],
+};
+
 const PROFICIENCY_LEVELS: EnglishLevel[] = ['Basic', 'Conversational', 'Fluent', 'Native or bilingual'];
+const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l, label: l }));
 const MARCHE_FEE_RATE = 0.1;
 
 function Stepper({ step, total }: { step: number; total: number }) {
   return (
-    <div className="space-y-2 max-w-xl">
+    <div className="space-y-2 w-full">
       <span className="text-xs text-ink-muted font-mono">{step}/{total}</span>
       <div className="h-1 w-full bg-border rounded-full overflow-hidden">
         <div className="h-full bg-primary transition-all duration-300" style={{ width: `${(step / total) * 100}%` }} />
@@ -71,9 +114,11 @@ function OptionCard({
   );
 }
 
-interface ExperienceEntry { title: string; company: string; location?: string; startDate?: string; endDate?: string; current?: boolean }
-interface EducationEntry { school: string; degree?: string }
-interface LanguageEntry { language: string; proficiency: EnglishLevel }
+// `key` is a locally-generated id for stable React list keys — stripped before saving,
+// since it isn't part of the actual User profile shape.
+interface ExperienceEntry { key: string; title: string; company: string; location?: string; startDate?: string; endDate?: string; current?: boolean }
+interface EducationEntry { key: string; school: string; degree?: string }
+interface LanguageEntry { key: string; language: string; proficiency: EnglishLevel }
 
 function StepFooter({
   onBack, onSkip, onNext, nextLabel, nextDisabled,
@@ -92,7 +137,7 @@ function StepFooter({
 function BrandHeader() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg tracking-tight shadow-xs shrink-0">
+      <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg tracking-tight shadow-xs shrink-0">
         M
       </div>
       <span className="text-lg font-extrabold tracking-tight text-ink">MARCHÉ</span>
@@ -109,21 +154,27 @@ export const ProviderOnboardingPage: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
 
   // Profile-builder state
-  const [category, setCategory] = useState<EventCategory | null>(currentUser.category ?? null);
+  const [categories, setCategories] = useState<EventCategory[]>(currentUser.categories ?? []);
   const [skills, setSkills] = useState<string[]>(currentUser.skills ?? []);
   const [skillInput, setSkillInput] = useState('');
   const [title, setTitle] = useState(currentUser.companyOrTitle ?? '');
-  const [experience, setExperience] = useState<ExperienceEntry[]>(currentUser.workExperience ?? []);
+  const [experience, setExperience] = useState<ExperienceEntry[]>(
+    () => (currentUser.workExperience ?? []).map((e) => ({ ...e, key: crypto.randomUUID() }))
+  );
   const [expTitle, setExpTitle] = useState('');
   const [expCompany, setExpCompany] = useState('');
   const [expLocation, setExpLocation] = useState('');
   const [expStart, setExpStart] = useState('');
   const [expEnd, setExpEnd] = useState('');
   const [expCurrent, setExpCurrent] = useState(false);
-  const [education, setEducation] = useState<EducationEntry[]>(currentUser.education ?? []);
+  const [education, setEducation] = useState<EducationEntry[]>(
+    () => (currentUser.education ?? []).map((e) => ({ ...e, key: crypto.randomUUID() }))
+  );
   const [eduSchool, setEduSchool] = useState('');
   const [eduDegree, setEduDegree] = useState('');
-  const [languages, setLanguages] = useState<LanguageEntry[]>(currentUser.languages ?? []);
+  const [languages, setLanguages] = useState<LanguageEntry[]>(
+    () => (currentUser.languages ?? []).map((l) => ({ ...l, key: crypto.randomUUID() }))
+  );
   const [langName, setLangName] = useState('');
   const [langProf, setLangProf] = useState<EnglishLevel>('Basic');
   const [bio, setBio] = useState(currentUser.bio ?? '');
@@ -145,6 +196,10 @@ export const ProviderOnboardingPage: React.FC = () => {
     });
   };
 
+  const toggleCategory = (c: EventCategory) => {
+    setCategories((prev) => (prev.includes(c) ? prev.filter((existing) => existing !== c) : [...prev, c]));
+  };
+
   const addSkill = (raw: string) => {
     const s = raw.trim();
     if (!s || skills.includes(s) || skills.length >= 15) return;
@@ -155,6 +210,7 @@ export const ProviderOnboardingPage: React.FC = () => {
   const addExperience = () => {
     if (!expTitle.trim() || !expCompany.trim()) return;
     setExperience([...experience, {
+      key: crypto.randomUUID(),
       title: expTitle, company: expCompany, location: expLocation || undefined,
       startDate: expStart || undefined, endDate: expCurrent ? undefined : expEnd || undefined, current: expCurrent,
     }]);
@@ -163,26 +219,26 @@ export const ProviderOnboardingPage: React.FC = () => {
 
   const addEducation = () => {
     if (!eduSchool.trim()) return;
-    setEducation([...education, { school: eduSchool, degree: eduDegree || undefined }]);
+    setEducation([...education, { key: crypto.randomUUID(), school: eduSchool, degree: eduDegree || undefined }]);
     setEduSchool(''); setEduDegree('');
   };
 
   const addLanguage = () => {
     if (!langName.trim()) return;
-    setLanguages([...languages, { language: langName, proficiency: langProf }]);
+    setLanguages([...languages, { key: crypto.randomUUID(), language: langName, proficiency: langProf }]);
     setLangName('');
   };
 
   const handleFinish = () => {
     updateCurrentUser({
-      category: category ?? undefined,
+      categories,
       skills,
-      companyOrTitle: title || currentUser.companyOrTitle,
-      workExperience: experience,
-      education,
-      languages,
-      bio: bio || currentUser.bio,
-      hourlyRate: hourlyRate || currentUser.hourlyRate,
+      companyOrTitle: title,
+      workExperience: experience.map(({ key: _key, ...e }) => e),
+      education: education.map(({ key: _key, ...e }) => e),
+      languages: languages.map(({ key: _key, ...l }) => l),
+      bio,
+      hourlyRate,
       phone,
       dateOfBirth,
     });
@@ -190,6 +246,7 @@ export const ProviderOnboardingPage: React.FC = () => {
   };
 
   const serviceFee = Math.round(hourlyRate * MARCHE_FEE_RATE * 100) / 100;
+  const stepMeta = STEP_META[step];
 
   return (
     <div className="min-h-screen bg-bg">
@@ -197,9 +254,17 @@ export const ProviderOnboardingPage: React.FC = () => {
         <BrandHeader />
       </div>
 
-      <div className="max-w-3xl mx-auto space-y-8 px-6 pb-16">
+      {stepMeta && (
+        <div className="sticky top-0 z-10 bg-bg/95 backdrop-blur-sm border-b border-border">
+          <div className="max-w-2xl mx-auto px-6 py-4">
+            <Stepper step={stepMeta.step} total={stepMeta.total} />
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto space-y-8 px-6 py-10 pb-16">
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-6 right-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl text-xs font-medium">
           {toast}
         </div>
       )}
@@ -227,7 +292,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'q1' && (
         <div className="space-y-6">
-          <Stepper step={1} total={3} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">A few quick questions: have you done this kind of work before?</h2>
             <p className="text-xs text-ink-muted mt-2">This helps us know how much guidance to give you. We won't share your answer with clients.</p>
@@ -243,7 +307,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'q2' && (
         <div className="space-y-6">
-          <Stepper step={2} total={3} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">Got it. What's your biggest goal?</h2>
             <p className="text-xs text-ink-muted mt-2">We'll highlight the opportunities that fit your goal best, while still showing you everything.</p>
@@ -259,7 +322,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'q3' && (
         <div className="space-y-6">
-          <Stepper step={3} total={3} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">And how would you like to work?</h2>
             <p className="text-xs text-ink-muted mt-2">Select as many as you like — you can always change this later.</p>
@@ -279,7 +341,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'profile' && (
         <div className="space-y-6">
-          <Stepper step={1} total={10} />
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">How would you like to tell us about yourself?</h2>
           <p className="text-xs text-ink-muted">We need a sense of your experience and skills. You can edit everything before your profile goes live.</p>
           <div className="space-y-3 max-w-sm">
@@ -298,29 +359,30 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'category' && (
         <div className="space-y-6">
-          <Stepper step={2} total={10} />
-          <h2 className="text-2xl font-extrabold text-ink tracking-tight">Great, what kind of service do you offer?</h2>
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink tracking-tight">Great, what kind of service do you offer?</h2>
+            <p className="text-xs text-ink-muted mt-2">Select as many as you like — you can always change this later.</p>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {CATEGORIES.map((c) => (
               <button
                 key={c}
                 type="button"
-                onClick={() => setCategory(c)}
+                onClick={() => toggleCategory(c)}
                 className={`p-3 rounded-xl border text-xs font-medium text-left cursor-pointer transition-all ${
-                  category === c ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border bg-white text-ink-muted hover:border-zinc-300'
+                  categories.includes(c) ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border bg-white text-ink-muted hover:border-zinc-300'
                 }`}
               >
                 {c}
               </button>
             ))}
           </div>
-          <StepFooter onBack={() => setStep('profile')} onSkip={() => setStep('skills')} onNext={() => setStep('skills')} nextLabel="Next, add your skills" nextDisabled={!category} />
+          <StepFooter onBack={() => setStep('profile')} onSkip={() => setStep('skills')} onNext={() => setStep('skills')} nextLabel="Next, add your skills" nextDisabled={categories.length === 0} />
         </div>
       )}
 
       {step === 'skills' && (
         <div className="space-y-6">
-          <Stepper step={3} total={10} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">What skills define your work?</h2>
             <p className="text-xs text-ink-muted mt-2">Your skills show clients what you can offer. Add up to 15.</p>
@@ -340,9 +402,11 @@ export const ProviderOnboardingPage: React.FC = () => {
               className="flex-1 min-w-[140px] text-xs outline-none px-1 py-1"
             />
           </div>
-          {category && (
+          {categories.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {(SKILL_SUGGESTIONS[category] ?? []).filter((s) => !skills.includes(s)).map((s) => (
+              {Array.from(new Set(categories.flatMap((c) => SKILL_SUGGESTIONS[c] ?? [])))
+                .filter((s) => !skills.includes(s))
+                .map((s) => (
                 <button key={s} type="button" onClick={() => addSkill(s)} className="px-3 py-1.5 rounded-full border border-border text-xs font-medium text-ink hover:border-primary cursor-pointer">
                   + {s}
                 </button>
@@ -355,14 +419,35 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'title' && (
         <div className="space-y-6">
-          <Stepper step={4} total={10} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">Now, add a title to tell the world what you do.</h2>
             <p className="text-xs text-ink-muted mt-2">It's the first thing clients see, so make it count.</p>
           </div>
           <div className="max-w-lg">
             <label className="block text-xs font-semibold text-ink mb-1">Your professional title</label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Editorial Event Photographer" />
+            <p className="text-[11px] text-ink-muted mb-2">
+              A one-line headline, not a job title — this is what clients see on your listing, before your full profile.
+            </p>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Editorial Event Photographer | 8+ Years Experience" />
+
+            {categories.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold text-ink">Example titles</p>
+                <ul className="space-y-1.5">
+                  {Array.from(new Set(categories.flatMap((c) => TITLE_EXAMPLES[c] ?? []))).map((example) => (
+                    <li key={example}>
+                      <button
+                        type="button"
+                        onClick={() => setTitle(example)}
+                        className="text-left text-xs text-ink-muted hover:text-primary transition-colors cursor-pointer leading-relaxed"
+                      >
+                        {example}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <StepFooter onBack={() => setStep('skills')} onSkip={() => setStep('experience')} onNext={() => setStep('experience')} nextLabel="Next, add your experience" />
         </div>
@@ -370,16 +455,15 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'experience' && (
         <div className="space-y-6">
-          <Stepper step={5} total={10} />
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">Tell us about your work experience.</h2>
           <div className="space-y-2">
-            {experience.map((exp, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {experience.map((exp) => (
+              <div key={exp.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <div>
                   <span className="font-semibold text-ink">{exp.title}</span>
                   <span className="text-ink-muted"> · {exp.company}{exp.location ? ` · ${exp.location}` : ''}</span>
                 </div>
-                <button type="button" onClick={() => setExperience(experience.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setExperience(experience.filter((e) => e.key !== exp.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>
@@ -390,9 +474,9 @@ export const ProviderOnboardingPage: React.FC = () => {
               <Input value={expLocation} onChange={(e) => setExpLocation(e.target.value)} placeholder="Location (optional)" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <input type="month" value={expStart} onChange={(e) => setExpStart(e.target.value)} className="text-xs border border-border rounded-lg px-2 py-1.5" />
+              <MonthPicker value={expStart} onChange={setExpStart} max={todayISODate().slice(0, 7)} />
               <span className="text-xs text-ink-muted">to</span>
-              <input type="month" value={expEnd} onChange={(e) => setExpEnd(e.target.value)} disabled={expCurrent} className="text-xs border border-border rounded-lg px-2 py-1.5 disabled:opacity-50" />
+              <MonthPicker value={expEnd} onChange={setExpEnd} min={expStart} max={todayISODate().slice(0, 7)} disabled={expCurrent} />
               <label className="flex items-center gap-1.5 text-xs text-ink cursor-pointer ml-2">
                 <input type="checkbox" checked={expCurrent} onChange={(e) => setExpCurrent(e.target.checked)} /> Currently working here
               </label>
@@ -405,16 +489,15 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'education' && (
         <div className="space-y-6">
-          <Stepper step={6} total={10} />
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">And your education?</h2>
           <div className="space-y-2">
-            {education.map((edu, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {education.map((edu) => (
+              <div key={edu.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <div>
                   <span className="font-semibold text-ink">{edu.school}</span>
                   {edu.degree && <span className="text-ink-muted"> · {edu.degree}</span>}
                 </div>
-                <button type="button" onClick={() => setEducation(education.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setEducation(education.filter((e) => e.key !== edu.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>
@@ -431,22 +514,35 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'languages' && (
         <div className="space-y-6">
-          <Stepper step={7} total={10} />
           <h2 className="text-2xl font-extrabold text-ink tracking-tight">Which languages do you speak?</h2>
           <p className="text-xs text-ink-muted">English is a must — do you speak any others?</p>
           <div className="space-y-2">
-            {languages.map((l, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
+            {languages.map((l) => (
+              <div key={l.key} className="flex items-center justify-between p-3 border border-border rounded-xl bg-white text-xs">
                 <span className="font-semibold text-ink">{l.language} <span className="text-ink-muted font-normal">— {l.proficiency}</span></span>
-                <button type="button" onClick={() => setLanguages(languages.filter((_, idx) => idx !== i))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setLanguages(languages.filter((lang) => lang.key !== l.key))} className="text-zinc-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Input value={langName} onChange={(e) => setLangName(e.target.value)} placeholder="Language" className="max-w-[180px]" />
-            <select value={langProf} onChange={(e) => setLangProf(e.target.value as EnglishLevel)} className="text-xs border border-border rounded-lg px-2 py-2">
-              {PROFICIENCY_LEVELS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+            <Combobox
+              options={LANGUAGE_OPTIONS}
+              value={langName}
+              onChange={setLangName}
+              placeholder="Select a language"
+              searchPlaceholder="Search languages..."
+              className="max-w-[220px]"
+            />
+            <Select value={langProf} onValueChange={(v) => setLangProf(v as EnglishLevel)}>
+              <SelectTrigger className="max-w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROFICIENCY_LEVELS.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button type="button" variant="outline" size="sm" onClick={addLanguage}>Add language</Button>
           </div>
           <StepFooter onBack={() => setStep('education')} onSkip={() => setStep('bio')} onNext={() => setStep('bio')} nextLabel="Next, write an overview" />
@@ -455,7 +551,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'bio' && (
         <div className="space-y-6">
-          <Stepper step={8} total={10} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">Now write a bio to tell the world about yourself.</h2>
             <p className="text-xs text-ink-muted mt-2">What work do you do best? Tell clients clearly.</p>
@@ -467,12 +562,11 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'rate' && (
         <div className="space-y-6">
-          <Stepper step={9} total={10} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">Now, let's set your hourly rate.</h2>
             <p className="text-xs text-ink-muted mt-2">Clients will see this rate on your profile. You can adjust it any time.</p>
           </div>
-          <div className="max-w-md divide-y divide-border border border-border rounded-xl overflow-hidden">
+          <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
             <div className="flex items-center justify-between p-4">
               <div>
                 <p className="text-sm font-semibold text-ink">Hourly rate</p>
@@ -480,7 +574,7 @@ export const ProviderOnboardingPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-ink-muted">₹</span>
-                <input type="number" value={hourlyRate} onChange={(e) => setHourlyRate(Number(e.target.value))} className="w-24 text-right text-sm border border-border rounded-lg px-2 py-1.5" />
+                <input type="number" min={0} value={hourlyRate} onChange={(e) => setHourlyRate(Math.max(0, Number(e.target.value)))} className="w-24 text-right text-sm border border-border rounded-lg px-2 py-1.5" />
                 <span className="text-xs text-ink-muted">/hr</span>
               </div>
             </div>
@@ -502,7 +596,6 @@ export const ProviderOnboardingPage: React.FC = () => {
 
       {step === 'personal' && (
         <div className="space-y-6">
-          <Stepper step={10} total={10} />
           <div>
             <h2 className="text-2xl font-extrabold text-ink tracking-tight">A few last details.</h2>
             <p className="text-xs text-ink-muted mt-2">We need this to keep payments safe and simple.</p>
@@ -510,11 +603,11 @@ export const ProviderOnboardingPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Date of birth</label>
-              <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+              <DatePicker value={dateOfBirth} onChange={setDateOfBirth} max={todayISODate()} captionLayout="dropdown" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Phone</label>
-              <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 Enter number" />
+              <PhoneInput value={phone} onChange={setPhone} />
             </div>
           </div>
           <div className="flex items-center justify-between pt-2">

@@ -5,21 +5,20 @@ import {
   CalendarClock,
   Clock,
   MapPin,
-  DollarSign,
-  User,
   Star,
   FileCheck,
+  FileText,
   CheckCircle2,
   ShieldCheck,
   ChevronRight,
-  Send,
-  Building,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatTimeRange } from '../../lib/formatTime';
+import { formatFileSize } from '../../lib/formatFile';
+import { formatBudget } from '../../lib/formatBudget';
 
 interface JobDetailPageProps {
   id: string;
@@ -32,6 +31,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
     getContractByJobId,
     auditLogs,
     navigate,
+    goBack,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'proposals' | 'specs' | 'audit'>('proposals');
@@ -46,8 +46,8 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
         <EmptyState
           title="Job Not Found"
           description="The requested job does not exist or was removed."
-          actionLabel="Back to Dashboard"
-          onAction={() => navigate('/client/dashboard')}
+          actionLabel="Go Back"
+          onAction={goBack}
         />
       </div>
     );
@@ -60,11 +60,11 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
       {/* Top Back Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate('/client/dashboard')}
+          onClick={goBack}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Client Workspace</span>
+          <span>Back</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -102,10 +102,10 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
 
           <div className="bg-bg border border-border rounded-2xl p-4 text-right shrink-0">
             <span className="block text-[10px] font-mono uppercase text-ink-muted">
-              Budget Bounds
+              {job.budgetMode === 'fixed' ? 'Fixed Budget' : 'Budget Bounds'}
             </span>
             <span className="text-xl font-bold text-primary">
-              ₹{job.budgetMin.toLocaleString('en-IN')} - ₹{job.budgetMax.toLocaleString('en-IN')}
+              {formatBudget(job)}
             </span>
           </div>
         </div>
@@ -240,20 +240,20 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
                       alt={proposal.vendorName}
                       className="w-12 h-12 rounded-full object-cover ring-1 ring-border"
                     />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-ink">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-bold text-ink truncate">
                           {proposal.vendorName}
                         </h3>
                         <StatusBadge status={proposal.status} />
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5">
-                        <span className="flex items-center gap-1 font-semibold text-amber-600">
+                      <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1 font-semibold text-amber-600 shrink-0">
                           <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                           {proposal.vendorRating} ({proposal.vendorReviewCount} reviews)
                         </span>
-                        <span>•</span>
-                        <span>{proposal.vendorLocation}</span>
+                        <span className="shrink-0">•</span>
+                        <span className="truncate">{proposal.vendorLocation}</span>
                       </div>
                     </div>
                   </div>
@@ -312,6 +312,28 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               ))}
             </div>
           </div>
+
+          {job.attachments && job.attachments.length > 0 && (
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-xs font-mono uppercase font-bold text-primary mb-4">
+                Reference Documents ({job.attachments.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {job.attachments.map((att) => (
+                  <a
+                    key={att.id}
+                    href={att.dataUrl}
+                    download={att.name}
+                    className="p-3 bg-bg border border-border rounded-xl text-xs text-ink flex items-center gap-2.5 hover:border-zinc-300 hover:shadow-xs transition-all"
+                  >
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                    <span className="truncate flex-1">{att.name}</span>
+                    <span className="text-ink-muted shrink-0">{formatFileSize(att.size)}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

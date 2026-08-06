@@ -1,5 +1,44 @@
 export type UserRole = 'client' | 'vendor' | 'admin';
 
+
+export type IdentityVerificationStatus = 'not_submitted' | 'pending' | 'verified';
+
+export interface IdentityVerification {
+  legalName: string;
+  documentType: 'aadhaar' | 'pan' | 'passport' | 'drivers_license' | 'other';
+  documentLast4: string;
+  address: string;
+  status: IdentityVerificationStatus;
+  submittedAt?: string;
+}
+export interface LegalAcceptance {
+  termsVersion: string;
+  privacyVersion: string;
+  acceptedAt: string;
+  acceptedById: string;
+  acceptedByName: string;
+  acceptedByRole: UserRole;
+  context: 'signup' | 'hire';
+}
+
+export interface ContractAgreementSnapshot {
+  termsVersion: string;
+  acceptedAt: string;
+  acceptedById: string;
+  acceptedByName: string;
+  acceptedByRole: UserRole;
+  jobTitle: string;
+  category: EventCategory;
+  location: string;
+  eventDate: string;
+  timingMode: EventTimingMode;
+  eventStartTime?: string;
+  eventEndTime?: string;
+  amount: number;
+  proposalId: string;
+  acknowledgementNumber: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -15,7 +54,7 @@ export interface User {
   memberSince: string;
   hourlyRate?: number;
   completedJobsCount?: number;
-  category?: EventCategory;
+  categories?: EventCategory[];
   skills?: string[];
   workExperience?: {
     title: string;
@@ -27,10 +66,13 @@ export interface User {
   }[];
   education?: { school: string; degree?: string }[];
   languages?: { language: string; proficiency: EnglishLevel }[];
+  paymentMethodAdded?: boolean;
   phone?: string;
   dateOfBirth?: string; // YYYY-MM-DD
   website?: string;
   orgSize?: string;
+  identityVerification?: IdentityVerification;
+  legalAcceptance?: LegalAcceptance;
 }
 
 export type EventCategory =
@@ -46,8 +88,7 @@ export type EventCategory =
   | 'Venue'
   | 'Event Planning'
   | 'Lighting & FX'
-  | 'Entertainment'
-  | string;
+  | 'Entertainment';
 
 export type TimeSlot = 'Morning' | 'Afternoon' | 'Evening' | 'Full Day';
 
@@ -65,6 +106,14 @@ export type BookingState =
   | 'Expired'
   | 'Paused';
 
+export interface JobAttachment {
+  id: string;
+  name: string;
+  size: number; // bytes
+  type: string; // MIME type
+  dataUrl: string; // base64-encoded file contents (frontend-only, no upload backend)
+}
+
 export interface Job {
   id: string;
   clientId: string;
@@ -81,12 +130,14 @@ export interface Job {
   eventStartTime?: string; // HH:MM, 24h — only when timingMode is 'fixed'
   eventEndTime?: string; // HH:MM, 24h — only when timingMode is 'fixed'
   proposalDeadline: string; // YYYY-MM-DD — cutoff for vendors to submit proposals
+  budgetMode: 'fixed' | 'range'; // 'fixed': providers may only bid budgetMin (budgetMax mirrors it); 'range': bids must fall within [budgetMin, budgetMax]
   budgetMin: number;
   budgetMax: number;
   status: BookingState;
   proposalsCount: number;
   createdAt: string;
   deliverables: string[];
+  attachments?: JobAttachment[]; // reference documents (briefs, spec sheets, contracts) attached at posting time
   featured?: boolean;
   isPaused?: boolean;
   isDraftPost?: boolean; // true only for a job saved from the wizard that has never been published
@@ -143,8 +194,38 @@ export interface Contract {
   vendorCompletedAt?: string;
   clientConfirmedAt?: string;
   acknowledgementNumber: string;
+  agreement?: ContractAgreementSnapshot;
 }
 
+
+
+export interface WorkDiaryEntry {
+  id: string;
+  contractId: string;
+  vendorId: string;
+  vendorName: string;
+  workDate: string;
+  hours: number;
+  summary: string;
+  proofUrl?: string;
+  createdAt: string;
+}
+export type DisputeStatus = 'open' | 'under_review' | 'resolved';
+
+export interface Dispute {
+  id: string;
+  contractId: string;
+  jobTitle: string;
+  raisedById: string;
+  raisedByName: string;
+  raisedAgainstId: string;
+  raisedAgainstName: string;
+  reason: string;
+  evidence: string;
+  status: DisputeStatus;
+  createdAt: string;
+  resolvedAt?: string;
+}
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -158,6 +239,29 @@ export interface AuditLogEntry {
   reason?: string;
 }
 
+
+
+export interface Referral {
+  id: string;
+  clientId: string;
+  clientName: string;
+  name: string;
+  email: string;
+  specialty: string;
+  note?: string;
+  status: 'invited' | 'joined';
+  createdAt: string;
+}
+export interface ClientSettings {
+  instantProposalAlerts: boolean;
+  milestoneReminders: boolean;
+}
+
+export interface JobAlertSettings {
+  enabled: boolean;
+  categories: EventCategory[];
+  locationMode: 'anywhere' | 'profile_location';
+}
 export interface Notification {
   id: string;
   userId: string;
@@ -167,6 +271,20 @@ export interface Notification {
   read: boolean;
   timestamp: string;
   linkRoute?: string;
+}
+
+export interface Review {
+  id: string;
+  contractId: string;
+  jobId: string;
+  jobTitle: string;
+  vendorId: string;
+  vendorName: string;
+  clientId: string;
+  clientName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
 }
 
 export interface VendorService {
@@ -193,7 +311,7 @@ export interface TalentProfile {
   rating: number;
   reviewCount: number;
   location: string;
-  timezone: string; // IANA time zone id, e.g. 'America/New_York'
+  timezone: string; // IANA time zone id, e.g. 'Asia/Kolkata'
   hourlyRate: number;
   verified: boolean;
   availableNow: boolean;
@@ -205,6 +323,7 @@ export interface TalentProfile {
   hoursPerWeek: string;
   openToContractToHire: boolean;
   avgResponseHours: string;
+  education?: { school: string; degree?: string }[];
 }
 
 export type WorkHistoryStatus = 'completed' | 'in_progress';

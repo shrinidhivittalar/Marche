@@ -16,6 +16,16 @@
       name="description"
       content="Marché connects event clients with trusted service professionals through a transparent requirement and proposal marketplace."
     />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('marche-theme');
+          document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

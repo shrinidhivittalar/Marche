@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   ArrowRight,
@@ -10,20 +10,35 @@ import {
   Users,
   Search,
   Lock,
+  LogIn,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from '@marche/ui';
+import { formatBudget } from '../lib/formatBudget';
 
 export const LandingPage: React.FC = () => {
-  const { navigate, setCurrentUserRole, jobs } = useApp();
+  const { navigate, jobs } = useApp();
+  const [loginPrompt, setLoginPrompt] = useState<string | null>(null);
+
+  const promptLogin = (message: string) => {
+    setLoginPrompt(message);
+    setTimeout(() => navigate('/auth/signin'), 1400);
+  };
 
   return (
     <div className="min-h-screen bg-bg text-ink">
+      {loginPrompt && (
+        <div className="fixed bottom-6 right-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
+          <LogIn className="w-4 h-4 text-primary shrink-0" />
+          {loginPrompt}
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="border-b border-border bg-white sticky top-0 z-30 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-xs">
               M
             </div>
             <span className="text-xl font-bold tracking-tight text-ink">MARCHÉ</span>
@@ -69,10 +84,7 @@ export const LandingPage: React.FC = () => {
             className="w-full sm:w-auto"
             icon={ArrowRight}
             iconPosition="right"
-            onClick={() => {
-              setCurrentUserRole('client');
-              navigate('/client/jobs/new');
-            }}
+            onClick={() => promptLogin('Sign in to post a job and start hiring talent.')}
           >
             Post a Job
           </Button>
@@ -82,10 +94,7 @@ export const LandingPage: React.FC = () => {
             variant="outline"
             className="w-full sm:w-auto"
             icon={Search}
-            onClick={() => {
-              setCurrentUserRole('vendor');
-              navigate('/provider/dashboard');
-            }}
+            onClick={() => promptLogin('Sign in to browse jobs and submit proposals.')}
           >
             Explore Jobs
           </Button>
@@ -133,10 +142,7 @@ export const LandingPage: React.FC = () => {
               size="sm"
               icon={ArrowRight}
               iconPosition="right"
-              onClick={() => {
-                setCurrentUserRole('vendor');
-                navigate('/provider/dashboard');
-              }}
+              onClick={() => promptLogin('Sign in to browse jobs and submit proposals.')}
             >
               View All Jobs
             </Button>
@@ -146,10 +152,7 @@ export const LandingPage: React.FC = () => {
             {jobs.slice(0, 3).map((req) => (
               <div
                 key={req.id}
-                onClick={() => {
-                  setCurrentUserRole('vendor');
-                  navigate(`/provider/jobs/${req.id}`);
-                }}
+                onClick={() => promptLogin('Sign in to view this job and submit a proposal.')}
                 className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
               >
                 <div>
@@ -158,7 +161,7 @@ export const LandingPage: React.FC = () => {
                       {req.category}
                     </span>
                     <span className="font-mono text-primary font-bold">
-                      ₹{req.budgetMin.toLocaleString('en-IN')} - ₹{req.budgetMax.toLocaleString('en-IN')}
+                      {formatBudget(req)}
                     </span>
                   </div>
 
@@ -194,15 +197,6 @@ export const LandingPage: React.FC = () => {
             </button>
             <button onClick={() => navigate('/landing')} className="hover:text-ink">
               Terms of Service
-            </button>
-            <button
-              onClick={() => {
-                setCurrentUserRole('admin');
-                navigate('/admin/audit');
-              }}
-              className="text-primary font-medium hover:underline"
-            >
-              Admin Audit Console
             </button>
           </div>
         </div>

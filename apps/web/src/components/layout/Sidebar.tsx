@@ -23,7 +23,7 @@ import {
   TrendingUp,
   Search,
 } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent, PopoverClose, Button } from '@marche/ui';
+import { Popover, PopoverTrigger, PopoverContent, PopoverClose, Button, ThemeToggle } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
@@ -107,7 +107,7 @@ export const Sidebar: React.FC = () => {
   const vendorNav = [
     { label: 'Home', path: '/provider/dashboard', icon: LayoutDashboard },
     { label: 'Search Jobs', path: '/provider/search', icon: Search },
-    { label: 'Dashboard', path: '/provider/analytics', icon: BarChart3 },
+    { label: 'My Work', path: '/provider/analytics', icon: BarChart3 },
     { label: 'Stats', path: '/provider/stats', icon: TrendingUp },
     { label: 'Contracts', path: '/provider/contracts', icon: FileSignature },
     { label: 'Finances', path: '/provider/finances', icon: IndianRupee },
@@ -118,7 +118,6 @@ export const Sidebar: React.FC = () => {
   const adminNav = [
     { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
     { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
-    { label: 'Client Dashboard', path: '/client/dashboard', icon: LayoutDashboard },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
@@ -143,7 +142,7 @@ export const Sidebar: React.FC = () => {
       ? '/provider/profile'
       : currentUser.role === 'client'
       ? '/client/profile'
-      : `/profile/${currentUser.id}`;
+      : '/admin/profile';
 
   const identityItemClass = (variant: 'default' | 'danger' = 'default') =>
     `w-full flex items-center rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -151,14 +150,14 @@ export const Sidebar: React.FC = () => {
     } ${
       variant === 'danger'
         ? 'text-rose-600 hover:bg-rose-50'
-        : 'text-ink-muted hover:text-ink hover:bg-white/70'
+        : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
     }`;
 
   return (
     <aside
       className={`${
         collapsed ? 'w-[68px]' : 'w-60'
-      } bg-bg border-r border-border min-h-screen p-3 flex flex-col justify-between shrink-0 transition-[width] duration-200`}
+      } bg-bg border-r border-border min-h-screen p-3 hidden md:flex md:flex-col justify-between shrink-0 transition-[width] duration-200`}
     >
       <div className="space-y-4">
         {/* Brand & Collapse Toggle */}
@@ -167,7 +166,7 @@ export const Sidebar: React.FC = () => {
             onClick={() => navigate(homePath)}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg tracking-tight group-hover:bg-primary-hover transition-colors shadow-xs shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg tracking-tight group-hover:bg-primary-hover transition-colors shadow-xs shrink-0">
               M
             </div>
             {!collapsed && (
@@ -175,13 +174,17 @@ export const Sidebar: React.FC = () => {
             )}
           </button>
 
-          <button
-            onClick={toggleCollapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="flex items-center p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-white/70 transition-colors cursor-pointer"
-          >
-            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
+          <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-1'}`}>
+            <ThemeToggle className="!size-auto p-2 rounded-lg hover:bg-surface-subtle" />
+
+            <button
+              onClick={toggleCollapsed}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="flex items-center p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-subtle transition-colors cursor-pointer"
+            >
+              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Navigation Group */}
@@ -196,20 +199,20 @@ export const Sidebar: React.FC = () => {
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
             } ${
               isActive
-                ? 'bg-white text-primary font-bold border border-border shadow-2xs'
-                : 'text-ink-muted hover:text-ink hover:bg-white/70'
+                ? 'bg-surface text-primary font-bold border border-border shadow-2xs'
+                : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
             }`;
             const navButtonContent = (
               <>
                 <div className={`flex items-center relative ${collapsed ? '' : 'gap-3'}`}>
-                  <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-zinc-400'}`} />
+                  <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`} />
                   {!collapsed && <span>{item.label}</span>}
                   {collapsed && item.badge && item.badge > 0 ? (
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
                   ) : null}
                 </div>
                 {!collapsed && item.badge && item.badge > 0 ? (
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-white">
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
                     {item.badge}
                   </span>
                 ) : null}
@@ -259,12 +262,12 @@ export const Sidebar: React.FC = () => {
                               <div
                                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                                   n.type === 'proposal'
-                                    ? 'bg-amber-100 text-amber-800'
+                                    ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
                                     : n.type === 'contract'
-                                    ? 'bg-emerald-100 text-primary'
+                                    ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
                                     : n.type === 'job_alert'
-                                    ? 'bg-sky-100 text-sky-800'
-                                    : 'bg-zinc-200 text-zinc-700'
+                                    ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-400'
+                                    : 'bg-surface-subtle text-ink'
                                 }`}
                               >
                                 {n.type === 'proposal' ? (
@@ -336,7 +339,7 @@ export const Sidebar: React.FC = () => {
                 <div key={item.label}>
                   <button onClick={() => toggleSection(item.label)} className={navButtonClass}>
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-zinc-400'}`} />
+                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`} />
                       <span>{item.label}</span>
                     </div>
                     <ChevronDown
@@ -351,8 +354,8 @@ export const Sidebar: React.FC = () => {
                           onClick={() => navigate(link.path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                             route === link.path
-                              ? 'bg-white text-primary font-bold border border-border shadow-2xs'
-                              : 'text-ink-muted hover:text-ink hover:bg-white/70'
+                              ? 'bg-surface text-primary font-bold border border-border shadow-2xs'
+                              : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
                           }`}
                         >
                           {link.label}
@@ -405,7 +408,7 @@ export const Sidebar: React.FC = () => {
           onClick={() => setIdentityOpen((prev) => !prev)}
           title={collapsed ? currentUser.name : undefined}
           className={`w-full flex items-center rounded-xl transition-colors cursor-pointer ${
-            collapsed ? 'justify-center p-2' : 'justify-between px-2.5 py-2 hover:bg-white/70'
+            collapsed ? 'justify-center p-2' : 'justify-between px-2.5 py-2 hover:bg-surface-subtle'
           }`}
         >
           <div className={`flex items-center min-w-0 ${collapsed ? '' : 'gap-2.5'}`}>

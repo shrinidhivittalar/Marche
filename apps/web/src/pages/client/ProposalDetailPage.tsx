@@ -4,12 +4,7 @@ import {
   Star,
   ShieldCheck,
   CheckCircle2,
-  Calendar,
-  Clock,
-  MapPin,
-  Building,
-  DollarSign,
-  ExternalLink,
+  FileText,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
@@ -23,11 +18,13 @@ interface ProposalDetailPageProps {
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { proposals, getJobById, hireVendor, navigate } = useApp();
+  const { proposals, getJobById, hireVendor, navigate, goBack } = useApp();
 
   const [hireModalOpen, setHireModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmedContractId, setConfirmedContractId] = useState<string | null>(null);
+  const [hireError, setHireError] = useState<string | null>(null);
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
 
   const proposal = proposals.find((p) => p.id === id);
   const job = proposal ? getJobById(proposal.jobId) : undefined;
@@ -38,23 +35,36 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
         <EmptyState
           title="Proposal Not Found"
           description="The requested proposal is unavailable."
-          actionLabel="Back to Dashboard"
-          onAction={() => navigate('/client/dashboard')}
+          actionLabel="Go Back"
+          onAction={goBack}
         />
       </div>
     );
   }
 
-  const handleConfirmHire = async () => {
+  const handleConfirmHire = () => {
+    if (!agreementAccepted) {
+      setHireError('Accept the booking agreement before confirming this hire.');
+      return;
+    }
+
     setIsProcessing(true);
-    const { contract } = await hireVendor(job.id, proposal.id);
-    setIsProcessing(false);
-    setConfirmedContractId(contract.id);
+    setHireError(null);
+    try {
+      const { contract } = hireVendor(job.id, proposal.id);
+      setConfirmedContractId(contract.id);
+    } catch (err) {
+      setHireError(err instanceof Error ? err.message : 'Could not confirm this hire.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const closeHireModal = () => {
     setHireModalOpen(false);
     setConfirmedContractId(null);
+    setHireError(null);
+    setAgreementAccepted(false);
   };
 
   return (
@@ -62,11 +72,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       {/* Top Back Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(`/client/jobs/${job.id}`)}
+          onClick={goBack}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Job Inbox</span>
+          <span>Back</span>
         </button>
 
         <StatusBadge status={proposal.status} />
@@ -276,11 +286,41 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
               </div>
             </div>
 
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-3 text-xs">
+              <div className="flex items-start gap-2">
+                <FileText className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-bold text-ink">Booking agreement snapshot</p>
+                  <p className="text-ink-muted mt-1 leading-relaxed">
+                    This confirmation records the selected proposal, agreed amount, event schedule, location, and the current Marché terms version against the new contract.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-ink-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreementAccepted}
+                  onChange={(event) => {
+                    setAgreementAccepted(event.target.checked);
+                    setHireError(null);
+                  }}
+                  className="mt-0.5 rounded border-border text-primary focus:ring-primary"
+                />
+                <span className="leading-relaxed">
+                  I accept the booking terms for {job.title} with {proposal.vendorName} at ₹{proposal.bidAmount.toLocaleString('en-IN')}.
+                </span>
+              </label>
+            </div>
+
+            {hireError && (
+              <p className="text-xs text-destructive font-medium">{hireError}</p>
+            )}
+
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={closeHireModal}>
                 Cancel
               </Button>
-              <Button loading={isProcessing} onClick={handleConfirmHire} icon={ShieldCheck}>
+              <Button loading={isProcessing} disabled={!agreementAccepted} onClick={handleConfirmHire} icon={ShieldCheck}>
                 Confirm & Hire
               </Button>
             </div>

@@ -1,4 +1,12 @@
 /* Marché design tokens — single source of truth for the design system. */
+
+/* Ties Tailwind's `dark:` variant to the same [data-theme="dark"] attribute
+   the theme toggle sets (see useTheme.ts), instead of the OS's
+   prefers-color-scheme. Lets one-off accent colors (status badge chips,
+   promo bands) opt into a dark-aware treatment via `dark:bg-...` without
+   needing a bespoke token for every combination. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   /* ---- Color: surfaces (matches the app's existing neutral palette) ---- */
   --color-bg: #f8f8f6;
@@ -113,7 +121,11 @@
   --shadow-focus: 0 0 0 3px rgba(31, 182, 131, 0.45);
 }
 
-:root[data-theme="light"] {
+/* Not scoped to :root (unlike the dark block above) so this can also be set
+   on a nested wrapper — e.g. Landing/Sign In/Sign Up intentionally opt out
+   of the app-wide dark mode toggle and always render light, regardless of
+   the user's saved theme preference on <html>. */
+[data-theme="light"] {
   --color-bg: #f8f8f6;
   --color-surface: #ffffff;
   --color-surface-subtle: #f3f4f2;
@@ -152,6 +164,52 @@
   --shadow-focus: 0 0 0 3px rgba(14, 107, 82, 0.35);
 }
 
+/* Printed documents (booking acknowledgements, receipts, etc.) must stay
+   legible on paper regardless of the on-screen theme — browsers already
+   strip background colors by default when printing, but text color is not
+   a "background graphic" and stays whatever the page had, so dark-mode's
+   near-white --color-ink would print as near-invisible text on white paper.
+   Force every token back to its light-mode value for the print media type,
+   overriding :root[data-theme="dark"] via matching specificity + source
+   order rather than relying on prefers-color-scheme (browsers' print
+   dialogs don't reliably respect that either). */
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    --color-bg: #f8f8f6;
+    --color-surface: #ffffff;
+    --color-surface-subtle: #f3f4f2;
+    --color-border: #e7e8e4;
+    --color-border-strong: #d4d4d8;
+
+    --color-ink: #111827;
+    --color-ink-muted: #6b7280;
+
+    --color-primary: #14532d;
+    --color-primary-hover: #166534;
+    --color-primary-active: #052e16;
+    --color-primary-subtle: #f0fdf4;
+    --color-primary-fg: #ffffff;
+
+    --color-accent: #f59e0b;
+    --color-accent-hover: #d97f06;
+    --color-accent-subtle: #fff6e5;
+    --color-accent-text: #92400e;
+
+    --color-success: #2563eb;
+    --color-success-text: #1d4ed8;
+    --color-success-subtle: #eaf1ff;
+
+    --color-danger: #dc2626;
+    --color-danger-text: #b91c1c;
+    --color-danger-subtle: #fef2f2;
+    --color-danger-fg: #ffffff;
+
+    --color-inverse: #15171a;
+    --color-inverse-fg: #ffffff;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -174,6 +232,26 @@
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  /* Chrome/Edge autofill (company name, address, email fields, etc.) paints
+     its own yellow-tinted background and forces text color via
+     -webkit-text-fill-color, ignoring the app's CSS entirely — most visible
+     in dark mode where it reads as illegible olive text. Repaint it in the
+     app's own surface/ink tokens instead. The huge inset box-shadow is the
+     standard trick to override the autofill background since
+     background-color itself can't win against the UA style. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    -webkit-box-shadow: 0 0 0px 1000px var(--color-surface) inset;
+    box-shadow: 0 0 0px 1000px var(--color-surface) inset;
+    caret-color: var(--color-ink);
+    transition: background-color 0s 600000s, color 0s 600000s;
   }
 
   @media (prefers-reduced-motion: reduce) {

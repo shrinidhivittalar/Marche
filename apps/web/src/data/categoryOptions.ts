@@ -1,8 +1,8 @@
 export const LOCATIONS = [
-  { value: 'New York', label: 'New York, NY' },
-  { value: 'Manhattan', label: 'Manhattan, NYC' },
-  { value: 'Napa', label: 'Napa Valley, CA' },
-  { value: 'Brooklyn', label: 'Brooklyn, NY' },
+  { value: 'Mumbai', label: 'Mumbai, Maharashtra' },
+  { value: 'Bangalore', label: 'Bangalore, Karnataka' },
+  { value: 'Nashik', label: 'Nashik, Maharashtra' },
+  { value: 'Pune', label: 'Pune, Maharashtra' },
 ];
 
 export const CATEGORIES = [

@@ -18,13 +18,24 @@ import {
   Globe,
   CheckCircle2,
   ZoomIn,
+  SlidersHorizontal,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Input, Checkbox, Button } from '@marche/ui';
+import {
+  Input,
+  Checkbox,
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { CATEGORIES, LOCATIONS } from '../../data/categoryOptions';
-import { INITIAL_TALENT } from '../../data/mockData';
+import { formatRating, getReviewStats } from '../../lib/reviews';
+import { getJobSuccessScore, getReputationBadges } from '../../lib/reputation';
+import type { ReputationBadgeKey } from '../../lib/reputation';
 import type { TalentProfile, EnglishLevel } from '../../types';
 
 type SortOption = 'best' | 'rating' | 'rate_low' | 'rate_high';
@@ -40,31 +51,20 @@ const RATE_BUCKETS = [
 ];
 
 const ENGLISH_LEVELS: EnglishLevel[] = ['Basic', 'Conversational', 'Fluent', 'Native or bilingual'];
-const ALL_SKILLS = Array.from(new Set(INITIAL_TALENT.flatMap((t) => t.skills))).sort();
+const ANY_LOCATION = '__any_location__';
+const ANY_SKILL = '__any_skill__';
 
-interface TalentBadge {
-  label: string;
-  icon: LucideIcon;
-  className: string;
-}
+const REPUTATION_BADGE_OPTIONS: { key: ReputationBadgeKey; label: string; icon: React.ComponentType<{ className?: string }>; className: string }[] = [
+  { key: 'top_rated_plus', label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10' },
+  { key: 'top_rated', label: 'Top Rated', icon: Award, className: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10' },
+  { key: 'rising_talent', label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' },
+  { key: 'responsive', label: 'Fast Response', icon: Zap, className: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10' },
+  { key: 'verified_pro', label: 'Verified Pro', icon: ShieldCheck, className: 'text-primary bg-primary/10' },
+];
 
-function getTalentBadge(t: TalentProfile): TalentBadge | null {
-  if (t.rating >= 4.95 && t.jobsCompleted >= 30) {
-    return { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 bg-pink-50 border-pink-200' };
-  }
-  if (t.rating >= 4.85) {
-    return { label: 'Top Rated', icon: Award, className: 'text-sky-600 bg-sky-50 border-sky-200' };
-  }
-  if (t.jobsCompleted < 20) {
-    return { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
-  }
-  return null;
-}
-
-function getJobSuccess(t: TalentProfile): number {
-  return Math.min(100, Math.round(t.rating * 20));
-}
-
+const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = Object.fromEntries(
+  REPUTATION_BADGE_OPTIONS.map((option) => [option.key, option.icon])
+) as Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>>;
 function getInsights(t: TalentProfile): string[] {
   return t.bio
     .split('.')
@@ -116,7 +116,7 @@ function RadioOption({
 }
 
 export const SearchTalentPage: React.FC = () => {
-  const { navigate } = useApp();
+  const { navigate, savedTalentIds, toggleSavedTalent, reviews, talentProfiles } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('best');
@@ -124,28 +124,31 @@ export const SearchTalentPage: React.FC = () => {
   const [selectedRates, setSelectedRates] = useState<Set<string>>(new Set());
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [selectedBadges, setSelectedBadges] = useState<Set<ReputationBadgeKey>>(new Set());
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [jobSuccessFilter, setJobSuccessFilter] = useState<JobSuccessFilter>('any');
   const [earnedFilter, setEarnedFilter] = useState<EarnedFilter>('any');
   const [hoursBilledFilter, setHoursBilledFilter] = useState<HoursBilledFilter>('any');
   const [englishLevelFilter, setEnglishLevelFilter] = useState<'any' | EnglishLevel>('any');
   const [otherLanguages, setOtherLanguages] = useState('');
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const toggleInSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
+  const toggleInSet = <T,>(set: Set<T>, setter: (s: Set<T>) => void, value: T) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
   };
 
-  const searchMatched = INITIAL_TALENT.filter(
+  const allSkills = Array.from(new Set(talentProfiles.flatMap((t) => t.skills))).sort();
+
+  const searchMatched = talentProfiles.filter(
     (t) =>
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.headline.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -168,12 +171,15 @@ export const SearchTalentPage: React.FC = () => {
     count: searchMatched.filter((t) => t.location.toLowerCase().includes(loc.value.toLowerCase())).length,
   }));
 
-  const skillCounts = ALL_SKILLS.map((skill) => ({
+  const skillCounts = allSkills.map((skill) => ({
     value: skill,
     count: searchMatched.filter((t) => t.skills.includes(skill)).length,
   }));
 
   const verifiedCount = searchMatched.filter((t) => t.verified).length;
+
+  const getTalentReviewStats = (talent: TalentProfile) =>
+    getReviewStats(talent, reviews.filter((review) => review.vendorId === talent.id));
 
   const filteredTalent = searchMatched.filter((t) => {
     const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(t.category);
@@ -185,7 +191,10 @@ export const SearchTalentPage: React.FC = () => {
     const matchesSkills = selectedSkills.size === 0 || t.skills.some((s) => selectedSkills.has(s));
     const matchesVerified = !verifiedOnly || t.verified;
 
-    const jobSuccess = getJobSuccess(t);
+    const reviewStats = getTalentReviewStats(t);
+    const reputationBadges = getReputationBadges(t, reviewStats);
+    const jobSuccess = getJobSuccessScore(reviewStats.rating);
+    const matchesBadges = selectedBadges.size === 0 || reputationBadges.some((badge) => selectedBadges.has(badge.key));
     const matchesJobSuccess =
       jobSuccessFilter === 'any' || jobSuccess >= (jobSuccessFilter === '80' ? 80 : 90);
 
@@ -211,6 +220,7 @@ export const SearchTalentPage: React.FC = () => {
       matchesLocation &&
       matchesSkills &&
       matchesVerified &&
+      matchesBadges &&
       matchesJobSuccess &&
       matchesEarned &&
       matchesHoursBilled &&
@@ -219,7 +229,7 @@ export const SearchTalentPage: React.FC = () => {
   });
 
   const sortedTalent = [...filteredTalent].sort((a, b) => {
-    if (sortBy === 'rating') return b.rating - a.rating;
+    if (sortBy === 'rating') return getTalentReviewStats(b).rating - getTalentReviewStats(a).rating;
     if (sortBy === 'rate_low') return a.hourlyRate - b.hourlyRate;
     if (sortBy === 'rate_high') return b.hourlyRate - a.hourlyRate;
     return 0; // 'best' — default relevance order
@@ -232,7 +242,7 @@ export const SearchTalentPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium border border-zinc-700">
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
           <span>{toastMessage}</span>
         </div>
       )}
@@ -246,79 +256,93 @@ export const SearchTalentPage: React.FC = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-xl">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Search talent..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => showToast("Advanced search isn't wired up yet — Marché is still a frontend preview.")}
-          className="text-xs font-semibold text-primary hover:underline cursor-pointer whitespace-nowrap"
-        >
-          Advanced search
-        </button>
+      <div className="relative max-w-xl">
+        <Search className="w-4 h-4 absolute left-3.5 top-3 text-ink-muted pointer-events-none" />
+        <Input
+          type="text"
+          placeholder="Search talent..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-surface border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+        />
       </div>
 
       {/* Quick Filter Bar */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <select
-          value={quickLocationValue}
-          onChange={(e) => setSelectedLocations(e.target.value ? new Set([e.target.value]) : new Set())}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+        <Select
+          value={quickLocationValue || ANY_LOCATION}
+          onValueChange={(v) => setSelectedLocations(v === ANY_LOCATION ? new Set() : new Set([v]))}
         >
-          <option value="">Location</option>
-          {LOCATIONS.map((loc) => (
-            <option key={loc.value} value={loc.value}>
-              {loc.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY_LOCATION}>Location</SelectItem>
+            {LOCATIONS.map((loc) => (
+              <SelectItem key={loc.value} value={loc.value}>
+                {loc.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <select
-          value={quickSkillValue}
-          onChange={(e) => setSelectedSkills(e.target.value ? new Set([e.target.value]) : new Set())}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+        <Select
+          value={quickSkillValue || ANY_SKILL}
+          onValueChange={(v) => setSelectedSkills(v === ANY_SKILL ? new Set() : new Set([v]))}
         >
-          <option value="">Skills</option>
-          {ALL_SKILLS.map((skill) => (
-            <option key={skill} value={skill}>
-              {skill}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY_SKILL}>Skills</SelectItem>
+            {allSkills.map((skill) => (
+              <SelectItem key={skill} value={skill}>
+                {skill}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <select
+        <Select
           value={englishLevelFilter}
-          onChange={(e) => setEnglishLevelFilter(e.target.value as 'any' | EnglishLevel)}
-          className="text-xs border border-border rounded-xl px-3 py-2 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
+          onValueChange={(v) => setEnglishLevelFilter(v as 'any' | EnglishLevel)}
         >
-          <option value="any">English level</option>
-          {ENGLISH_LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>
-              {lvl}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-xl px-3 py-2 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">English level</SelectItem>
+            {ENGLISH_LEVELS.map((lvl) => (
+              <SelectItem key={lvl} value={lvl}>
+                {lvl}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setMobileFiltersOpen((prev) => !prev)}
+        className="lg:hidden w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-border bg-surface text-xs font-semibold text-ink cursor-pointer"
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          Filters
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`} />
+      </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Filter Sidebar */}
-        <aside className="lg:col-span-1 space-y-4">
-          <FilterSection title="Talent badge">
-            {[
-              { label: 'Top Rated Plus', icon: Gem, className: 'text-pink-600 bg-pink-50' },
-              { label: 'Top Rated', icon: Award, className: 'text-sky-600 bg-sky-50' },
-              { label: 'Rising Talent', icon: TrendingUp, className: 'text-emerald-600 bg-emerald-50' },
-            ].map(({ label, icon: Icon, className }) => (
-              <label key={label} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
-                <Checkbox />
+        <aside className={`lg:col-span-1 space-y-4 ${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
+                    <FilterSection title="Talent badge">
+            {REPUTATION_BADGE_OPTIONS.map(({ key, label, icon: Icon, className }) => (
+              <label key={key} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                <Checkbox
+                  checked={selectedBadges.has(key)}
+                  onCheckedChange={() => toggleInSet(selectedBadges, setSelectedBadges, key)}
+                />
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center ${className}`}>
                   <Icon className="w-3 h-3" />
                 </span>
@@ -424,7 +448,7 @@ export const SearchTalentPage: React.FC = () => {
               value={otherLanguages}
               onChange={(e) => setOtherLanguages(e.target.value)}
               onFocus={() => showToast("Other-language filtering isn't wired up yet — Marché is still a frontend preview.")}
-              className="w-full bg-white border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
             />
           </FilterSection>
 
@@ -457,16 +481,17 @@ export const SearchTalentPage: React.FC = () => {
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-ink-muted">{sortedTalent.length} providers found</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer focus:outline-none focus:border-primary"
-            >
-              <option value="best">Sort by: Best Matches</option>
-              <option value="rating">Sort by: Highest Rated</option>
-              <option value="rate_low">Sort by: Rate Low to High</option>
-              <option value="rate_high">Sort by: Rate High to Low</option>
-            </select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-lg px-2.5 py-1.5 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="best">Sort by: Best Matches</SelectItem>
+                <SelectItem value="rating">Sort by: Highest Rated</SelectItem>
+                <SelectItem value="rate_low">Sort by: Rate Low to High</SelectItem>
+                <SelectItem value="rate_high">Sort by: Rate High to Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {sortedTalent.length === 0 ? (
@@ -477,9 +502,10 @@ export const SearchTalentPage: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {sortedTalent.map((t, idx) => {
-                const badge = getTalentBadge(t);
-                const jobSuccess = getJobSuccess(t);
-                const isSaved = savedIds.has(t.id);
+                const reviewStats = getTalentReviewStats(t);
+                const reputationBadges = getReputationBadges(t, reviewStats);
+                const jobSuccess = getJobSuccessScore(reviewStats.rating);
+                const isSaved = savedTalentIds.includes(t.id);
                 const isBoosted = idx === 0;
                 const relatedJobs = Math.max(1, Math.round(t.jobsCompleted * 0.6));
 
@@ -487,7 +513,7 @@ export const SearchTalentPage: React.FC = () => {
                   <div
                     key={t.id}
                     onClick={() => navigate(`/profile/${t.id}`)}
-                    className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer space-y-3"
+                    className="bg-surface border border-border rounded-2xl p-5 hover:border-border-strong hover:shadow-md transition-all cursor-pointer space-y-3"
                   >
                     <div className="flex items-start gap-4">
                       <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-xl overflow-hidden border border-border group/thumb">
@@ -505,23 +531,28 @@ export const SearchTalentPage: React.FC = () => {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               {isBoosted && (
-                                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-full px-2 py-0.5">
                                   <Zap className="w-3 h-3" />
                                   Boosted
                                 </span>
                               )}
-                              {badge && (
-                                <span
-                                  className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}
-                                >
-                                  <badge.icon className="w-3 h-3" />
-                                  {badge.label}
-                                </span>
-                              )}
+                              {reputationBadges.slice(0, 3).map((badge) => {
+                                const BadgeIcon = REPUTATION_BADGE_ICONS[badge.key];
+                                return (
+                                  <span
+                                    key={badge.key}
+                                    title={badge.description}
+                                    className={`flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5 ${badge.className}`}
+                                  >
+                                    <BadgeIcon className="w-3 h-3" />
+                                    {badge.label}
+                                  </span>
+                                );
+                              })}
                             </div>
                             <h3 className="text-sm font-bold text-ink mt-1">{t.name.split(' ')[0]} {t.name.split(' ')[1]?.[0]}.</h3>
                             <p className="text-xs text-ink-muted mt-0.5">{t.headline}</p>
@@ -532,10 +563,11 @@ export const SearchTalentPage: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleInSet(savedIds, setSavedIds, t.id);
+                                toggleSavedTalent(t.id);
+                                showToast(isSaved ? 'Removed from saved talent.' : 'Saved to your talent list.');
                               }}
-                              title="Save"
-                              className={`cursor-pointer ${isSaved ? 'text-rose-500' : 'text-zinc-400 hover:text-rose-500'}`}
+                              title={isSaved ? 'Unsave' : 'Save'}
+                              className={`cursor-pointer ${isSaved ? 'text-rose-500' : 'text-ink-muted hover:text-rose-500'}`}
                             >
                               <Heart className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
                             </button>
@@ -565,20 +597,20 @@ export const SearchTalentPage: React.FC = () => {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5">
-                          <span className="flex items-center gap-1 font-semibold text-amber-600">
+                        <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5 flex-wrap">
+                          <span className="flex items-center gap-1 font-semibold text-amber-600 shrink-0">
                             <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                            {t.rating.toFixed(2)} ({t.reviewCount})
+                            {formatRating(reviewStats.rating)} ({reviewStats.reviewCount})
                           </span>
                           {t.verified && (
-                            <span className="flex items-center gap-1 font-semibold text-primary">
+                            <span className="flex items-center gap-1 font-semibold text-primary shrink-0">
                               <ShieldCheck className="w-3.5 h-3.5" />
                               Verified Pro
                             </span>
                           )}
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 min-w-0">
                             <MapPin className="w-3 h-3 shrink-0" />
-                            {t.location}
+                            <span className="truncate">{t.location}</span>
                           </span>
                         </div>
 
@@ -615,7 +647,7 @@ export const SearchTalentPage: React.FC = () => {
                           <Sparkles className="w-3.5 h-3.5 text-primary" />
                           Insights about {t.name.split(' ')[0]}
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-400">
+                        <span className="flex items-center gap-2 text-ink-muted">
                           <ThumbsUp className="w-3.5 h-3.5" />
                           <ThumbsDown className="w-3.5 h-3.5" />
                         </span>
