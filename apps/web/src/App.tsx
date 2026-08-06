@@ -31,7 +31,12 @@ const ADMIN_ROOT_ROUTES = new Set([
 // Pages
 import { LandingPage } from './pages/LandingPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
-import { AuthSignInPage, AuthSignUpPage, AuthVerifyEmailPage } from './pages/AuthPages';
+import {
+  AuthSignInPage,
+  AuthSignUpPage,
+  AuthVerifyEmailPage,
+  AuthResetPasswordPage,
+} from './pages/AuthPages';
 import { ClientDashboard } from './pages/client/ClientDashboard';
 import { CreateJobPage } from './pages/client/CreateJobPage';
 import { PostJobIntroPage } from './pages/client/PostJobIntroPage';
@@ -153,6 +158,14 @@ function AppContent() {
     return (
       <div data-theme="light">
         <AuthVerifyEmailPage />
+      </div>
+    );
+  }
+
+  if (route === '/auth/reset-password') {
+    return (
+      <div data-theme="light">
+        <AuthResetPasswordPage />
       </div>
     );
   }

@@ -598,3 +598,142 @@ export const AuthVerifyEmailPage: React.FC = () => {
     </div>
   );
 };
+
+export const AuthResetPasswordPage: React.FC = () => {
+  const { navigate, submitPasswordReset } = useApp();
+  const token = tokenFromUrl();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
+        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+          <XCircle className="w-10 h-10 text-danger mx-auto" />
+          <h1 className="text-xl font-extrabold text-ink tracking-tight">Invalid link</h1>
+          <p className="text-xs text-ink-muted leading-relaxed">
+            This password reset link is missing its token. Request a new one from the sign-in page.
+          </p>
+          <Button size="md" className="w-full" onClick={() => navigate('/auth/signin')}>
+            Go to Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
+        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+          <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />
+          <h1 className="text-xl font-extrabold text-ink tracking-tight">Password updated</h1>
+          <p className="text-xs text-ink-muted leading-relaxed">
+            Sign in with your new password. You've been signed out everywhere else for security.
+          </p>
+          <Button size="md" className="w-full" onClick={() => navigate('/auth/signin')}>
+            Go to Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (newPassword.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitPasswordReset(token, newPassword);
+      setDone(true);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
+      <div className="w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-4">
+        <div className="text-center space-y-1">
+          <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
+            M
+          </div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
+            Set a new password
+          </h1>
+          <p className="text-[11px] text-ink-muted">Choose a new password for your account.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">New Password</label>
+            <div className="relative">
+              <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="At least 8 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-9 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Confirm Password</label>
+            <div className="relative">
+              <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 sm:py-2 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
+                required
+              />
+            </div>
+          </div>
+
+          {errorMessage && (
+            <div className="p-2.5 bg-red-50 border border-red-200 text-red-900 rounded-xl text-[11px]">
+              {errorMessage}
+            </div>
+          )}
+
+          <Button type="submit" size="md" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Updating password…' : 'Update Password'}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
