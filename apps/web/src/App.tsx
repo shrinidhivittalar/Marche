@@ -7,14 +7,36 @@ import { MobileTabBar } from './components/layout/MobileTabBar';
 // Bottom-tab-bar destinations, mirroring MobileTabBar.tsx's per-role tab sets exactly —
 // these are primary nav, so a back button doesn't belong there. Must stay role-aware:
 // e.g. /notifications is a tab only for admin, so client/vendor still need a back button on it.
-const CLIENT_ROOT_ROUTES = new Set(['/client/dashboard', '/client/search', '/client/jobs', '/messages', '/menu']);
-const VENDOR_ROOT_ROUTES = new Set(['/provider/dashboard', '/provider/search', '/provider/contracts', '/messages', '/menu']);
-const ADMIN_ROOT_ROUTES = new Set(['/admin/audit', '/provider/dashboard', '/notifications', '/menu']);
+const CLIENT_ROOT_ROUTES = new Set([
+  '/client/dashboard',
+  '/client/search',
+  '/client/jobs',
+  '/messages',
+  '/menu',
+]);
+const VENDOR_ROOT_ROUTES = new Set([
+  '/provider/dashboard',
+  '/provider/search',
+  '/provider/contracts',
+  '/messages',
+  '/menu',
+]);
+const ADMIN_ROOT_ROUTES = new Set([
+  '/admin/audit',
+  '/provider/dashboard',
+  '/notifications',
+  '/menu',
+]);
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
-import { AuthSignInPage, AuthSignUpPage } from './pages/AuthPages';
+import {
+  AuthSignInPage,
+  AuthSignUpPage,
+  AuthVerifyEmailPage,
+  AuthResetPasswordPage,
+} from './pages/AuthPages';
 import { ClientDashboard } from './pages/client/ClientDashboard';
 import { CreateJobPage } from './pages/client/CreateJobPage';
 import { PostJobIntroPage } from './pages/client/PostJobIntroPage';
@@ -132,6 +154,22 @@ function AppContent() {
     );
   }
 
+  if (route === '/auth/verify-email') {
+    return (
+      <div data-theme="light">
+        <AuthVerifyEmailPage />
+      </div>
+    );
+  }
+
+  if (route === '/auth/reset-password') {
+    return (
+      <div data-theme="light">
+        <AuthResetPasswordPage />
+      </div>
+    );
+  }
+
   // Sends a role to its own home instead of whatever route it just tried to reach —
   // used both for unmatched routes and for routes that belong to a different role.
   const roleHome = () => {
@@ -181,8 +219,8 @@ function AppContent() {
     currentUser.role === 'client'
       ? CLIENT_ROOT_ROUTES
       : currentUser.role === 'vendor'
-      ? VENDOR_ROOT_ROUTES
-      : ADMIN_ROOT_ROUTES;
+        ? VENDOR_ROOT_ROUTES
+        : ADMIN_ROOT_ROUTES;
   const showMobileBack = !rootRoutes.has(route);
 
   return (

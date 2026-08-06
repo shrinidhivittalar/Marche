@@ -1,0 +1,122 @@
+// Identity module schema (docs/module1.md, docs/database1.0.0.md).
+// Additional modules (Profile, Marketplace, Jobs, ...) will extend this file
+// as their turn comes up in the phase_scope roadmap.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  PROVIDER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  DELETED
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  passwordHash    String
+  name            String
+  role            UserRole
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sessions            Session[]
+  verificationTokens  VerificationToken[]
+  passwordResets      PasswordReset[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("verification_tokens")
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+// Generic, cross-module security audit trail — not just Identity events.
+// eventType is a plain string ("auth.login.success", later "jobs.created",
+// "contracts.signed", etc.) instead of an enum on purpose, so every future
+// module can log into this same table without a schema migration; the set
+// of valid event types lives in application code (apps/api/src/audit),
+// not the database.
+//
+// userId is intentionally NOT a foreign key to User. An audit trail must
+// survive account deletion (that's the whole point of an audit trail) —
+// a real FK with onDelete:Cascade would silently erase history exactly
+// when it matters most (e.g. investigating a deleted account).
+//
+// Scoped to security-relevant events only (auth attempts, password
+// resets, ...) — never click/page-view tracking, which belongs in a
+// dedicated analytics tool, not this database.
+model AuditLog {
+  id        String   @id @default(uuid())
+  eventType String
+  userId    String?
+  email     String?
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
