@@ -6,6 +6,7 @@ import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -20,6 +21,15 @@ async function bootstrap() {
   );
 
   app.enableCors({ credentials: true });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Marche API')
+    .setDescription('Phase 1 backend — see docs/module1.md for the Identity module spec')
+    .setVersion('0.1')
+    .addBearerAuth()
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDocument);
 
   const port = process.env.PORT ?? 4000;
   await app.listen(port);

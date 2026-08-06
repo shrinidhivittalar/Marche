@@ -181,4 +181,116 @@ describe('AuthService', () => {
       expect(sessionsRepository.revokeAllForUser).toHaveBeenCalledWith('user_1');
     });
   });
+
+  describe('refresh', () => {
+    const activeSession = {
+      id: 'session_1',
+      userId: 'user_1',
+      refreshTokenHash: 'hash',
+      userAgent: null,
+      ipAddress: null,
+      expiresAt: new Date(Date.now() + 1000 * 60),
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('rejects a token with no matching active session', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(null);
+
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rotates the session: revokes the old one and issues a new pair', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(activeSession);
+      usersRepository.findById.mockResolvedValue(buildUser());
+
+      const result = await authService.refresh('raw-token', {});
+
+      expect(sessionsRepository.revoke).toHaveBeenCalledWith('session_1');
+      expect(sessionsRepository.create).toHaveBeenCalledTimes(1);
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(result.refreshToken).toEqual(expect.any(String));
+    });
+
+    it('rejects when the session belongs to a since-suspended user', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(activeSession);
+      usersRepository.findById.mockResolvedValue(buildUser({ status: 'SUSPENDED' }));
+
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('logout', () => {
+    it('revokes the session matching the refresh token', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue({
+        id: 'session_1',
+        userId: 'user_1',
+        refreshTokenHash: 'hash',
+        userAgent: null,
+        ipAddress: null,
+        expiresAt: new Date(Date.now() + 1000 * 60),
+        revokedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await authService.logout('raw-token');
+
+      expect(sessionsRepository.revoke).toHaveBeenCalledWith('session_1');
+    });
+
+    it('is a no-op when the refresh token has no matching session', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(null);
+
+      await authService.logout('raw-token');
+
+      expect(sessionsRepository.revoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('does nothing for an unknown email, without revealing that to the caller', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+
+      await authService.forgotPassword('unknown@example.com');
+
+      expect(passwordResetsRepository.create).not.toHaveBeenCalled();
+      expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    it('creates a reset token and emails it for a known user', async () => {
+      usersRepository.findByEmail.mockResolvedValue(buildUser());
+
+      await authService.forgotPassword('jane@example.com');
+
+      expect(passwordResetsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user_1' }),
+      );
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith('jane@example.com', expect.any(String));
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('rejects an unknown or expired token', async () => {
+      verificationTokensRepository.findByTokenHash.mockResolvedValue(null);
+
+      await expect(authService.verifyEmail('raw-token')).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('marks the user verified and deletes the token on success', async () => {
+      verificationTokensRepository.findByTokenHash.mockResolvedValue({
+        id: 'verification_1',
+        userId: 'user_1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000 * 60),
+        createdAt: new Date(),
+      });
+
+      await authService.verifyEmail('raw-token');
+
+      expect(usersRepository.markEmailVerified).toHaveBeenCalledWith('user_1');
+      expect(verificationTokensRepository.deleteById).toHaveBeenCalledWith('verification_1');
+    });
+  });
 });
