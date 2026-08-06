@@ -12,7 +12,7 @@ import type { LoginDto } from '../dto/login.dto';
 import type { User } from '@marche/db';
 
 const ACCESS_TOKEN_TTL = '15m';
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 

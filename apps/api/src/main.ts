@@ -7,6 +7,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -20,7 +21,14 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors({ credentials: true });
+  app.use(cookieParser());
+
+  // credentials:true requires an explicit origin — '*' (the default) is
+  // rejected by browsers for credentialed (cookie-bearing) requests.
+  app.enableCors({
+    origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173',
+    credentials: true,
+  });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Marche API')
