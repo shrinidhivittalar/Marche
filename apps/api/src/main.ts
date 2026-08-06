@@ -8,6 +8,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -20,6 +21,13 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Sets a batch of standard security headers (clickjacking, MIME-sniffing,
+  // etc.). CSP disabled here — this is a pure JSON API with no HTML views
+  // to protect; the frontend app (a separate service) is where CSP would
+  // actually matter, and Swagger's own UI needs looser rules than a strict
+  // default would allow.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.use(cookieParser());
 

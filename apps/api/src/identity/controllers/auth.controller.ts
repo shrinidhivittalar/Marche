@@ -1,5 +1,18 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService, REFRESH_TOKEN_TTL_MS } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
@@ -9,6 +22,11 @@ import { ResetPasswordDto } from '../dto/reset-password.dto';
 
 const REFRESH_COOKIE_NAME = 'marche_refresh_token';
 
+// Tighter limit for the endpoints a brute-force/credential-stuffing attempt
+// would actually target — the global 100/min default (app.module.ts) is too
+// loose to stop rapid password guessing on its own.
+const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+
 function requestContext(req: Request) {
   return { userAgent: req.headers['user-agent'], ipAddress: req.ip };
 }
@@ -16,6 +34,17 @@ function requestContext(req: Request) {
 // The refresh token is only ever readable by the browser via this cookie —
 // never handed back in a JSON body — so it can't be exfiltrated by an XSS
 // payload the way a JS-accessible token could (CLAUDE.md security rule).
+//
+// CSRF: no separate token here. sameSite:'strict' already stops the browser
+// from attaching this cookie to any cross-site-triggered request in every
+// modern browser, and CORS is locked to the exact FRONTEND_ORIGIN, so even a
+// same-site-cookie edge case couldn't read the response. A double-submit
+// CSRF token was tried and reverted — it fundamentally conflicts with
+// restoring a session silently on page load (the frontend has no token to
+// send on that very first /auth/refresh call, since one is only ever handed
+// out in a login/refresh response, and in-memory state doesn't survive a
+// reload) and adds real complexity for protection that's already redundant
+// with sameSite+CORS given how narrowly these two cookies are used.
 function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
@@ -36,15 +65,27 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Create an account and send a verification email' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Exchange email/password for an access token; refresh token is set as an httpOnly cookie' })
-  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { accessToken, refreshToken, user } = await this.authService.login(dto, requestContext(req));
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({
+    summary:
+      'Exchange email/password for an access token; refresh token is set as an httpOnly cookie',
+  })
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken, user } = await this.authService.login(
+      dto,
+      requestContext(req),
+    );
     setRefreshCookie(res, refreshToken);
     return { accessToken, user };
   }
@@ -76,13 +117,17 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Request a password reset email (always 204, regardless of whether the email exists)' })
+  @ApiOperation({
+    summary: 'Request a password reset email (always 204, regardless of whether the email exists)',
+  })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     await this.authService.forgotPassword(dto.email);
   }
 
   @Post('reset-password')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Set a new password using a password reset token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -92,7 +137,10 @@ export class AuthController {
   @Get('verify-email')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Mark the account owning this token as email-verified' })
-  async verifyEmail(@Query('token') token: string) {
+  async verifyEmail(@Query('token') token?: string) {
+    if (!token) {
+      throw new BadRequestException('token query parameter is required');
+    }
     await this.authService.verifyEmail(token);
   }
 }

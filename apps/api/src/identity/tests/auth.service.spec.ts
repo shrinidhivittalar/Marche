@@ -81,7 +81,12 @@ describe('AuthService', () => {
       usersRepository.findByEmail.mockResolvedValue(buildUser());
 
       await expect(
-        authService.register({ email: 'jane@example.com', password: 'password123', name: 'Jane', role: 'CLIENT' }),
+        authService.register({
+          email: 'jane@example.com',
+          password: 'password123',
+          name: 'Jane',
+          role: 'CLIENT',
+        }),
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(usersRepository.create).not.toHaveBeenCalled();
@@ -104,7 +109,10 @@ describe('AuthService', () => {
       );
       const storedHash = usersRepository.create.mock.calls[0]![0].passwordHash;
       expect(await argon2.verify(storedHash, 'password123')).toBe(true);
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith('jane@example.com', expect.any(String));
+      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
+        'jane@example.com',
+        expect.any(String),
+      );
       expect(result).toEqual(expect.objectContaining({ id: created.id, emailVerified: false }));
     });
   });
@@ -129,10 +137,43 @@ describe('AuthService', () => {
 
     it('rejects a suspended account', async () => {
       const passwordHash = await argon2.hash('password123');
-      usersRepository.findByEmail.mockResolvedValue(buildUser({ passwordHash, status: 'SUSPENDED' }));
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, status: 'SUSPENDED' }),
+      );
 
       await expect(
         authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects a disabled account', async () => {
+      const passwordHash = await argon2.hash('password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, status: 'DISABLED' }),
+      );
+
+      await expect(
+        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects a soft-deleted account even if status still reads ACTIVE', async () => {
+      const passwordHash = await argon2.hash('password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, deletedAt: new Date() }),
+      );
+
+      await expect(
+        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects an empty password against a real hash rather than throwing unhandled', async () => {
+      const passwordHash = await argon2.hash('password123');
+      usersRepository.findByEmail.mockResolvedValue(buildUser({ passwordHash }));
+
+      await expect(
+        authService.login({ email: 'jane@example.com', password: '' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -140,7 +181,10 @@ describe('AuthService', () => {
       const passwordHash = await argon2.hash('password123');
       usersRepository.findByEmail.mockResolvedValue(buildUser({ passwordHash }));
 
-      const result = await authService.login({ email: 'jane@example.com', password: 'password123' }, {});
+      const result = await authService.login(
+        { email: 'jane@example.com', password: 'password123' },
+        {},
+      );
 
       expect(result.accessToken).toEqual(expect.any(String));
       expect(result.refreshToken).toEqual(expect.any(String));
@@ -159,9 +203,33 @@ describe('AuthService', () => {
         createdAt: new Date(),
       });
 
-      await expect(authService.resetPassword('raw-token', 'new-password123')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(
+        authService.resetPassword('raw-token', 'new-password123'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects a token that has already been used once', async () => {
+      passwordResetsRepository.findByTokenHash.mockResolvedValue({
+        id: 'reset_1',
+        userId: 'user_1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000 * 60),
+        usedAt: new Date(),
+        createdAt: new Date(),
+      });
+
+      await expect(
+        authService.resetPassword('raw-token', 'new-password123'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(usersRepository.updatePasswordHash).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown token', async () => {
+      passwordResetsRepository.findByTokenHash.mockResolvedValue(null);
+
+      await expect(
+        authService.resetPassword('garbage-token', 'new-password123'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('updates the password and revokes existing sessions on success', async () => {
@@ -198,7 +266,9 @@ describe('AuthService', () => {
     it('rejects a token with no matching active session', async () => {
       sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(null);
 
-      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
 
     it('rotates the session: revokes the old one and issues a new pair', async () => {
@@ -217,7 +287,27 @@ describe('AuthService', () => {
       sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(activeSession);
       usersRepository.findById.mockResolvedValue(buildUser({ status: 'SUSPENDED' }));
 
-      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects when the session belongs to a since-deleted user', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(activeSession);
+      usersRepository.findById.mockResolvedValue(buildUser({ deletedAt: new Date() }));
+
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects when the session references a user that no longer exists at all', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(activeSession);
+      usersRepository.findById.mockResolvedValue(null);
+
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -267,15 +357,36 @@ describe('AuthService', () => {
       expect(passwordResetsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user_1' }),
       );
-      expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith('jane@example.com', expect.any(String));
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(
+        'jane@example.com',
+        expect.any(String),
+      );
     });
   });
 
   describe('verifyEmail', () => {
-    it('rejects an unknown or expired token', async () => {
+    it('rejects an unknown token', async () => {
       verificationTokensRepository.findByTokenHash.mockResolvedValue(null);
 
-      await expect(authService.verifyEmail('raw-token')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.verifyEmail('raw-token')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects a token that exists but has expired', async () => {
+      verificationTokensRepository.findByTokenHash.mockResolvedValue({
+        id: 'verification_1',
+        userId: 'user_1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() - 1000),
+        createdAt: new Date(),
+      });
+
+      await expect(authService.verifyEmail('raw-token')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(usersRepository.markEmailVerified).not.toHaveBeenCalled();
+      expect(verificationTokensRepository.deleteById).not.toHaveBeenCalled();
     });
 
     it('marks the user verified and deletes the token on success', async () => {
