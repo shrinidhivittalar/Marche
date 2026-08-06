@@ -169,9 +169,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                 <h1 className="text-xl font-extrabold text-ink">{talent.name}</h1>
                 {talent.verified && <BadgeCheck className="w-5 h-5 text-primary shrink-0" />}
               </div>
-              <p className="text-xs text-ink-muted mt-1 flex items-center gap-1">
+              <p className="text-xs text-ink-muted mt-1 flex items-center gap-1 min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                {talent.location} – {getLocalTime(talent.timezone)} local time
+                <span className="truncate">{talent.location} – {getLocalTime(talent.timezone)} local time</span>
               </p>
               {talent.availableNow && (
                 <p className="text-xs text-ink-muted mt-1.5 flex items-center gap-1.5">
@@ -525,7 +525,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                     />
                     <div className="flex-1 space-y-2">
                       <p className="text-xs font-semibold text-ink">{project.title}</p>
-                      <div className="flex items-center gap-3 text-[11px] text-ink-muted">
+                      <div className="flex items-center gap-3 text-[11px] text-ink-muted flex-wrap">
                         <span className="px-2 py-0.5 rounded bg-bg border border-border font-semibold text-ink">
                           From ₹{project.priceFrom.toLocaleString('en-IN')}
                         </span>

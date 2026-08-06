@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   User,
   UserRole,
@@ -300,8 +300,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('All');
-  const publicVendorUser = currentUser.role === 'vendor' ? currentUser : loadUserWithOverrides('vendor');
-  const talentProfiles = INITIAL_TALENT.map((talent) => applyUserToTalentProfile(talent, publicVendorUser));
+  const publicVendorUser = useMemo(
+    () => (currentUser.role === 'vendor' ? currentUser : loadUserWithOverrides('vendor')),
+    [currentUser]
+  );
+  const talentProfiles = useMemo(
+    () => INITIAL_TALENT.map((talent) => applyUserToTalentProfile(talent, publicVendorUser)),
+    [publicVendorUser]
+  );
   const jobAlertSettings = {
     ...getDefaultJobAlertSettings(currentUser.id),
     ...jobAlertSettingsByVendor[currentUser.id],
@@ -423,7 +429,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const submitIdentityVerification = (data: Omit<IdentityVerification, 'status' | 'submittedAt'>) => {
     updateCurrentUser({
-      verified: false,
       identityVerification: {
         ...data,
         legalName: data.legalName.trim(),
@@ -818,6 +823,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       slot,
     );
 
+    // A hired vendor is no longer just "saved for later"
+    setSavedTalentIds((prev) => prev.filter((id) => id !== prop.vendorId));
+
     // Update proposal state
     setProposals((prev) =>
       prev.map((p) => {
@@ -1027,6 +1035,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (ctr.bookingState !== 'Confirmed' && ctr.bookingState !== 'Completed') {
       throw new Error('Work diary entries can only be added while a contract is active or awaiting completion review.');
     }
+    if (data.hours <= 0 || data.hours > 24) {
+      throw new Error('Hours must be between 0 and 24.');
+    }
 
     const entry: WorkDiaryEntry = {
       id: generateId('wde'),
@@ -1034,7 +1045,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       vendorId: ctr.vendorId,
       vendorName: ctr.vendorName,
       workDate: data.workDate,
-      hours: Math.max(0, Math.min(24, data.hours)),
+      hours: data.hours,
       summary: data.summary.trim(),
       proofUrl: data.proofUrl?.trim() || undefined,
       createdAt: new Date().toISOString(),

@@ -30,7 +30,7 @@ const DEFAULT_BID_AMOUNT = 3200;
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
   jobId,
 }) => {
-  const { currentUser, proposals, getJobById, submitProposal, saveProposalDraft, navigate } = useApp();
+  const { currentUser, proposals, getJobById, submitProposal, saveProposalDraft, navigate, goBack } = useApp();
 
   const job = getJobById(jobId);
   const existingDraft = proposals.find(
@@ -198,11 +198,11 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
 
       {/* Top Navigation */}
       <button
-        onClick={() => navigate(`/provider/jobs/${job.id}`)}
+        onClick={goBack}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        <span>Back to Job Specs</span>
+        <span>Back</span>
       </button>
 
       {/* Header */}

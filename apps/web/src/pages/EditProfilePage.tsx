@@ -3,11 +3,14 @@ import { FileCheck2, MapPin, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Badge, Button, Card, DatePicker, Input, PhoneInput, Textarea } from '@marche/ui';
 import { todayISODate } from '../lib/formatTime';
+import type { IdentityVerification } from '../types';
 
 interface EducationEntry {
   school: string;
   degree?: string;
 }
+
+const DOCUMENT_TYPES: IdentityVerification['documentType'][] = ['pan', 'aadhaar', 'passport', 'drivers_license', 'other'];
 
 interface ProfileDraftFields {
   companyOrTitle: string;
@@ -64,7 +67,7 @@ export const EditProfilePage: React.FC = () => {
   const [dateOfBirth, setDateOfBirth] = useState(initialFields.dateOfBirth);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [kycLegalName, setKycLegalName] = useState(currentUser.identityVerification?.legalName || currentUser.name);
-  const [kycDocumentType, setKycDocumentType] = useState(currentUser.identityVerification?.documentType || 'pan');
+  const [kycDocumentType, setKycDocumentType] = useState<IdentityVerification['documentType']>(currentUser.identityVerification?.documentType || 'pan');
   const [kycDocumentLast4, setKycDocumentLast4] = useState(currentUser.identityVerification?.documentLast4 || '');
   const [kycAddress, setKycAddress] = useState(currentUser.identityVerification?.address || currentUser.location || '');
   const [kycError, setKycError] = useState<string | null>(null);
@@ -218,7 +221,12 @@ export const EditProfilePage: React.FC = () => {
               <label className="block text-xs font-semibold text-ink mb-1">Document type</label>
               <select
                 value={kycDocumentType}
-                onChange={(event) => setKycDocumentType(event.target.value as typeof kycDocumentType)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (DOCUMENT_TYPES.includes(value as IdentityVerification['documentType'])) {
+                    setKycDocumentType(value as IdentityVerification['documentType']);
+                  }
+                }}
                 className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
               >
                 <option value="pan">PAN</option>

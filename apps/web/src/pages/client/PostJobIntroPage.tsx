@@ -51,7 +51,7 @@ function PhaseStepper() {
 }
 
 export const PostJobIntroPage: React.FC = () => {
-  const { currentUser, navigate } = useApp();
+  const { currentUser, navigate, goBack } = useApp();
 
   const [view, setView] = useState<IntroView>('welcome');
   const [prompt, setPrompt] = useState('');
@@ -74,7 +74,7 @@ export const PostJobIntroPage: React.FC = () => {
       )}
 
       <button
-        onClick={() => (view === 'welcome' ? navigate('/client/dashboard') : setView('welcome'))}
+        onClick={() => (view === 'welcome' ? goBack() : setView('welcome'))}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />

@@ -216,7 +216,7 @@ export const SearchJobsPage: React.FC = () => {
 
         {/* Results */}
         <div className="lg:col-span-3 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-ink-muted">{sortedJobs.length} jobs found</span>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
               <SelectTrigger className="h-auto w-auto min-w-0 gap-2 rounded-lg px-2.5 py-1.5 text-xs">
@@ -246,12 +246,12 @@ export const SearchJobsPage: React.FC = () => {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-[11px] text-ink-muted mb-1.5">
+                      <div className="flex items-center gap-2 text-[11px] text-ink-muted mb-1.5 flex-wrap">
                         <span>{timeAgo(req.createdAt)}</span>
                         <span>•</span>
                         <span>Proposals: {req.proposalsCount}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-ink">{req.title}</h3>
+                      <h3 className="text-sm font-bold text-ink break-words">{req.title}</h3>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -277,20 +277,20 @@ export const SearchJobsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-2">
+                  <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-2 flex-wrap">
                     {req.clientVerified && (
-                      <span className="flex items-center gap-1 text-primary font-semibold">
+                      <span className="flex items-center gap-1 text-primary font-semibold shrink-0">
                         <ShieldCheck className="w-3.5 h-3.5" />
                         Payment Verified
                       </span>
                     )}
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 min-w-0">
                       <MapPin className="w-3 h-3 shrink-0" />
-                      {req.location}
+                      <span className="truncate">{req.location}</span>
                     </span>
                   </div>
 
-                  <p className="text-xs text-ink mt-2">
+                  <p className="text-xs text-ink mt-2 break-words">
                     <span className="font-semibold text-primary">
                       {formatBudget(req)}
                     </span>{' '}

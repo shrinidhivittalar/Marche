@@ -108,7 +108,7 @@ interface CreateJobPageProps {
 }
 
 export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
-  const { createJob, saveJobDraft, publishJobDraft, getJobById, navigate } = useApp();
+  const { createJob, saveJobDraft, publishJobDraft, getJobById, navigate, goBack } = useApp();
 
   const existingDraft = draftId ? getJobById(draftId) : undefined;
 
@@ -233,7 +233,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
 
   const handleBack = () => {
     if (step === 1) {
-      navigate('/client/dashboard');
+      goBack();
       return;
     }
     goToStep((step - 1) as WizardStep);
@@ -292,11 +292,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
 
       {/* Header Back Link */}
       <button
-        onClick={() => navigate('/client/dashboard')}
+        onClick={goBack}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        <span>Back to Client Dashboard</span>
+        <span>Back</span>
       </button>
 
       {/* Phase Stepper */}

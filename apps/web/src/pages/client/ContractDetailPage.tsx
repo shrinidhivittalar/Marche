@@ -36,7 +36,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     getDisputeForContract,
     addWorkDiaryEntry,
     getWorkDiaryForContract,
-    navigate,
+    goBack,
   } = useApp();
 
   const [acknowledgementOpen, setAcknowledgementOpen] = useState(false);
@@ -64,18 +64,16 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
         <EmptyState
           title="Contract Not Found"
           description="The requested contract does not exist."
-          actionLabel="Back to Dashboard"
-          onAction={() =>
-            navigate(currentUser.role === 'vendor' ? '/provider/contracts' : '/client/jobs')
-          }
+          actionLabel="Go Back"
+          onAction={goBack}
         />
       </div>
     );
   }
 
   const agreement = contract.agreement;
-  const isClient = currentUser.id === contract.clientId || currentUser.role === 'client';
-  const isVendor = currentUser.id === contract.vendorId || currentUser.role === 'vendor';
+  const isClient = currentUser.id === contract.clientId;
+  const isVendor = currentUser.id === contract.vendorId;
   const contractReview = getReviewForContract(contract.id);
   const contractDispute = getDisputeForContract(contract.id);
   const canRaiseDispute = (isClient || isVendor) && !contractDispute && contract.bookingState !== 'Closed' && contract.bookingState !== 'Cancelled';
@@ -149,13 +147,11 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       {/* Top Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() =>
-            navigate(currentUser.role === 'vendor' ? '/provider/contracts' : '/client/jobs')
-          }
+          onClick={goBack}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Workspace</span>
+          <span>Back</span>
         </button>
 
         <div className="flex items-center gap-3">
@@ -183,10 +179,10 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       <Card className="p-8 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
           <div>
-            <div className="flex items-center gap-2 text-xs text-ink-muted font-mono mb-1">
-              <span>Contract ID: {contract.id}</span>
-              <span>•</span>
-              <span className="text-primary font-bold">{contract.category}</span>
+            <div className="flex items-center gap-2 text-xs text-ink-muted font-mono mb-1 flex-wrap">
+              <span className="truncate">Contract ID: {contract.id}</span>
+              <span className="shrink-0">•</span>
+              <span className="text-primary font-bold shrink-0">{contract.category}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
               {contract.jobTitle}

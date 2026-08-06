@@ -10,7 +10,7 @@ export const BudgetsPage: React.FC = () => {
   const budgets = getBudgetSummaries(jobs, contracts, currentUser.id);
   const planned = budgets.reduce((total, budget) => total + budget.planned, 0);
   const committed = budgets.reduce((total, budget) => total + budget.committed, 0);
-  const remaining = budgets.reduce((total, budget) => total + budget.remaining, 0);
+  const remaining = planned - committed;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

@@ -139,6 +139,9 @@ export function getProviderFinanceTotals(contracts: Contract[], vendorId: string
   const inReview = sumAmounts(providerContracts.filter((contract) => contract.bookingState === 'Completed'));
   const availableContracts = providerContracts.filter((contract) => contract.bookingState === 'Closed');
   const available = sumAmounts(availableContracts);
+  const mostRecentAvailable = [...availableContracts].sort(
+    (a, b) => new Date(contractSortDate(b)).getTime() - new Date(contractSortDate(a)).getTime()
+  )[0];
 
   return {
     workInProgress,
@@ -146,7 +149,7 @@ export function getProviderFinanceTotals(contracts: Contract[], vendorId: string
     available,
     pending: workInProgress + inReview,
     lifetime: sumAmounts(providerContracts),
-    lastPayment: availableContracts[0]?.amount ?? 0,
+    lastPayment: mostRecentAvailable?.amount ?? 0,
   };
 }
 
@@ -165,8 +168,12 @@ export function getClientFinanceTotals(contracts: Contract[], clientId: string):
   };
 }
 
+const EXCLUDED_BUDGET_STATES: BookingState[] = ['Draft', 'Cancelled', 'Rejected', 'Expired'];
+
 export function getBudgetSummaries(jobs: Job[], contracts: Contract[], clientId: string): BudgetSummary[] {
-  const clientJobs = jobs.filter((job) => job.clientId === clientId);
+  const clientJobs = jobs.filter(
+    (job) => job.clientId === clientId && !job.isDraftPost && !EXCLUDED_BUDGET_STATES.includes(job.status)
+  );
   const clientContracts = getClientContracts(contracts, clientId);
   const categories = Array.from(new Set(clientJobs.map((job) => job.category)));
 

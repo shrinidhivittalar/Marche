@@ -62,13 +62,9 @@ const REPUTATION_BADGE_OPTIONS: { key: ReputationBadgeKey; label: string; icon: 
   { key: 'verified_pro', label: 'Verified Pro', icon: ShieldCheck, className: 'text-primary bg-primary/10' },
 ];
 
-const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = {
-  top_rated_plus: Gem,
-  top_rated: Award,
-  rising_talent: TrendingUp,
-  responsive: Zap,
-  verified_pro: ShieldCheck,
-};
+const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = Object.fromEntries(
+  REPUTATION_BADGE_OPTIONS.map((option) => [option.key, option.icon])
+) as Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>>;
 function getInsights(t: TalentProfile): string[] {
   return t.bio
     .split('.')
@@ -601,20 +597,20 @@ export const SearchTalentPage: React.FC = () => {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5">
-                          <span className="flex items-center gap-1 font-semibold text-amber-600">
+                        <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5 flex-wrap">
+                          <span className="flex items-center gap-1 font-semibold text-amber-600 shrink-0">
                             <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                             {formatRating(reviewStats.rating)} ({reviewStats.reviewCount})
                           </span>
                           {t.verified && (
-                            <span className="flex items-center gap-1 font-semibold text-primary">
+                            <span className="flex items-center gap-1 font-semibold text-primary shrink-0">
                               <ShieldCheck className="w-3.5 h-3.5" />
                               Verified Pro
                             </span>
                           )}
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 min-w-0">
                             <MapPin className="w-3 h-3 shrink-0" />
-                            {t.location}
+                            <span className="truncate">{t.location}</span>
                           </span>
                         </div>
 

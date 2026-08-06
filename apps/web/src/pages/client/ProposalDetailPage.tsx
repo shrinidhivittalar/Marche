@@ -18,7 +18,7 @@ interface ProposalDetailPageProps {
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { proposals, getJobById, hireVendor, navigate } = useApp();
+  const { proposals, getJobById, hireVendor, navigate, goBack } = useApp();
 
   const [hireModalOpen, setHireModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,8 +35,8 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
         <EmptyState
           title="Proposal Not Found"
           description="The requested proposal is unavailable."
-          actionLabel="Back to Dashboard"
-          onAction={() => navigate('/client/dashboard')}
+          actionLabel="Go Back"
+          onAction={goBack}
         />
       </div>
     );
@@ -72,11 +72,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       {/* Top Back Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(`/client/jobs/${job.id}`)}
+          onClick={goBack}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Job Inbox</span>
+          <span>Back</span>
         </button>
 
         <StatusBadge status={proposal.status} />

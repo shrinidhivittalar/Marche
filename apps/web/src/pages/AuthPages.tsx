@@ -29,7 +29,7 @@ function AuthBrandPanel() {
 }
 
 export const AuthSignInPage: React.FC = () => {
-  const { navigate, setCurrentUserRole } = useApp();
+  const { navigate, goBack, setCurrentUserRole } = useApp();
   const [email, setEmail] = useState('sarah.jenkins@luminaevents.co');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
@@ -59,8 +59,8 @@ export const AuthSignInPage: React.FC = () => {
       {/* Top Bar Navigation */}
       <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
         <button
-          onClick={() => navigate('/')}
-          aria-label="Back to Home"
+          onClick={goBack}
+          aria-label="Back"
           className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -224,7 +224,7 @@ export const AuthSignInPage: React.FC = () => {
 };
 
 export const AuthSignUpPage: React.FC = () => {
-  const { navigate, setCurrentUserRole, acceptLegalTerms } = useApp();
+  const { navigate, goBack, setCurrentUserRole, acceptLegalTerms } = useApp();
   const [role, setRole] = useState<UserRole>('client');
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
@@ -252,8 +252,8 @@ export const AuthSignUpPage: React.FC = () => {
       {/* Top Bar Navigation */}
       <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
         <button
-          onClick={() => navigate('/')}
-          aria-label="Back to Home"
+          onClick={goBack}
+          aria-label="Back"
           className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />

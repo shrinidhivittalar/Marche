@@ -31,6 +31,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
     getContractByJobId,
     auditLogs,
     navigate,
+    goBack,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'proposals' | 'specs' | 'audit'>('proposals');
@@ -45,8 +46,8 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
         <EmptyState
           title="Job Not Found"
           description="The requested job does not exist or was removed."
-          actionLabel="Back to Dashboard"
-          onAction={() => navigate('/client/dashboard')}
+          actionLabel="Go Back"
+          onAction={goBack}
         />
       </div>
     );
@@ -59,11 +60,11 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
       {/* Top Back Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate('/client/dashboard')}
+          onClick={goBack}
           className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Client Workspace</span>
+          <span>Back</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -239,20 +240,20 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
                       alt={proposal.vendorName}
                       className="w-12 h-12 rounded-full object-cover ring-1 ring-border"
                     />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-ink">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-bold text-ink truncate">
                           {proposal.vendorName}
                         </h3>
                         <StatusBadge status={proposal.status} />
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5">
-                        <span className="flex items-center gap-1 font-semibold text-amber-600">
+                      <div className="flex items-center gap-3 text-xs text-ink-muted mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1 font-semibold text-amber-600 shrink-0">
                           <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                           {proposal.vendorRating} ({proposal.vendorReviewCount} reviews)
                         </span>
-                        <span>•</span>
-                        <span>{proposal.vendorLocation}</span>
+                        <span className="shrink-0">•</span>
+                        <span className="truncate">{proposal.vendorLocation}</span>
                       </div>
                     </div>
                   </div>
