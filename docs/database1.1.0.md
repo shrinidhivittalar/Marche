@@ -1,5 +1,13 @@
 # Database Design
 
+> Version: 1.1.0
+>
+> Changelog from 1.0.0 (minor): Profile Module section reconciled with the
+> detailed module spec (docs/modules/module2.md), written after this
+> document. ProviderProfile/ClientProfile consolidated into a single
+> Profile table shared by both roles; UserSkill, UserLanguage, and
+> ProfileStatistics added. No other module's section changed.
+
 ## Purpose
 
 This document serves as the high-level blueprint for the database architecture of Marché.
@@ -52,21 +60,22 @@ The following modules are required to build the first production-ready version o
 
 ### Goals
 
-- Maintain provider profiles.
-- Maintain client profiles.
+- Maintain a professional profile for every user (client or provider).
 - Build user credibility.
 - Showcase portfolios, skills and experience.
 
 ### Tables
 
-- ProviderProfile
-- ClientProfile
+- Profile — one per User, shared shape for both Client and Provider roles rather than two separate tables (see docs/modules/module2.md for the reasoning).
 - Portfolio
 - PortfolioImage
 - Skill
+- UserSkill — join table between Profile and Skill.
+- UserLanguage
 - Experience
 - Education
 - Certification
+- ProfileStatistics — system-generated, one per Profile.
 
 ---
 

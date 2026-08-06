@@ -1,5 +1,11 @@
 # Domain Rules
 
+> **[Updated]** Section 3 "Profiles" reconciled with docs/modules/module2.md
+> — single shared Profile per user instead of separate Provider/Client
+> Profile records; clarified that portfolio/skills/education stay
+> Provider-only even though the table is shared; added the lightweight
+> Verified badge rule. No other section changed.
+
 ## Purpose
 
 This document defines the core business and domain rules of Marché.
@@ -32,9 +38,9 @@ These rules will be used while designing the database, APIs, backend services, a
 
 - Every user must have exactly one primary role during Phase 1.
 - Supported roles are:
-    - Client
-    - Provider
-    - Admin
+  - Client
+  - Provider
+  - Admin
 - A Provider can also become a Client in future versions.
 - Platform Administrators can access administrative functionality.
 
@@ -44,11 +50,13 @@ These rules will be used while designing the database, APIs, backend services, a
 
 ## Rules
 
-- Every Provider has one Provider Profile.
-- Every Client has one Client Profile.
-- Providers may upload multiple portfolio items.
+- Every user has exactly one Profile, regardless of role. **[Updated]** — a single shared table, not separate Provider/Client Profile records (was: "Every Provider has one Provider Profile. Every Client has one Client Profile.").
+- Providers may upload multiple portfolio items. Clients may not — portfolio, skills, experience, education, certifications and availability remain Provider-only even though Profile is a shared table. **[Updated]**
 - Providers may list multiple skills.
 - Providers may list education, certifications and experience.
+- Providers may list languages spoken, with proficiency level. **[New]**
+- Providers may set their availability status. **[New]**
+- A Profile may carry a system-computed "Verified" badge (e.g. email verified + a minimum number of completed jobs) — this is not identity/KYC verification, which remains excluded from Phase 1 (see phase_scope1.1.0.md). **[New]**
 - Ratings are calculated from completed reviews.
 
 ---

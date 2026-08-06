@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
 import { IdentityModule } from './identity/identity.module';
+import { ProfilesModule } from './profiles/profiles.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { IdentityModule } from './identity/identity.module';
     PrismaModule,
     AuditModule,
     IdentityModule,
+    ProfilesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

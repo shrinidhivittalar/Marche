@@ -11,6 +11,7 @@ import { VerificationTokensRepository } from './repositories/verification-tokens
 import { PasswordResetsRepository } from './repositories/password-resets.repository';
 import { EmailService } from './email/email.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { ProfilesModule } from '../profiles/profiles.module';
 
 @Module({
   imports: [
@@ -18,6 +19,9 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.register({
       secret: process.env.JWT_ACCESS_SECRET,
     }),
+    // AuthService.register creates a Profile for the new user in the same
+    // flow — see module2-edge-cases.md's "Profile never created" decision.
+    ProfilesModule,
   ],
   controllers: [AuthController, UsersController],
   providers: [

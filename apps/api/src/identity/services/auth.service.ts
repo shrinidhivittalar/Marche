@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
 import { AuditService } from '../../audit/audit.service';
 import { AUTH_EVENTS } from '../audit-events';
+import { ProfilesService } from '../../profiles/services/profiles.service';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { User } from '@marche/db';
@@ -53,6 +54,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly profilesService: ProfilesService,
   ) {}
 
   async register(dto: RegisterDto): Promise<PublicUser> {
@@ -70,6 +72,7 @@ export class AuthService {
     });
 
     await this.issueVerificationToken(user);
+    await this.profilesService.createForNewUser(user.id, user.name);
     await this.auditService.record({
       eventType: AUTH_EVENTS.REGISTER,
       userId: user.id,

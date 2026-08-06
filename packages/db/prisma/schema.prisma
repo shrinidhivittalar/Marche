@@ -37,9 +37,10 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  sessions            Session[]
-  verificationTokens  VerificationToken[]
-  passwordResets      PasswordReset[]
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+  passwordResets     PasswordReset[]
+  profile            Profile?
 
   @@index([email])
   @@map("users")
@@ -105,7 +106,7 @@ model PasswordReset {
 // resets, ...) — never click/page-view tracking, which belongs in a
 // dedicated analytics tool, not this database.
 model AuditLog {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   eventType String
   userId    String?
   email     String?
@@ -119,4 +120,197 @@ model AuditLog {
   @@index([eventType])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Profile module schema (docs/modules/module2.md, docs/modules/module2-edge-cases.md).
+//
+// Deliberate deviations from module2.md, decided during edge-case review:
+// - One shared Profile table for both Client and Provider roles, not
+//   separate ProviderProfile/ClientProfile tables (see database1.1.0.md).
+// - No ProfileStatistics table: stats are computed on read from
+//   Contracts/Reviews once those modules exist, not cached here — a cache
+//   has nothing to drift from if it doesn't exist.
+// - No file-upload handling yet: avatar/image fields are plain URL strings;
+//   endpoints accept an already-hosted URL until object storage (R2) is
+//   set up. See module2-edge-cases.md's Portfolio section for the ordering
+//   this implies once real uploads are wired in (storage write must
+//   succeed before the DB row is created, to avoid orphaned rows).
+
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  LIMITED
+  UNAVAILABLE
+}
+
+enum LanguageProficiency {
+  BASIC
+  CONVERSATIONAL
+  FLUENT
+  NATIVE
+}
+
+model Profile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Nullable until set — see module2-edge-cases.md's "Open questions"
+  // section (username shape was an unresolved gap in module2.md itself).
+  username    String? @unique
+  displayName String
+  headline    String?
+  bio         String?
+  avatar      String?
+  location    String?
+  timezone    String?
+  socialLinks Json?
+
+  visibility         ProfileVisibility  @default(PUBLIC)
+  availabilityStatus AvailabilityStatus @default(AVAILABLE)
+  nextAvailableDate  DateTime?
+
+  // Lightweight, system-computed badge — not identity/KYC verification,
+  // which remains out of Phase 1 scope (phase_scope1.1.0.md).
+  verifiedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  portfolioItems Portfolio[]
+  experiences    Experience[]
+  educations     Education[]
+  certifications Certification[]
+  skills         UserSkill[]
+  languages      UserLanguage[]
+
+  @@index([username])
+  @@map("profiles")
+}
+
+model Portfolio {
+  id          String            @id @default(uuid())
+  profileId   String
+  profile     Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  category    String?
+  coverImage  String?
+  projectDate DateTime?
+  visibility  ProfileVisibility @default(PUBLIC)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  images PortfolioImage[]
+
+  @@index([profileId])
+  @@map("portfolio_items")
+}
+
+model PortfolioImage {
+  id          String    @id @default(uuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  url         String
+
+  createdAt DateTime @default(now())
+
+  @@index([portfolioId])
+  @@map("portfolio_images")
+}
+
+model Experience {
+  id               String    @id @default(uuid())
+  profileId        String
+  profile          Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  company          String
+  position         String
+  description      String?
+  startDate        DateTime
+  endDate          DateTime?
+  currentlyWorking Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@map("experiences")
+}
+
+model Education {
+  id             String  @id @default(uuid())
+  profileId      String
+  profile        Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  institution    String
+  degree         String
+  fieldOfStudy   String?
+  graduationYear Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@map("educations")
+}
+
+model Certification {
+  id                  String    @id @default(uuid())
+  profileId           String
+  profile             Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name                String
+  issuingOrganization String
+  issueDate           DateTime?
+  expiryDate          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@map("certifications")
+}
+
+// Predefined, platform-wide skill list — not user-created. Seeded once,
+// referenced by UserSkill.
+model Skill {
+  id   String @id @default(uuid())
+  name String @unique
+
+  userSkills UserSkill[]
+
+  @@map("skills")
+}
+
+model UserSkill {
+  id        String  @id @default(uuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([profileId, skillId])
+  @@index([profileId])
+  @@map("user_skills")
+}
+
+model UserLanguage {
+  id          String              @id @default(uuid())
+  profileId   String
+  profile     Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language    String
+  proficiency LanguageProficiency
+
+  createdAt DateTime @default(now())
+
+  @@unique([profileId, language])
+  @@index([profileId])
+  @@map("user_languages")
 }

@@ -8,6 +8,7 @@ import type { VerificationTokensRepository } from '../repositories/verification-
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import type { EmailService } from '../email/email.service';
 import type { AuditService } from '../../audit/audit.service';
+import type { ProfilesService } from '../../profiles/services/profiles.service';
 import type { User } from '@marche/db';
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -33,6 +34,7 @@ describe('AuthService', () => {
   let passwordResetsRepository: jest.Mocked<PasswordResetsRepository>;
   let emailService: jest.Mocked<EmailService>;
   let auditService: jest.Mocked<AuditService>;
+  let profilesService: jest.Mocked<ProfilesService>;
   let authService: AuthService;
 
   beforeEach(() => {
@@ -72,6 +74,10 @@ describe('AuthService', () => {
       record: jest.fn(),
     } as unknown as jest.Mocked<AuditService>;
 
+    profilesService = {
+      createForNewUser: jest.fn(),
+    } as unknown as jest.Mocked<ProfilesService>;
+
     authService = new AuthService(
       usersRepository,
       sessionsRepository,
@@ -80,6 +86,7 @@ describe('AuthService', () => {
       emailService,
       new JwtService({ secret: 'test-secret' }),
       auditService,
+      profilesService,
     );
   });
 
@@ -124,6 +131,7 @@ describe('AuthService', () => {
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: 'auth.register', userId: created.id }),
       );
+      expect(profilesService.createForNewUser).toHaveBeenCalledWith(created.id, created.name);
     });
   });
 
