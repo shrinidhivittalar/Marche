@@ -7,9 +7,13 @@ import { VerificationTokensRepository } from '../repositories/verification-token
 import { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import { EmailService } from '../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
+import { AuditService } from '../../audit/audit.service';
+import { AUTH_EVENTS } from '../audit-events';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { User } from '@marche/db';
+
+type RequestContext = { userAgent?: string; ipAddress?: string };
 
 const ACCESS_TOKEN_TTL = '15m';
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -48,6 +52,7 @@ export class AuthService {
     private readonly passwordResetsRepository: PasswordResetsRepository,
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto): Promise<PublicUser> {
@@ -65,36 +70,62 @@ export class AuthService {
     });
 
     await this.issueVerificationToken(user);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.REGISTER,
+      userId: user.id,
+      email: user.email,
+      metadata: { role: user.role },
+    });
 
     return toPublicUser(user);
   }
 
-  async login(
-    dto: LoginDto,
-    context: { userAgent?: string; ipAddress?: string },
-  ): Promise<AuthTokens & { user: PublicUser }> {
+  async login(dto: LoginDto, context: RequestContext): Promise<AuthTokens & { user: PublicUser }> {
     const user = await this.usersRepository.findByEmail(dto.email);
     if (!user) {
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.LOGIN_FAILURE,
+        email: dto.email,
+        ...context,
+        metadata: { reason: 'unknown_email' },
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const passwordMatches = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordMatches) {
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.LOGIN_FAILURE,
+        userId: user.id,
+        email: user.email,
+        ...context,
+        metadata: { reason: 'wrong_password' },
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
 
     if (user.status !== 'ACTIVE' || user.deletedAt) {
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.LOGIN_FAILURE,
+        userId: user.id,
+        email: user.email,
+        ...context,
+        metadata: { reason: 'account_inactive', status: user.status },
+      });
       throw new UnauthorizedException('This account is not active');
     }
 
     const tokens = await this.issueSession(user, context);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.LOGIN_SUCCESS,
+      userId: user.id,
+      email: user.email,
+      ...context,
+    });
     return { ...tokens, user: toPublicUser(user) };
   }
 
-  async refresh(
-    rawRefreshToken: string,
-    context: { userAgent?: string; ipAddress?: string },
-  ): Promise<AuthTokens> {
+  async refresh(rawRefreshToken: string, context: RequestContext): Promise<AuthTokens> {
     const refreshTokenHash = hashToken(rawRefreshToken);
     const session = await this.sessionsRepository.findActiveByRefreshTokenHash(refreshTokenHash);
     if (!session) {
@@ -116,6 +147,10 @@ export class AuthService {
     const session = await this.sessionsRepository.findActiveByRefreshTokenHash(refreshTokenHash);
     if (session) {
       await this.sessionsRepository.revoke(session.id);
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.LOGOUT,
+        userId: session.userId,
+      });
     }
   }
 
@@ -134,6 +169,11 @@ export class AuthService {
       expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
     });
     await this.emailService.sendPasswordResetEmail(user.email, rawToken);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.PASSWORD_RESET_REQUESTED,
+      userId: user.id,
+      email: user.email,
+    });
   }
 
   async resetPassword(rawToken: string, newPassword: string): Promise<void> {
@@ -149,6 +189,10 @@ export class AuthService {
     await this.passwordResetsRepository.markUsed(resetRequest.id);
     // A password reset invalidates every existing session as a precaution.
     await this.sessionsRepository.revokeAllForUser(resetRequest.userId);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.PASSWORD_RESET_COMPLETED,
+      userId: resetRequest.userId,
+    });
   }
 
   async verifyEmail(rawToken: string): Promise<void> {
@@ -161,6 +205,10 @@ export class AuthService {
 
     await this.usersRepository.markEmailVerified(verification.userId);
     await this.verificationTokensRepository.deleteById(verification.id);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.EMAIL_VERIFIED,
+      userId: verification.userId,
+    });
   }
 
   private async issueVerificationToken(user: User): Promise<void> {
@@ -173,10 +221,7 @@ export class AuthService {
     await this.emailService.sendVerificationEmail(user.email, rawToken);
   }
 
-  private async issueSession(
-    user: User,
-    context: { userAgent?: string; ipAddress?: string },
-  ): Promise<AuthTokens> {
+  private async issueSession(user: User, context: RequestContext): Promise<AuthTokens> {
     const accessToken = await this.jwtService.signAsync(
       { sub: user.id, role: user.role },
       { expiresIn: ACCESS_TOKEN_TTL },

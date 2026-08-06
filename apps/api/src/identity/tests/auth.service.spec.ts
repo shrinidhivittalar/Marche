@@ -7,6 +7,7 @@ import type { SessionsRepository } from '../repositories/sessions.repository';
 import type { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import type { EmailService } from '../email/email.service';
+import type { AuditService } from '../../audit/audit.service';
 import type { User } from '@marche/db';
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -31,6 +32,7 @@ describe('AuthService', () => {
   let verificationTokensRepository: jest.Mocked<VerificationTokensRepository>;
   let passwordResetsRepository: jest.Mocked<PasswordResetsRepository>;
   let emailService: jest.Mocked<EmailService>;
+  let auditService: jest.Mocked<AuditService>;
   let authService: AuthService;
 
   beforeEach(() => {
@@ -66,6 +68,10 @@ describe('AuthService', () => {
       sendPasswordResetEmail: jest.fn(),
     } as unknown as jest.Mocked<EmailService>;
 
+    auditService = {
+      record: jest.fn(),
+    } as unknown as jest.Mocked<AuditService>;
+
     authService = new AuthService(
       usersRepository,
       sessionsRepository,
@@ -73,6 +79,7 @@ describe('AuthService', () => {
       passwordResetsRepository,
       emailService,
       new JwtService({ secret: 'test-secret' }),
+      auditService,
     );
   });
 
@@ -114,6 +121,9 @@ describe('AuthService', () => {
         expect.any(String),
       );
       expect(result).toEqual(expect.objectContaining({ id: created.id, emailVerified: false }));
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.register', userId: created.id }),
+      );
     });
   });
 
@@ -124,6 +134,10 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.login.failure', email: 'jane@example.com' }),
+      );
     });
 
     it('rejects an incorrect password', async () => {
@@ -189,6 +203,9 @@ describe('AuthService', () => {
       expect(result.accessToken).toEqual(expect.any(String));
       expect(result.refreshToken).toEqual(expect.any(String));
       expect(sessionsRepository.create).toHaveBeenCalledTimes(1);
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.login.success', email: 'jane@example.com' }),
+      );
     });
   });
 
