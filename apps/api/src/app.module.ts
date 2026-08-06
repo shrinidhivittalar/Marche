@@ -3,9 +3,11 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { stdSerializers } from 'pino';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
 import { IdentityModule } from './identity/identity.module';
+import { ProfilesModule } from './profiles/profiles.module';
 
 @Module({
   imports: [
@@ -23,7 +25,23 @@ import { IdentityModule } from './identity/identity.module';
           'req.headers.cookie',
           'req.body.password',
           'req.body.newPassword',
+          'req.query.token',
         ],
+        // Single-use email-verification tokens travel as a `?token=...` query
+        // param (see auth.controller.ts#verifyEmail). The `redact` array above
+        // masks the parsed req.query.token field, but pino-http's default req
+        // serializer also logs the raw req.url string with the token still
+        // embedded in it — redact can't scrub a substring out of a string
+        // field, so that has to be stripped here instead.
+        serializers: {
+          req(req) {
+            const serialized = stdSerializers.req(req);
+            if (serialized.url) {
+              serialized.url = serialized.url.replace(/([?&]token=)[^&]+/i, '$1[REDACTED]');
+            }
+            return serialized;
+          },
+        },
         autoLogging: { ignore: (req) => Boolean(req.url?.startsWith('/docs')) },
       },
     }),
@@ -34,6 +52,7 @@ import { IdentityModule } from './identity/identity.module';
     PrismaModule,
     AuditModule,
     IdentityModule,
+    ProfilesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

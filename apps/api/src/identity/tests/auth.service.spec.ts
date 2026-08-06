@@ -1,4 +1,4 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+﻿import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { AuthService } from '../services/auth.service';
@@ -8,6 +8,8 @@ import type { VerificationTokensRepository } from '../repositories/verification-
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import type { EmailService } from '../email/email.service';
 import type { AuditService } from '../../audit/audit.service';
+import type { ProfilesService } from '../../profiles/services/profiles.service';
+import type { PrismaService } from '../../prisma/prisma.service';
 import type { User } from '@marche/db';
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -33,6 +35,8 @@ describe('AuthService', () => {
   let passwordResetsRepository: jest.Mocked<PasswordResetsRepository>;
   let emailService: jest.Mocked<EmailService>;
   let auditService: jest.Mocked<AuditService>;
+  let profilesService: jest.Mocked<ProfilesService>;
+  let prismaService: jest.Mocked<PrismaService>;
   let authService: AuthService;
 
   beforeEach(() => {
@@ -72,6 +76,16 @@ describe('AuthService', () => {
       record: jest.fn(),
     } as unknown as jest.Mocked<AuditService>;
 
+    profilesService = {
+      createForNewUser: jest.fn(),
+    } as unknown as jest.Mocked<ProfilesService>;
+
+    prismaService = {
+      client: {
+        $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(undefined)),
+      },
+    } as unknown as jest.Mocked<PrismaService>;
+
     authService = new AuthService(
       usersRepository,
       sessionsRepository,
@@ -80,6 +94,8 @@ describe('AuthService', () => {
       emailService,
       new JwtService({ secret: 'test-secret' }),
       auditService,
+      profilesService,
+      prismaService,
     );
   });
 
@@ -90,7 +106,7 @@ describe('AuthService', () => {
       await expect(
         authService.register({
           email: 'jane@example.com',
-          password: 'password123',
+          password: 'Password123',
           name: 'Jane',
           role: 'CLIENT',
         }),
@@ -106,16 +122,17 @@ describe('AuthService', () => {
 
       const result = await authService.register({
         email: 'jane@example.com',
-        password: 'password123',
+        password: 'Password123',
         name: 'Jane',
         role: 'CLIENT',
       });
 
       expect(usersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'jane@example.com', name: 'Jane', role: 'CLIENT' }),
+        undefined,
       );
       const storedHash = usersRepository.create.mock.calls[0]![0].passwordHash;
-      expect(await argon2.verify(storedHash, 'password123')).toBe(true);
+      expect(await argon2.verify(storedHash, 'Password123')).toBe(true);
       expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
         'jane@example.com',
         expect.any(String),
@@ -123,6 +140,11 @@ describe('AuthService', () => {
       expect(result).toEqual(expect.objectContaining({ id: created.id, emailVerified: false }));
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: 'auth.register', userId: created.id }),
+      );
+      expect(profilesService.createForNewUser).toHaveBeenCalledWith(
+        created.id,
+        created.name,
+        undefined,
       );
     });
   });
@@ -132,7 +154,7 @@ describe('AuthService', () => {
       usersRepository.findByEmail.mockResolvedValue(null);
 
       await expect(
-        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+        authService.login({ email: 'jane@example.com', password: 'Password123' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
 
       expect(auditService.record).toHaveBeenCalledWith(
@@ -150,40 +172,40 @@ describe('AuthService', () => {
     });
 
     it('rejects a suspended account', async () => {
-      const passwordHash = await argon2.hash('password123');
+      const passwordHash = await argon2.hash('Password123');
       usersRepository.findByEmail.mockResolvedValue(
         buildUser({ passwordHash, status: 'SUSPENDED' }),
       );
 
       await expect(
-        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+        authService.login({ email: 'jane@example.com', password: 'Password123' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('rejects a disabled account', async () => {
-      const passwordHash = await argon2.hash('password123');
+      const passwordHash = await argon2.hash('Password123');
       usersRepository.findByEmail.mockResolvedValue(
         buildUser({ passwordHash, status: 'DISABLED' }),
       );
 
       await expect(
-        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+        authService.login({ email: 'jane@example.com', password: 'Password123' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('rejects a soft-deleted account even if status still reads ACTIVE', async () => {
-      const passwordHash = await argon2.hash('password123');
+      const passwordHash = await argon2.hash('Password123');
       usersRepository.findByEmail.mockResolvedValue(
         buildUser({ passwordHash, deletedAt: new Date() }),
       );
 
       await expect(
-        authService.login({ email: 'jane@example.com', password: 'password123' }, {}),
+        authService.login({ email: 'jane@example.com', password: 'Password123' }, {}),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('rejects an empty password against a real hash rather than throwing unhandled', async () => {
-      const passwordHash = await argon2.hash('password123');
+      const passwordHash = await argon2.hash('Password123');
       usersRepository.findByEmail.mockResolvedValue(buildUser({ passwordHash }));
 
       await expect(
@@ -191,12 +213,34 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('rejects an account whose email has not been verified', async () => {
+      const passwordHash = await argon2.hash('Password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, emailVerifiedAt: null }),
+      );
+
+      await expect(
+        authService.login({ email: 'jane@example.com', password: 'Password123' }, {}),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'auth.login.failure',
+          email: 'jane@example.com',
+          metadata: expect.objectContaining({ reason: 'email_not_verified' }),
+        }),
+      );
+      expect(sessionsRepository.create).not.toHaveBeenCalled();
+    });
+
     it('issues tokens and creates a session on success', async () => {
-      const passwordHash = await argon2.hash('password123');
-      usersRepository.findByEmail.mockResolvedValue(buildUser({ passwordHash }));
+      const passwordHash = await argon2.hash('Password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, emailVerifiedAt: new Date() }),
+      );
 
       const result = await authService.login(
-        { email: 'jane@example.com', password: 'password123' },
+        { email: 'jane@example.com', password: 'Password123' },
         {},
       );
 
@@ -220,9 +264,9 @@ describe('AuthService', () => {
         createdAt: new Date(),
       });
 
-      await expect(
-        authService.resetPassword('raw-token', 'new-password123'),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.resetPassword('raw-token', 'NewPassword123')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
 
     it('rejects a token that has already been used once', async () => {
@@ -235,9 +279,9 @@ describe('AuthService', () => {
         createdAt: new Date(),
       });
 
-      await expect(
-        authService.resetPassword('raw-token', 'new-password123'),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.resetPassword('raw-token', 'NewPassword123')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
       expect(usersRepository.updatePasswordHash).not.toHaveBeenCalled();
     });
 
@@ -245,7 +289,7 @@ describe('AuthService', () => {
       passwordResetsRepository.findByTokenHash.mockResolvedValue(null);
 
       await expect(
-        authService.resetPassword('garbage-token', 'new-password123'),
+        authService.resetPassword('garbage-token', 'NewPassword123'),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -259,7 +303,7 @@ describe('AuthService', () => {
         createdAt: new Date(),
       });
 
-      await authService.resetPassword('raw-token', 'new-password123');
+      await authService.resetPassword('raw-token', 'NewPassword123');
 
       expect(usersRepository.updatePasswordHash).toHaveBeenCalledWith('user_1', expect.any(String));
       expect(passwordResetsRepository.markUsed).toHaveBeenCalledWith('reset_1');

@@ -9,13 +9,18 @@
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "studio": "prisma studio"
+    "studio": "prisma studio",
+    "seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"commonjs\"} prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1"
   },
   "devDependencies": {
     "prisma": "^6.3.1",
+    "ts-node": "^10.9.2",
     "typescript": "6.0.3"
   }
 }

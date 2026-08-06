@@ -9,6 +9,8 @@ import { EmailService } from '../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
 import { AuditService } from '../../audit/audit.service';
 import { AUTH_EVENTS } from '../audit-events';
+import { ProfilesService } from '../../profiles/services/profiles.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { User } from '@marche/db';
@@ -19,6 +21,10 @@ const ACCESS_TOKEN_TTL = '15m';
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Used to pay the same argon2 cost on an unknown-email login attempt as a
+// known one, so response timing doesn't reveal whether an email is registered.
+const DUMMY_PASSWORD_HASH = argon2.hash('dummy-password-for-timing-parity');
 
 export interface AuthTokens {
   accessToken: string;
@@ -53,6 +59,8 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly profilesService: ProfilesService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async register(dto: RegisterDto): Promise<PublicUser> {
@@ -62,11 +70,15 @@ export class AuthService {
     }
 
     const passwordHash = await argon2.hash(dto.password);
-    const user = await this.usersRepository.create({
-      email: dto.email,
-      passwordHash,
-      name: dto.name,
-      role: dto.role,
+    // User + Profile must be created together: if the process dies between
+    // them, a user with no profile breaks every downstream profile endpoint.
+    const user = await this.prisma.client.$transaction(async (tx) => {
+      const created = await this.usersRepository.create(
+        { email: dto.email, passwordHash, name: dto.name, role: dto.role },
+        tx,
+      );
+      await this.profilesService.createForNewUser(created.id, created.name, tx);
+      return created;
     });
 
     await this.issueVerificationToken(user);
@@ -83,6 +95,9 @@ export class AuthService {
   async login(dto: LoginDto, context: RequestContext): Promise<AuthTokens & { user: PublicUser }> {
     const user = await this.usersRepository.findByEmail(dto.email);
     if (!user) {
+      // Pay the same argon2 cost as a real login attempt so response timing
+      // doesn't leak whether this email is registered.
+      await argon2.verify(await DUMMY_PASSWORD_HASH, dto.password);
       await this.auditService.record({
         eventType: AUTH_EVENTS.LOGIN_FAILURE,
         email: dto.email,
@@ -113,6 +128,17 @@ export class AuthService {
         metadata: { reason: 'account_inactive', status: user.status },
       });
       throw new UnauthorizedException('This account is not active');
+    }
+
+    if (!user.emailVerifiedAt) {
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.LOGIN_FAILURE,
+        userId: user.id,
+        email: user.email,
+        ...context,
+        metadata: { reason: 'email_not_verified' },
+      });
+      throw new UnauthorizedException('Please verify your email before logging in');
     }
 
     const tokens = await this.issueSession(user, context);

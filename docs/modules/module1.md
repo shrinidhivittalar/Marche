@@ -5,6 +5,7 @@
 Phase 1 (MVP)
 
 ---
+
 # Purpose
 
 The Identity module is responsible for authentication and account lifecycle management.

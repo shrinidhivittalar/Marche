@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsString, Matches, MinLength } from 'class-validator';
+import { PASSWORD_PATTERN, PASSWORD_PATTERN_MESSAGE } from './password.constants';
 
 export type RegisterableRole = 'CLIENT' | 'PROVIDER';
 
@@ -8,9 +9,10 @@ export class RegisterDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ minLength: 8, example: 'a-strong-password' })
+  @ApiProperty({ minLength: 10, example: 'Str0ngPassword' })
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MinLength(10, { message: 'Password must be at least 10 characters long' })
+  @Matches(PASSWORD_PATTERN, { message: PASSWORD_PATTERN_MESSAGE })
   password!: string;
 
   @ApiProperty({ example: 'Jane Doe' })
