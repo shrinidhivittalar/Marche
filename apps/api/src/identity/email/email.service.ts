@@ -14,7 +14,7 @@ export class EmailService {
   constructor() {
     const apiKey = process.env.RESEND_API_KEY;
     this.resend = apiKey ? new Resend(apiKey) : null;
-    this.from = process.env.EMAIL_FROM ?? 'Marche <onboarding@resend.dev>';
+    this.from = process.env.EMAIL_FROM ?? 'Marché <onboarding@resend.dev>';
     this.frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
   }
 
@@ -22,21 +22,18 @@ export class EmailService {
     const link = `${this.frontendOrigin}/auth/verify-email?token=${rawToken}`;
     await this.send(
       email,
-      'Verify your Marche account',
-      `<p>Welcome to Marche. Click the link below to verify your email address:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
+      'Verify your Marché account',
+      `<p>Welcome to Marché. Click the link below to verify your email address:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
       `[dev] Verification link for ${email}: ${link}`,
     );
   }
 
   async sendPasswordResetEmail(email: string, rawToken: string): Promise<void> {
-    // No frontend page consumes this route yet — the Identity module's
-    // reset-password endpoint exists and works (verified end-to-end), but
-    // nothing renders a form at this URL for a user to land on.
     const link = `${this.frontendOrigin}/auth/reset-password?token=${rawToken}`;
     await this.send(
       email,
-      'Reset your Marche password',
-      `<p>We received a request to reset your Marche password. Click the link below to choose a new one:</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, you can safely ignore this email. This link expires in 1 hour.</p>`,
+      'Reset your Marché password',
+      `<p>We received a request to reset your Marché password. Click the link below to choose a new one:</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, you can safely ignore this email. This link expires in 1 hour.</p>`,
       `[dev] Password reset link for ${email}: ${link}`,
     );
   }
@@ -52,11 +49,13 @@ export class EmailService {
       return;
     }
 
-    const { error } = await this.resend.emails.send({ from: this.from, to, subject, html });
+    const { data, error } = await this.resend.emails.send({ from: this.from, to, subject, html });
     if (error) {
       // Never let a downed email provider block registration/reset flows —
       // log it and let the caller carry on; the token still exists in the DB.
       this.logger.error(`Failed to send email to ${to}: ${error.message}`);
+      return;
     }
+    this.logger.log(`Sent "${subject}" to ${to} (Resend id: ${data?.id})`);
   }
 }

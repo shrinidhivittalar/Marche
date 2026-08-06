@@ -39,7 +39,7 @@ async function bootstrap() {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Marche API')
+    .setTitle('Marché API')
     .setDescription('Phase 1 backend — see docs/module1.md for the Identity module spec')
     .setVersion('0.1')
     .addBearerAuth()

@@ -267,6 +267,7 @@ export const AuthSignUpPage: React.FC = () => {
   const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -277,6 +278,10 @@ export const AuthSignUpPage: React.FC = () => {
     e.preventDefault();
     if (!agreeTerms) return;
     setErrorMessage(null);
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       await registerAccount({ email, password, name: fullName, role });
@@ -461,6 +466,22 @@ export const AuthSignUpPage: React.FC = () => {
                       <Eye className="w-3.5 h-3.5" />
                     )}
                   </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-ink mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface transition-all"
+                    required
+                  />
                 </div>
               </div>
 
