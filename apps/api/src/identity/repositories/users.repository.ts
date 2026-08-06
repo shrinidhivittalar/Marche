@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { User, UserRole } from '@marche/db';
+import type { Prisma, User, UserRole } from '@marche/db';
 
 @Injectable()
 export class UsersRepository {
@@ -14,8 +14,11 @@ export class UsersRepository {
     return this.prisma.client.user.findUnique({ where: { id } });
   }
 
-  create(data: { email: string; passwordHash: string; name: string; role: UserRole }): Promise<User> {
-    return this.prisma.client.user.create({ data });
+  create(
+    data: { email: string; passwordHash: string; name: string; role: UserRole },
+    tx?: Prisma.TransactionClient,
+  ): Promise<User> {
+    return (tx ?? this.prisma.client).user.create({ data });
   }
 
   markEmailVerified(userId: string): Promise<User> {

@@ -10,8 +10,12 @@ export class SkillsRepository {
     return this.prisma.client.skill.findUnique({ where: { id: skillId } });
   }
 
-  listAllSkills() {
-    return this.prisma.client.skill.findMany({ orderBy: { name: 'asc' } });
+  listAllSkills(skip: number, take: number) {
+    return this.prisma.client.skill.findMany({ orderBy: { name: 'asc' }, skip, take });
+  }
+
+  countAllSkills() {
+    return this.prisma.client.skill.count();
   }
 
   findUserSkill(profileId: string, skillId: string) {

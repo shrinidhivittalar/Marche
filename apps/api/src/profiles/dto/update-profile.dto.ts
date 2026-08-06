@@ -1,7 +1,62 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsObject, IsOptional, IsString, IsUrl, Matches, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  MaxLength,
+  registerDecorator,
+  type ValidationOptions,
+} from 'class-validator';
 
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/;
+const MAX_SOCIAL_LINKS = 10;
+const MAX_SOCIAL_LINK_KEY_LENGTH = 30;
+const MAX_SOCIAL_LINK_URL_LENGTH = 300;
+
+// class-validator has no built-in decorator for "bounded map of URLs", and
+// this is the only place that shape appears — a one-off inline check is
+// simpler than a generic map validator nobody else needs.
+function IsSocialLinks(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isSocialLinks',
+      target: object.constructor,
+      propertyName,
+      options: {
+        message:
+          `socialLinks must have at most ${MAX_SOCIAL_LINKS} entries, ` +
+          `each with a short key and a valid URL value`,
+        ...validationOptions,
+      },
+      validator: {
+        validate(value: unknown) {
+          if (value === undefined) return true;
+          if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+
+          const entries = Object.entries(value as Record<string, unknown>);
+          if (entries.length > MAX_SOCIAL_LINKS) return false;
+
+          return entries.every(([key, url]) => {
+            if (
+              typeof key !== 'string' ||
+              key.length === 0 ||
+              key.length > MAX_SOCIAL_LINK_KEY_LENGTH
+            ) {
+              return false;
+            }
+            if (typeof url !== 'string' || url.length > MAX_SOCIAL_LINK_URL_LENGTH) {
+              return false;
+            }
+            return /^https?:\/\/.+/i.test(url);
+          });
+        },
+      },
+    });
+  };
+}
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ description: 'Lowercase, alphanumeric + hyphens, 3-30 chars' })
@@ -32,7 +87,8 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(300)
   avatar?: string;
 
   @ApiPropertyOptional()
@@ -51,6 +107,7 @@ export class UpdateProfileDto {
   })
   @IsOptional()
   @IsObject()
+  @IsSocialLinks()
   socialLinks?: Record<string, string>;
 
   @ApiPropertyOptional({ enum: ['PUBLIC', 'PRIVATE'] })

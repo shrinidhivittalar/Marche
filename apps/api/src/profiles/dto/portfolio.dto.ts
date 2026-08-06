@@ -28,7 +28,8 @@ export class CreatePortfolioDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(300)
   coverImage?: string;
 
   @ApiPropertyOptional()
@@ -39,7 +40,8 @@ export class CreatePortfolioDto {
   @ApiProperty({ type: [String], description: 'At least one image URL is required' })
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one image is required' })
-  @IsUrl({}, { each: true })
+  @IsUrl({ protocols: ['https'], require_protocol: true }, { each: true })
+  @MaxLength(300, { each: true })
   imageUrls!: string[];
 }
 
@@ -63,7 +65,8 @@ export class UpdatePortfolioDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(300)
   coverImage?: string;
 
   @ApiPropertyOptional()

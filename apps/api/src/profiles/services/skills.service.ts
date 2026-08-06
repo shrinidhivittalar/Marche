@@ -2,7 +2,15 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { SkillsRepository } from '../repositories/skills.repository';
 import { assertOwnership, assertProviderRole } from '../profile-access.util';
+import type { PaginationQueryDto } from '../dto/pagination-query.dto';
 import type { Skill, UserSkill } from '@marche/db';
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 @Injectable()
 export class SkillsService {
@@ -11,8 +19,13 @@ export class SkillsService {
     private readonly skillsRepository: SkillsRepository,
   ) {}
 
-  listAvailableSkills(): Promise<Skill[]> {
-    return this.skillsRepository.listAllSkills();
+  async listAvailableSkills(pagination: PaginationQueryDto): Promise<PaginatedResult<Skill>> {
+    const { page, limit } = pagination;
+    const [items, total] = await Promise.all([
+      this.skillsRepository.listAllSkills((page - 1) * limit, limit),
+      this.skillsRepository.countAllSkills(),
+    ]);
+    return { items, total, page, limit };
   }
 
   async addSkill(userId: string, skillId: string): Promise<UserSkill> {

@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -15,6 +16,7 @@ import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { SkillsService } from '../services/skills.service';
 import { AddSkillDto } from '../dto/add-skill.dto';
+import { PaginationQueryDto } from '../dto/pagination-query.dto';
 
 @ApiTags('skills')
 @Controller('skills')
@@ -23,8 +25,8 @@ export class SkillsController {
 
   @Get()
   @ApiOperation({ summary: 'List the predefined platform skills available to add' })
-  list() {
-    return this.skillsService.listAvailableSkills();
+  list(@Query() pagination: PaginationQueryDto) {
+    return this.skillsService.listAvailableSkills(pagination);
   }
 
   @Post()

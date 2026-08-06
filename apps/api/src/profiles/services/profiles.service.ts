@@ -8,7 +8,7 @@ import { ProfilesRepository } from '../repositories/profiles.repository';
 import { assertProviderRole } from '../profile-access.util';
 import type { UpdateProfileDto } from '../dto/update-profile.dto';
 import type { UpdateAvailabilityDto } from '../dto/update-availability.dto';
-import type { Profile } from '@marche/db';
+import type { Prisma, Profile } from '@marche/db';
 
 export interface PublicProfileView {
   id: string;
@@ -46,8 +46,12 @@ export class ProfilesService {
   // Called once, at registration — see AuthService.register. Makes "user
   // exists but has no Profile" structurally impossible instead of
   // something every downstream endpoint has to defend against.
-  async createForNewUser(userId: string, displayName: string): Promise<Profile> {
-    return this.profilesRepository.create({ userId, displayName });
+  async createForNewUser(
+    userId: string,
+    displayName: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Profile> {
+    return this.profilesRepository.create({ userId, displayName }, tx);
   }
 
   async getMyProfile(userId: string) {

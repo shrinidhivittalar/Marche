@@ -50,10 +50,13 @@ describe('ProfilesService', () => {
 
       await service.createForNewUser('user_1', 'Jane');
 
-      expect(profilesRepository.create).toHaveBeenCalledWith({
-        userId: 'user_1',
-        displayName: 'Jane',
-      });
+      expect(profilesRepository.create).toHaveBeenCalledWith(
+        {
+          userId: 'user_1',
+          displayName: 'Jane',
+        },
+        undefined,
+      );
     });
   });
 

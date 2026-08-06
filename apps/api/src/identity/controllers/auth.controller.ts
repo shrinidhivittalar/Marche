@@ -135,6 +135,7 @@ export class AuthController {
   }
 
   @Get('verify-email')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Mark the account owning this token as email-verified' })
   async verifyEmail(@Query('token') token?: string) {

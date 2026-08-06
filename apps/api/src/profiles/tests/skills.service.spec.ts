@@ -17,12 +17,25 @@ describe('SkillsService', () => {
     skillsRepository = {
       findSkillById: jest.fn(),
       listAllSkills: jest.fn(),
+      countAllSkills: jest.fn(),
       findUserSkill: jest.fn(),
       findUserSkillById: jest.fn(),
       addSkill: jest.fn(),
       removeSkill: jest.fn(),
     } as unknown as jest.Mocked<SkillsRepository>;
     service = new SkillsService(profilesRepository, skillsRepository);
+  });
+
+  describe('listAvailableSkills', () => {
+    it('paginates using the requested page and limit', async () => {
+      skillsRepository.listAllSkills.mockResolvedValue([{ id: 'skill_1' }] as never);
+      skillsRepository.countAllSkills.mockResolvedValue(41);
+
+      const result = await service.listAvailableSkills({ page: 2, limit: 20 });
+
+      expect(skillsRepository.listAllSkills).toHaveBeenCalledWith(20, 20);
+      expect(result).toEqual({ items: [{ id: 'skill_1' }], total: 41, page: 2, limit: 20 });
+    });
   });
 
   describe('addSkill', () => {
