@@ -2,7 +2,6 @@
   "name": "@marche/db",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "exports": {
     ".": "./src/client.ts"
   },

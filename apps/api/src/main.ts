@@ -1,3 +1,8 @@
+// Must load before anything else is imported: identity.module.ts reads
+// process.env.JWT_ACCESS_SECRET at decoration time (JwtModule.register),
+// which runs before @nestjs/config's ConfigModule would otherwise get a
+// chance to load .env during Nest's instantiation phase.
+import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
