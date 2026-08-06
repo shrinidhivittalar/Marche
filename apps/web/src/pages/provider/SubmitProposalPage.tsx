@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   IndianRupee,
@@ -27,39 +27,55 @@ const MAX_HIGHLIGHTS = 4;
 const DESCRIPTION_TRUNCATE_LENGTH = 180;
 const DEFAULT_BID_AMOUNT = 3200;
 
-export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
-  jobId,
-}) => {
-  const { currentUser, proposals, getJobById, submitProposal, saveProposalDraft, navigate, goBack } = useApp();
+export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId }) => {
+  const {
+    currentUser,
+    proposals,
+    getJobById,
+    submitProposal,
+    saveProposalDraft,
+    navigate,
+    goBack,
+  } = useApp();
 
   const job = getJobById(jobId);
   const existingDraft = proposals.find(
-    (p) => p.jobId === jobId && p.vendorId === currentUser.id && p.status === 'draft'
+    (p) => p.jobId === jobId && p.vendorId === currentUser.id && p.status === 'draft',
   );
 
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(existingDraft?.id ?? null);
 
   // Form State — pre-filled from an existing draft proposal when resuming one
-  const [bidAmount, setBidAmount] = useState<number>(existingDraft?.bidAmount ?? job?.budgetMin ?? DEFAULT_BID_AMOUNT);
+  const [bidAmount, setBidAmount] = useState<number>(
+    existingDraft?.bidAmount ?? job?.budgetMin ?? DEFAULT_BID_AMOUNT,
+  );
   const [proposedStartTime, setProposedStartTime] = useState<string>(
-    existingDraft?.proposedStartTime ?? job?.eventStartTime ?? '18:00'
+    existingDraft?.proposedStartTime ?? job?.eventStartTime ?? '18:00',
   );
   const [proposedEndTime, setProposedEndTime] = useState<string>(
-    existingDraft?.proposedEndTime ?? job?.eventEndTime ?? '22:00'
+    existingDraft?.proposedEndTime ?? job?.eventEndTime ?? '22:00',
   );
-  const [estimatedDelivery, setEstimatedDelivery] = useState<string>(existingDraft?.estimatedDelivery ?? '48 Hours');
+  const [estimatedDelivery, setEstimatedDelivery] = useState<string>(
+    existingDraft?.estimatedDelivery ?? '48 Hours',
+  );
   const [coverLetter, setCoverLetter] = useState<string>(
     existingDraft?.coverLetter ??
-      'Hello. I have extensive experience providing top-tier event services for similar high-profile gatherings. My team will ensure full coverage, rapid asset turnaround, and professional execution.'
+      'Hello. I have extensive experience providing top-tier event services for similar high-profile gatherings. My team will ensure full coverage, rapid asset turnaround, and professional execution.',
   );
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const [selectedHighlights, setSelectedHighlights] = useState<string[]>(existingDraft?.portfolioLinks ?? []);
+  const [selectedHighlights, setSelectedHighlights] = useState<string[]>(
+    existingDraft?.portfolioLinks ?? [],
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [milestones, setMilestones] = useState<
     { title: string; amount: number; description: string }[]
   >(
-    existingDraft?.milestones.map((m) => ({ title: m.title, amount: m.amount, description: m.description })) ?? [
+    existingDraft?.milestones.map((m) => ({
+      title: m.title,
+      amount: m.amount,
+      description: m.description,
+    })) ?? [
       {
         title: 'Event On-Site Setup & Equipment Prep',
         amount: Math.round(bidAmount * 0.3),
@@ -75,7 +91,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
         amount: Math.round(bidAmount * 0.2),
         description: 'High-res color grading, editing, and commercial usage licensing.',
       },
-    ]
+    ],
   );
 
   const [msTitle, setMsTitle] = useState('');
@@ -86,18 +102,6 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
-
-  // Fixed-budget jobs only accept one bid amount — keep the field pinned to it,
-  // even if a stale draft or a later job edit left bidAmount out of sync.
-  // Called unconditionally (before the `!job` early return below) so hook order
-  // never changes between renders; guards internally for a missing job instead.
-  useEffect(() => {
-    if (!job) return;
-    if (job.budgetMode === 'fixed' && bidAmount !== job.budgetMin) {
-      setBidAmount(job.budgetMin);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.budgetMode, job?.budgetMin]);
 
   if (!job) {
     return (
@@ -112,9 +116,14 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     );
   }
 
-  const bidOutOfRange = !isBidWithinBudget(job, bidAmount);
+  // Fixed-budget jobs only accept one bid amount — derive the effective value
+  // instead of syncing bidAmount state to it, so a stale draft or a later job
+  // edit can never leave the two out of sync.
+  const effectiveBidAmount = job.budgetMode === 'fixed' ? job.budgetMin : bidAmount;
+
+  const bidOutOfRange = !isBidWithinBudget(job, effectiveBidAmount);
   const milestoneTotal = milestones.reduce((sum, m) => sum + m.amount, 0);
-  const milestonesMismatch = milestones.length > 0 && milestoneTotal !== bidAmount;
+  const milestonesMismatch = milestones.length > 0 && milestoneTotal !== effectiveBidAmount;
 
   const portfolioItems = INITIAL_PORTFOLIO_ITEMS.filter((p) => p.vendorId === currentUser.id);
 
@@ -146,7 +155,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
 
   const buildProposalData = () => ({
     jobId: job.id,
-    bidAmount,
+    bidAmount: effectiveBidAmount,
     coverLetter,
     estimatedDelivery,
     proposedStartTime: job.timingMode === 'fixed' ? proposedStartTime : undefined,
@@ -163,7 +172,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!coverLetter || !bidAmount) return;
+    if (!coverLetter || !effectiveBidAmount) return;
     if (job.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
     if (bidOutOfRange) return;
     if (milestonesMismatch) return;
@@ -179,8 +188,8 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
     }
   };
 
-  const serviceFee = Math.round(bidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;
-  const youReceive = bidAmount - serviceFee;
+  const serviceFee = Math.round(effectiveBidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;
+  const youReceive = effectiveBidAmount - serviceFee;
 
   const descriptionIsLong = job.description.length > DESCRIPTION_TRUNCATE_LENGTH;
   const displayedDescription =
@@ -232,7 +241,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                     {job.category}
                   </span>
                   <span className="text-[11px] text-ink-muted">
-                    Posted {new Date(job.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    Posted{' '}
+                    {new Date(job.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </span>
                 </div>
               </div>
@@ -273,7 +287,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 <CalendarIcon className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-ink">
-                    {formatEventSchedule(job.eventDate, job.timingMode, job.eventStartTime, job.eventEndTime)}
+                    {formatEventSchedule(
+                      job.eventDate,
+                      job.timingMode,
+                      job.eventStartTime,
+                      job.eventEndTime,
+                    )}
                   </p>
                   <p className="text-[11px] text-ink-muted">Event timing</p>
                 </div>
@@ -302,10 +321,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 {job.budgetMode === 'fixed' ? (
                   <>
                     <div className="relative max-w-xs">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
+                        ₹
+                      </span>
                       <Input
                         type="number"
-                        value={bidAmount}
+                        value={effectiveBidAmount}
                         disabled
                         className="w-full bg-bg border border-border rounded-xl pl-7 pr-9 py-2.5 text-xs text-ink font-mono font-bold disabled:opacity-100 disabled:cursor-not-allowed"
                       />
@@ -318,7 +339,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                 ) : (
                   <>
                     <div className="relative max-w-xs">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">₹</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
+                        ₹
+                      </span>
                       <Input
                         type="number"
                         step={50}
@@ -365,7 +388,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                         />
                       </div>
                       {proposedEndTime <= proposedStartTime && (
-                        <p className="text-[11px] text-rose-600 mt-1">End time must be after start time.</p>
+                        <p className="text-[11px] text-rose-600 mt-1">
+                          End time must be after start time.
+                        </p>
                       )}
                     </>
                   ) : (
@@ -394,7 +419,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
                 <div className="flex justify-between">
                   <div>
-                    <span className="text-ink">Marché Service Fee: {(MARCHE_SERVICE_FEE_RATE * 100).toFixed(0)}%</span>
+                    <span className="text-ink">
+                      Marché Service Fee: {(MARCHE_SERVICE_FEE_RATE * 100).toFixed(0)}%
+                    </span>
                     <p className="text-[10px] text-ink-muted">Fixed for the entire contract</p>
                   </div>
                   <span className="text-ink-muted shrink-0">
@@ -418,7 +445,11 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
                   Includes Marché Booking Protection.{' '}
                   <button
                     type="button"
-                    onClick={() => showToast("Booking protection details aren't wired up yet — Marché is still a frontend preview.")}
+                    onClick={() =>
+                      showToast(
+                        "Booking protection details aren't wired up yet — Marché is still a frontend preview.",
+                      )
+                    }
                     className="text-primary font-semibold hover:underline cursor-pointer"
                   >
                     Learn more
@@ -433,8 +464,11 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
         <Card className="p-8 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-ink">Milestone breakdown</h2>
-            <span className={`text-xs font-mono font-bold ${milestonesMismatch ? 'text-destructive' : 'text-primary'}`}>
-              Milestones Total: ₹{milestoneTotal.toLocaleString('en-IN')} / ₹{bidAmount.toLocaleString('en-IN')}
+            <span
+              className={`text-xs font-mono font-bold ${milestonesMismatch ? 'text-destructive' : 'text-primary'}`}
+            >
+              Milestones Total: ₹{milestoneTotal.toLocaleString('en-IN')} / ₹
+              {effectiveBidAmount.toLocaleString('en-IN')}
             </span>
           </div>
           {milestonesMismatch && (
@@ -508,9 +542,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
           <h2 className="text-lg font-bold text-ink">Additional details</h2>
 
           <div>
-            <label className="block text-xs font-semibold text-ink mb-1">
-              Cover Letter
-            </label>
+            <label className="block text-xs font-semibold text-ink mb-1">Cover Letter</label>
             <Textarea
               rows={5}
               placeholder="Explain why you are the best talent for this event, your equipment & approach, and past client successes..."
@@ -525,7 +557,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
             <label className="block text-xs font-semibold text-ink mb-1">Attachments</label>
             <button
               type="button"
-              onClick={() => showToast("File uploads aren't wired up yet — Marché is still a frontend preview.")}
+              onClick={() =>
+                showToast("File uploads aren't wired up yet — Marché is still a frontend preview.")
+              }
               className="w-full border border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 text-xs text-ink-muted hover:border-primary hover:text-primary transition-colors cursor-pointer"
             >
               <Paperclip className="w-4 h-4" />
@@ -534,7 +568,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
               </span>
             </button>
             <p className="text-[11px] text-ink-muted mt-2 leading-relaxed">
-              You may attach up to 10 files under 25 MB each. Include work samples or other documents to support your proposal. Do not attach your resume — your Marché profile is automatically forwarded to the client with your proposal.
+              You may attach up to 10 files under 25 MB each. Include work samples or other
+              documents to support your proposal. Do not attach your resume — your Marché profile is
+              automatically forwarded to the client with your proposal.
             </p>
           </div>
         </Card>
@@ -544,7 +580,8 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
           <div>
             <h2 className="text-lg font-bold text-ink">Profile highlights</h2>
             <p className="text-xs text-ink-muted mt-1">
-              Highlight relevant work from your profile to include with this proposal. You can add up to {MAX_HIGHLIGHTS} highlights.
+              Highlight relevant work from your profile to include with this proposal. You can add
+              up to {MAX_HIGHLIGHTS} highlights.
             </p>
           </div>
 
@@ -583,7 +620,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({
 
         {/* Submit Action */}
         <div className="flex items-center gap-4 pt-4">
-          <Button type="submit" size="lg" icon={Send} disabled={bidOutOfRange || milestonesMismatch}>
+          <Button
+            type="submit"
+            size="lg"
+            icon={Send}
+            disabled={bidOutOfRange || milestonesMismatch}
+          >
             Submit proposal
           </Button>
           <Button type="button" variant="ghost" onClick={handleSaveDraft}>
