@@ -9,3 +9,6 @@ dist-ssr
 !.env.example
 .DS_Store
 *.log
+
+# Local reference notes, not part of the tracked docs set
+docs/module*-status.md
