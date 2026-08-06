@@ -1,0 +1,90 @@
+// Identity module schema (docs/module1.md, docs/database1.0.0.md).
+// Additional modules (Profile, Marketplace, Jobs, ...) will extend this file
+// as their turn comes up in the phase_scope roadmap.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  PROVIDER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  DELETED
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  passwordHash    String
+  name            String
+  role            UserRole
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sessions            Session[]
+  verificationTokens  VerificationToken[]
+  passwordResets      PasswordReset[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("verification_tokens")
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_resets")
+}

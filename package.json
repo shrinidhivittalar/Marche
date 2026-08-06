@@ -14,7 +14,11 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "dev:web": "npm run dev -w @marche/web"
+    "dev:web": "npm run dev -w @marche/web",
+    "dev:api": "npm run dev -w @marche/api",
+    "db:generate": "npm run generate -w @marche/db",
+    "db:migrate": "npm run migrate:dev -w @marche/db",
+    "db:studio": "npm run studio -w @marche/db"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
