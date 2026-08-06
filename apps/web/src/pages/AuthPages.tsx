@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button, Input } from '@marche/ui';
-import { UserRole } from '../types';
+import { ApiError } from '../lib/api';
 
 function AuthBrandPanel() {
   return (
@@ -29,26 +29,39 @@ function AuthBrandPanel() {
 }
 
 export const AuthSignInPage: React.FC = () => {
-  const { navigate, goBack, setCurrentUserRole } = useApp();
-  const [email, setEmail] = useState('sarah.jenkins@luminaevents.co');
-  const [password, setPassword] = useState('password123');
+  const { navigate, goBack, loginWithCredentials, requestPasswordReset } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [forgotSent, setForgotSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalizedEmail = email.toLowerCase();
-    const isVendor =
-      normalizedEmail === 'arjun@vermaimagery.com' ||
-      normalizedEmail.includes('vendor') ||
-      normalizedEmail.includes('provider');
-    const role: UserRole = isVendor ? 'vendor' : 'client';
-    setCurrentUserRole(role);
-    if (role === 'vendor') {
-      navigate('/provider/dashboard');
-    } else {
-      navigate('/client/dashboard');
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await loginWithCredentials(email, password);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setErrorMessage('Enter your email address first, then click "Forgot password?"');
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      await requestPasswordReset(email);
+      setForgotSent(true);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
     }
   };
 
@@ -104,7 +117,7 @@ export const AuthSignInPage: React.FC = () => {
               <label className="block text-xs font-semibold text-ink">Password</label>
               <button
                 type="button"
-                onClick={() => setForgotSent(true)}
+                onClick={handleForgotPassword}
                 className="text-[11px] text-primary hover:underline cursor-pointer"
               >
                 Forgot password?
@@ -132,7 +145,13 @@ export const AuthSignInPage: React.FC = () => {
           {forgotSent && (
             <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-[11px] flex items-center gap-2">
               <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span>Password reset instructions sent to your email.</span>
+              <span>If an account exists for that email, reset instructions have been sent.</span>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="p-2.5 bg-red-50 border border-red-200 text-red-900 rounded-xl text-[11px]">
+              {errorMessage}
             </div>
           )}
 
@@ -148,8 +167,8 @@ export const AuthSignInPage: React.FC = () => {
             </label>
           </div>
 
-          <Button type="submit" size="md" className="w-full" icon={ArrowRight} iconPosition="right">
-            Sign In
+          <Button type="submit" size="md" className="w-full" icon={ArrowRight} iconPosition="right" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing in…' : 'Sign In'}
           </Button>
         </form>
 
@@ -166,7 +185,7 @@ export const AuthSignInPage: React.FC = () => {
         <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
-            onClick={handleSignIn}
+            onClick={() => setErrorMessage('Social sign-in is not available yet.')}
             className="flex items-center justify-center gap-2 px-3 py-2 bg-bg border border-border hover:bg-zinc-100 rounded-xl text-xs font-semibold text-ink transition-all cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
@@ -192,7 +211,7 @@ export const AuthSignInPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={handleSignIn}
+            onClick={() => setErrorMessage('Social sign-in is not available yet.')}
             className="flex items-center justify-center gap-2 px-3 py-2 bg-bg border border-border hover:bg-zinc-100 rounded-xl text-xs font-semibold text-ink transition-all cursor-pointer"
           >
             <svg className="w-3.5 h-3.5 fill-current text-black" viewBox="0 0 24 24">
@@ -224,26 +243,51 @@ export const AuthSignInPage: React.FC = () => {
 };
 
 export const AuthSignUpPage: React.FC = () => {
-  const { navigate, goBack, setCurrentUserRole, acceptLegalTerms } = useApp();
-  const [role, setRole] = useState<UserRole>('client');
+  const { navigate, goBack, acceptLegalTerms, registerAccount } = useApp();
+  const [role, setRole] = useState<'client' | 'vendor'>('client');
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [registered, setRegistered] = useState(false);
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreeTerms) return;
-    acceptLegalTerms({ role, context: 'signup', name: fullName, email, companyOrTitle: company });
-    setCurrentUserRole(role);
-    if (role === 'vendor') {
-      navigate('/provider/onboarding');
-    } else {
-      navigate('/client/onboarding');
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await registerAccount({ email, password, name: fullName, role });
+      acceptLegalTerms({ role, context: 'signup', name: fullName, email, companyOrTitle: company });
+      setRegistered(true);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  if (registered) {
+    return (
+      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
+        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+          <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />
+          <h1 className="text-xl font-extrabold text-ink tracking-tight">Check your email</h1>
+          <p className="text-xs text-ink-muted leading-relaxed">
+            We sent a verification link to <span className="font-semibold text-ink">{email}</span>. Verify your
+            address, then sign in to continue.
+          </p>
+          <Button size="md" className="w-full" onClick={() => navigate('/auth/signin')}>
+            Go to Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#eef2ec] flex font-sans">
@@ -419,8 +463,14 @@ export const AuthSignUpPage: React.FC = () => {
             </label>
           </div>
 
-          <Button type="submit" size="md" className="w-full" icon={ArrowRight} iconPosition="right">
-            Create Account & Get Started
+          {errorMessage && (
+            <div className="p-2.5 bg-red-50 border border-red-200 text-red-900 rounded-xl text-[11px]">
+              {errorMessage}
+            </div>
+          )}
+
+          <Button type="submit" size="md" className="w-full" icon={ArrowRight} iconPosition="right" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating account…' : 'Create Account & Get Started'}
           </Button>
         </form>
 

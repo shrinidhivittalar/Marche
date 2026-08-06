@@ -32,6 +32,16 @@ import {
 } from '../data/mockData';
 import { deriveSlotFromEvent, isVendorSlotAvailable, markVendorSlotBooked } from '../lib/availability';
 import { isBidWithinBudget } from '../lib/formatBudget';
+import {
+  BackendUser,
+  forgotPasswordRequest,
+  loginRequest,
+  logoutRequest,
+  meRequest,
+  refreshRequest,
+  registerRequest,
+  resetPasswordRequest,
+} from '../lib/api';
 
 type JobDraftInput = Omit<
   Job,
@@ -56,6 +66,13 @@ interface AppContextType {
   currentUser: User;
   setCurrentUserRole: (role: UserRole) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  registerAccount: (data: { email: string; password: string; name: string; role: 'client' | 'vendor' }) => Promise<void>;
+  loginWithCredentials: (email: string, password: string) => Promise<void>;
+  logoutAccount: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  submitPasswordReset: (token: string, newPassword: string) => Promise<void>;
   submitIdentityVerification: (data: Omit<IdentityVerification, 'status' | 'submittedAt'>) => void;
   acceptLegalTerms: (data: { role?: UserRole; context: LegalAcceptance['context']; name?: string; email?: string; companyOrTitle?: string }) => LegalAcceptance;
   route: string;
@@ -195,6 +212,35 @@ function normalizeJobBudget<T extends { budgetMode: 'fixed' | 'range'; budgetMin
   return data.budgetMode === 'fixed' ? { ...data, budgetMax: data.budgetMin } : data;
 }
 
+// The backend (Identity module) only knows CLIENT/PROVIDER/ADMIN — the
+// frontend's role vocabulary predates it and uses 'vendor' instead of
+// 'provider'. Translate at this one boundary rather than renaming it
+// throughout the app.
+function backendRoleToUserRole(role: BackendUser['role']): UserRole {
+  if (role === 'PROVIDER') return 'vendor';
+  if (role === 'ADMIN') return 'admin';
+  return 'client';
+}
+
+function userRoleToBackendRole(role: 'client' | 'vendor'): 'CLIENT' | 'PROVIDER' {
+  return role === 'vendor' ? 'PROVIDER' : 'CLIENT';
+}
+
+// The Profile module doesn't exist yet, so a real backend account has no
+// avatar/bio/rating/etc. — fill those with sensible new-account defaults,
+// the same way a freshly onboarded demo user would look.
+function buildUserFromBackend(backendUser: BackendUser): User {
+  return {
+    id: backendUser.id,
+    name: backendUser.name,
+    email: backendUser.email,
+    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(backendUser.name)}&background=random`,
+    role: backendRoleToUserRole(backendUser.role),
+    verified: backendUser.emailVerified,
+    memberSince: new Date().toISOString(),
+  };
+}
+
 function loadUserWithOverrides(role: UserRole): User {
   const base = DEMO_USERS[role];
   const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_profile_${role}`);
@@ -224,6 +270,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value === 'client' || value === 'vendor' || value === 'admin';
     return loadUserWithOverrides(isUserRole(saved) ? saved : 'client');
   });
+
+  // In-memory only — never persisted. The httpOnly refresh-token cookie is
+  // what survives a reload; this is restored via silent refresh on mount.
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { accessToken: token } = await refreshRequest();
+        const backendUser = await meRequest(token);
+        if (cancelled) return;
+        setAccessToken(token);
+        setCurrentUser(buildUserFromBackend(backendUser));
+      } catch {
+        // No valid session cookie — stay in demo mode, exactly as before.
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [route, setRoute] = useState<string>(() => {
     return window.location.pathname && window.location.pathname !== '/'
@@ -380,6 +451,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigate('/admin/audit');
       }
     }
+  };
+
+  const registerAccount = async (data: { email: string; password: string; name: string; role: 'client' | 'vendor' }) => {
+    await registerRequest({
+      email: data.email,
+      password: data.password,
+      name: data.name,
+      role: userRoleToBackendRole(data.role),
+    });
+    // Registration does not log the account in — it still needs email
+    // verification (docs/domain_rules.md), so no session is created here.
+  };
+
+  const loginWithCredentials = async (email: string, password: string) => {
+    const { accessToken: token, user } = await loginRequest({ email, password });
+    setAccessToken(token);
+    const mappedUser = buildUserFromBackend(user);
+    setCurrentUser(mappedUser);
+    navigate(mappedUser.role === 'vendor' ? '/provider/dashboard' : '/client/dashboard');
+  };
+
+  const logoutAccount = async () => {
+    if (accessToken) {
+      await logoutRequest().catch(() => {
+        // Best-effort: clear local session state even if the network call fails.
+      });
+    }
+    setAccessToken(null);
+    setCurrentUser(loadUserWithOverrides('client'));
+    navigate('/auth/signin');
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    await forgotPasswordRequest(email);
+  };
+
+  const submitPasswordReset = async (token: string, newPassword: string) => {
+    await resetPasswordRequest(token, newPassword);
   };
 
   const updateCurrentUser = (updates: Partial<User>) => {
@@ -1260,6 +1369,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         setCurrentUserRole,
         updateCurrentUser,
+        isAuthenticated: accessToken !== null,
+        authLoading,
+        registerAccount,
+        loginWithCredentials,
+        logoutAccount,
+        requestPasswordReset,
+        submitPasswordReset,
         submitIdentityVerification,
         acceptLegalTerms,
         route,
