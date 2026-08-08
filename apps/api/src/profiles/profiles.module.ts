@@ -49,6 +49,11 @@ import { LanguagesRepository } from './repositories/languages.repository';
   ],
   // ProfilesService.createForNewUser is called from AuthService at
   // registration time — exported so IdentityModule can inject it.
-  exports: [ProfilesService],
+  //
+  // ProfilesRepository is exported for MarketplaceModule, which reads
+  // profiles (never writes them) to resolve service owners and to filter
+  // discovery by location and availability. Exported rather than
+  // re-registered there so there is one instance, not two.
+  exports: [ProfilesService, ProfilesRepository],
 })
 export class ProfilesModule {}
