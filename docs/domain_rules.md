@@ -1,5 +1,11 @@
 # Domain Rules
 
+> **[Updated]** Section 4 "Services" reconciled with docs/modules/module3.md
+> — added category hierarchy, service skills, visibility/discovery rules,
+> and made the soft-delete requirement explicit. This document is
+> unversioned by design, so changes are marked inline rather than by a
+> version bump. No other section changed.
+
 > **[Updated]** Section 3 "Profiles" reconciled with docs/modules/module2.md
 > — single shared Profile per user instead of separate Provider/Client
 > Profile records; clarified that portfolio/skills/education stay
@@ -61,16 +67,45 @@ These rules will be used while designing the database, APIs, backend services, a
 
 ---
 
+<!-- ============================================================ -->
+<!-- [Module 3 — Marketplace] SECTION UPDATED                     -->
+<!-- Reconciled against docs/modules/module3.md.                  -->
+<!-- Changes start here and end at the "5. Jobs" heading.         -->
+<!-- ============================================================ -->
+
 # 4. Services
 
 ## Rules
 
 - Only Providers can create Services.
 - Every Service belongs to exactly one Category.
-- Services may contain multiple images.
+- Every Service belongs to exactly one Profile. **[New]**
+- ~~Services may contain multiple images.~~ — **[Updated]** deferred out of Phase 1. Service images are not implemented; cards use the Profile avatar and portfolio previews instead. See phase_scope1.2.0.md.
+- A Service may reference multiple predefined Skills. **[New]**
 - Services can be published or unpublished.
-- Services can be edited by their owner.
+- Services can be edited by their owner, and only by their owner. **[Updated]**
 - Deleted services should not remove historical contracts.
+- Service deletion is therefore always a soft delete. **[New]** Made explicit — the rule above states the requirement, not the mechanism.
+- Contracts must capture agreed service terms at signing time rather than reading a live Service row, since services remain editable. **[New]**
+
+## Categories **[New]**
+
+- Categories are platform-defined, not user-created.
+- Categories may nest one level deep: a parent and its children.
+- A child category may not itself have children.
+- A category that still has services or children cannot be deleted.
+- Only Administrators may create, update, or delete categories.
+
+## Discovery **[New]**
+
+- Only published services are publicly discoverable.
+- A service is discoverable only if its owning profile is public and its owning user is active.
+- Filtering by a parent category includes services in all of its children.
+- A provider must never appear more than once in a provider result set.
+- Marketplace discovery reads profile data but never writes it.
+- Ranking is deterministic; sort options the platform cannot honestly compute are rejected rather than approximated.
+
+<!-- [Module 3 — Marketplace] SECTION UPDATE ENDS HERE -->
 
 ---
 
