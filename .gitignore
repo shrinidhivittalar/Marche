@@ -14,3 +14,6 @@ dist-ssr
 docs/module*-status.md
 docs/modules/status.md
 docs/modules/*status*.md
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/.test-users.json

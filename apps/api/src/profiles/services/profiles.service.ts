@@ -59,7 +59,14 @@ export class ProfilesService {
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
-    return profile;
+
+    // Returns the nested collections, not just the base row. Without this
+    // an owner could add a skill, an experience or a language and never see
+    // it on their own profile — every sub-resource POST appeared to do
+    // nothing. Found by the frontend wiring: the public profile endpoints
+    // already used withDetails, and only this one did not.
+    const details = await this.profilesRepository.withDetails(profile.id);
+    return { ...profile, ...details };
   }
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<Profile> {

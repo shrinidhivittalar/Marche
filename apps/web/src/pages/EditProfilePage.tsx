@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileCheck2, MapPin, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { ProfileApiSection } from '../components/profile/ProfileApiSection';
 import { Badge, Button, Card, DatePicker, Input, PhoneInput, Textarea } from '@marche/ui';
 import { todayISODate } from '../lib/formatTime';
 import type { IdentityVerification } from '../types';
@@ -10,7 +11,13 @@ interface EducationEntry {
   degree?: string;
 }
 
-const DOCUMENT_TYPES: IdentityVerification['documentType'][] = ['pan', 'aadhaar', 'passport', 'drivers_license', 'other'];
+const DOCUMENT_TYPES: IdentityVerification['documentType'][] = [
+  'pan',
+  'aadhaar',
+  'passport',
+  'drivers_license',
+  'other',
+];
 
 interface ProfileDraftFields {
   companyOrTitle: string;
@@ -36,7 +43,8 @@ function loadDraft(userId: string): ProfileDraftFields | null {
 }
 
 export const EditProfilePage: React.FC = () => {
-  const { currentUser, updateCurrentUser, submitIdentityVerification, navigate } = useApp();
+  const { currentUser, updateCurrentUser, submitIdentityVerification, navigate, isAuthenticated } =
+    useApp();
   const isVendor = currentUser.role === 'vendor';
 
   const liveFields: ProfileDraftFields = {
@@ -51,7 +59,7 @@ export const EditProfilePage: React.FC = () => {
 
   const [existingDraft] = useState<ProfileDraftFields | null>(() => loadDraft(currentUser.id));
   const [showDraftBanner, setShowDraftBanner] = useState(
-    !!existingDraft && JSON.stringify(existingDraft) !== JSON.stringify(liveFields)
+    !!existingDraft && JSON.stringify(existingDraft) !== JSON.stringify(liveFields),
   );
 
   const initialFields = existingDraft ?? liveFields;
@@ -66,15 +74,26 @@ export const EditProfilePage: React.FC = () => {
   const [phone, setPhone] = useState(initialFields.phone);
   const [dateOfBirth, setDateOfBirth] = useState(initialFields.dateOfBirth);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [kycLegalName, setKycLegalName] = useState(currentUser.identityVerification?.legalName || currentUser.name);
-  const [kycDocumentType, setKycDocumentType] = useState<IdentityVerification['documentType']>(currentUser.identityVerification?.documentType || 'pan');
-  const [kycDocumentLast4, setKycDocumentLast4] = useState(currentUser.identityVerification?.documentLast4 || '');
-  const [kycAddress, setKycAddress] = useState(currentUser.identityVerification?.address || currentUser.location || '');
+  const [kycLegalName, setKycLegalName] = useState(
+    currentUser.identityVerification?.legalName || currentUser.name,
+  );
+  const [kycDocumentType, setKycDocumentType] = useState<IdentityVerification['documentType']>(
+    currentUser.identityVerification?.documentType || 'pan',
+  );
+  const [kycDocumentLast4, setKycDocumentLast4] = useState(
+    currentUser.identityVerification?.documentLast4 || '',
+  );
+  const [kycAddress, setKycAddress] = useState(
+    currentUser.identityVerification?.address || currentUser.location || '',
+  );
   const [kycError, setKycError] = useState<string | null>(null);
 
   const addEducation = () => {
     if (!eduSchool.trim()) return;
-    setEducation([...education, { school: eduSchool.trim(), degree: eduDegree.trim() || undefined }]);
+    setEducation([
+      ...education,
+      { school: eduSchool.trim(), degree: eduDegree.trim() || undefined },
+    ]);
     setEduSchool('');
     setEduDegree('');
   };
@@ -93,7 +112,7 @@ export const EditProfilePage: React.FC = () => {
     updateCurrentUser(
       isVendor
         ? { companyOrTitle, hourlyRate, location, bio, education, phone, dateOfBirth }
-        : { companyOrTitle, location, bio }
+        : { companyOrTitle, location, bio },
     );
     localStorage.removeItem(draftKey(currentUser.id));
     setShowDraftBanner(false);
@@ -101,7 +120,15 @@ export const EditProfilePage: React.FC = () => {
   };
 
   const handleSaveDraft = () => {
-    const draft: ProfileDraftFields = { companyOrTitle, hourlyRate, location, bio, education, phone, dateOfBirth };
+    const draft: ProfileDraftFields = {
+      companyOrTitle,
+      hourlyRate,
+      location,
+      bio,
+      education,
+      phone,
+      dateOfBirth,
+    };
     localStorage.setItem(draftKey(currentUser.id), JSON.stringify(draft));
     showStatus('Draft saved on this device.');
   };
@@ -133,8 +160,27 @@ export const EditProfilePage: React.FC = () => {
     showStatus('Verification submitted for review.');
   };
 
+  // With a live session the real Profiles API is the source of truth, so the
+  // mock profile form below is replaced rather than shown alongside it —
+  // two forms editing "the same" profile, one of which only writes to
+  // localStorage, is worse than either on its own. Signed-out visitors keep
+  // the original demo experience.
+  if (isAuthenticated) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-8" data-testid="profile-page">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Your profile</h1>
+          <p className="text-muted text-sm mt-1">
+            This is what clients see when they find you in the marketplace.
+          </p>
+        </div>
+        <ProfileApiSection />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8" data-testid="profile-page">
       {/* Profile Header */}
       <Card className="p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -148,13 +194,16 @@ export const EditProfilePage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-extrabold text-ink">{currentUser.name}</h1>
                 {currentUser.verified ? (
-                  <Badge variant="success" dot>Verified</Badge>
+                  <Badge variant="success" dot>
+                    Verified
+                  </Badge>
                 ) : (
                   <Badge variant="neutral">Unverified</Badge>
                 )}
               </div>
               <p className="text-xs text-ink-muted">
-                {companyOrTitle || (isVendor ? 'Add a professional headline' : 'Add a company or title')}
+                {companyOrTitle ||
+                  (isVendor ? 'Add a professional headline' : 'Add a company or title')}
               </p>
               <p className="text-xs text-ink-muted flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-zinc-400" />
@@ -164,7 +213,11 @@ export const EditProfilePage: React.FC = () => {
           </div>
 
           {isVendor && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/profile/${currentUser.id}`)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/profile/${currentUser.id}`)}
+            >
               See Public View
             </Button>
           )}
@@ -203,19 +256,36 @@ export const EditProfilePage: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-ink">Identity verification</h2>
                 <p className="text-xs text-ink-muted mt-1">
-                  Frontend-only verification intake for this preview. Real KYC still needs backend checks and a provider.
+                  Frontend-only verification intake for this preview. Real KYC still needs backend
+                  checks and a provider.
                 </p>
               </div>
             </div>
-            <Badge variant={currentUser.verified ? 'success' : currentUser.identityVerification?.status === 'pending' ? 'warning' : 'neutral'}>
-              {currentUser.verified ? 'Verified' : currentUser.identityVerification?.status === 'pending' ? 'Pending review' : 'Not submitted'}
+            <Badge
+              variant={
+                currentUser.verified
+                  ? 'success'
+                  : currentUser.identityVerification?.status === 'pending'
+                    ? 'warning'
+                    : 'neutral'
+              }
+            >
+              {currentUser.verified
+                ? 'Verified'
+                : currentUser.identityVerification?.status === 'pending'
+                  ? 'Pending review'
+                  : 'Not submitted'}
             </Badge>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Legal name</label>
-              <Input value={kycLegalName} onChange={(event) => setKycLegalName(event.target.value)} placeholder="Name on your document" />
+              <Input
+                value={kycLegalName}
+                onChange={(event) => setKycLegalName(event.target.value)}
+                placeholder="Name on your document"
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Document type</label>
@@ -238,24 +308,45 @@ export const EditProfilePage: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">Document last 4</label>
-              <Input value={kycDocumentLast4} maxLength={4} onChange={(event) => setKycDocumentLast4(event.target.value)} placeholder="Last 4 characters" />
+              <Input
+                value={kycDocumentLast4}
+                maxLength={4}
+                onChange={(event) => setKycDocumentLast4(event.target.value)}
+                placeholder="Last 4 characters"
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Residential address</label>
-              <Input value={kycAddress} onChange={(event) => setKycAddress(event.target.value)} placeholder="City, state, country" />
+              <label className="block text-xs font-semibold text-ink mb-1">
+                Residential address
+              </label>
+              <Input
+                value={kycAddress}
+                onChange={(event) => setKycAddress(event.target.value)}
+                placeholder="City, state, country"
+              />
             </div>
           </div>
 
           {currentUser.identityVerification?.submittedAt && (
             <p className="text-xs text-ink-muted flex items-center gap-1.5">
               <FileCheck2 className="w-3.5 h-3.5 text-primary" />
-              Submitted {new Date(currentUser.identityVerification.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              Submitted{' '}
+              {new Date(currentUser.identityVerification.submittedAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
             </p>
           )}
           {kycError && <p className="text-xs font-semibold text-red-600">{kycError}</p>}
 
           <div className="flex justify-end">
-            <Button type="button" variant="outline" icon={FileCheck2} onClick={handleSubmitVerification}>
+            <Button
+              type="button"
+              variant="outline"
+              icon={FileCheck2}
+              onClick={handleSubmitVerification}
+            >
               Submit Verification
             </Button>
           </div>
@@ -272,7 +363,9 @@ export const EditProfilePage: React.FC = () => {
             </label>
             <Input
               type="text"
-              placeholder={isVendor ? 'e.g. Editorial Event Photographer' : 'e.g. Lumina Luxury Events'}
+              placeholder={
+                isVendor ? 'e.g. Editorial Event Photographer' : 'e.g. Lumina Luxury Events'
+              }
               value={companyOrTitle}
               onChange={(e) => setCompanyOrTitle(e.target.value)}
               className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary focus:bg-surface"
@@ -281,9 +374,7 @@ export const EditProfilePage: React.FC = () => {
 
           {isVendor && (
             <div>
-              <label className="block text-xs font-semibold text-ink mb-1">
-                Hourly Rate (₹)
-              </label>
+              <label className="block text-xs font-semibold text-ink mb-1">Hourly Rate (₹)</label>
               <Input
                 type="number"
                 step={5}
@@ -296,9 +387,7 @@ export const EditProfilePage: React.FC = () => {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-ink mb-1">
-              Location
-            </label>
+            <label className="block text-xs font-semibold text-ink mb-1">Location</label>
             <Input
               type="text"
               placeholder="e.g. Mumbai, Maharashtra"
@@ -309,9 +398,7 @@ export const EditProfilePage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-ink mb-1">
-              About / Summary
-            </label>
+            <label className="block text-xs font-semibold text-ink mb-1">About / Summary</label>
             <Textarea
               rows={6}
               placeholder={
@@ -378,11 +465,18 @@ export const EditProfilePage: React.FC = () => {
           {isVendor && (
             <div>
               <label className="block text-xs font-semibold text-ink mb-2">Personal Details</label>
-              <p className="text-[11px] text-ink-muted mb-3">We need this to keep payments safe and simple.</p>
+              <p className="text-[11px] text-ink-muted mb-3">
+                We need this to keep payments safe and simple.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">Date of birth</label>
-                  <DatePicker value={dateOfBirth} onChange={setDateOfBirth} max={todayISODate()} captionLayout="dropdown" />
+                  <DatePicker
+                    value={dateOfBirth}
+                    onChange={setDateOfBirth}
+                    max={todayISODate()}
+                    captionLayout="dropdown"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">Phone</label>

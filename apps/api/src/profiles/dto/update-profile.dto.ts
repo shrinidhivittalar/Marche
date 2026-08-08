@@ -7,6 +7,7 @@ import {
   IsUrl,
   Matches,
   MaxLength,
+  MinLength,
   registerDecorator,
   type ValidationOptions,
 } from 'class-validator';
@@ -67,9 +68,13 @@ export class UpdateProfileDto {
   })
   username?: string;
 
+  // MinLength(1) as well as MaxLength: module2.md lists Display Name as
+  // required, but without a minimum an update could blank it out, leaving
+  // an unnamed profile in search results and on the public page.
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   displayName?: string;
 

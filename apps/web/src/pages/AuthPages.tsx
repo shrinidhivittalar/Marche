@@ -103,10 +103,13 @@ export const AuthSignInPage: React.FC = () => {
 
             <form onSubmit={handleSignIn} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Email Address</label>
+                <label htmlFor="signin-email" className="block text-xs font-semibold text-ink mb-1">
+                  Email Address
+                </label>
                 <div className="relative">
                   <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                   <Input
+                    id="signin-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -118,7 +121,9 @@ export const AuthSignInPage: React.FC = () => {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-ink">Password</label>
+                  <label htmlFor="signin-password" className="block text-xs font-semibold text-ink">
+                    Password
+                  </label>
                   <button
                     type="button"
                     onClick={handleForgotPassword}
@@ -130,6 +135,7 @@ export const AuthSignInPage: React.FC = () => {
                 <div className="relative">
                   <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                   <Input
+                    id="signin-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
