@@ -41,6 +41,17 @@
 - **Skill filter with several IDs** — `skills=a,b` means the service must match **all** of them (AND, not OR). Narrowing is the useful default for a discovery filter; an OR semantic makes adding filters _widen_ results, which reads as broken.
 - **Service with no skills** — allowed. It simply never matches a skill filter.
 
+## Tags (free text)
+
+- **Provider's skill isn't in the seeded list** — this is what tags exist for. They put it in a tag, it becomes findable by keyword search, and the filter taxonomy stays clean. Nobody hits a dead end.
+- **Tag duplicating a seeded skill** ("event photography" as a tag when the Skill exists) — allowed, not rejected. Policing it would mean fuzzy-matching every tag against the skill list, and the cost of the duplicate is nil: the service simply matches on both paths.
+- **Same tag twice on one service** — deduplicated silently on write (case-insensitive), not rejected. It is a typo, not an error worth failing a save over.
+- **Empty or whitespace-only tag** — trimmed and dropped, not rejected. Same reasoning.
+- **Unbounded tag count or length** — capped on both. Tags ride on search-result payloads, and uncapped free text is a spam and response-size surface.
+- **Tags used as a filter** — **explicitly not supported**, and this is the whole point. Free-text values fragment ("photography" / "Photography" / "photo"), so a filter built on them is quietly wrong. Tags are keyword-search and display only. If a tag becomes common enough to deserve filtering, an admin promotes it to a seeded Skill — that is the intended path, not widening tags.
+- **Tag containing markup or a script payload** — stored as-is, escaped at render, same as description. Tags are displayed on cards, so this is a real XSS surface and worth an explicit test.
+- **Tag case in search** — matching is case-insensitive, so a tag stored "Balloon Artistry" matches `q=balloon`.
+
 ## Mass assignment
 
 - **Request body carries `profileId`** — rejected. The owning profile is resolved from the authenticated caller, never read from the body, and is written after the DTO spread so it cannot be overridden even if a future DTO edit lets the field through.

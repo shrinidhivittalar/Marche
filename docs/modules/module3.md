@@ -186,6 +186,7 @@ Contains
 - Delivery Time (days)
 - Status
 - Visibility
+- Tags — **[New]** free-text, provider-authored
 
 Relationships
 
@@ -217,6 +218,35 @@ Notes
 
 `Skill` is owned by the Profiles domain (Module 2) and is referenced by
 relation here, never duplicated.
+
+---
+
+### Tags (a column on Service, not a table) **[New]**
+
+Purpose
+
+Lets a provider describe work the seeded `Skill` taxonomy doesn't cover
+("balloon artistry", "sri lankan cuisine") without a dead end.
+
+**[Decision]** Two mechanisms deliberately, with different jobs:
+
+| | `ServiceSkill` (seeded) | `tags` (free text) |
+| --- | --- | --- |
+| Who defines the values | Platform, seeded | The provider |
+| Powers filters / facets | **Yes** | **Never** |
+| Searched by `q` | Yes | Yes |
+| Displayed on the card | Yes | Yes |
+
+The reason skills are seeded at all is that filtering only works when
+everyone uses the same label — free text produces "Photography",
+"photography", "Photograpy", and a category filter that finds a third of
+the people who match. Tags stay out of filters for exactly that reason,
+so they can never degrade discovery. They are a **keyword-search and
+display** surface only.
+
+Stored as a `String[]` column on `Service`. No join table: tags are not
+shared entities, nothing references them, and nothing needs to enumerate
+them. A table would buy nothing and cost a join.
 
 ---
 
@@ -261,6 +291,7 @@ Requirements
 - Unique constraint on `Category.slug`
 - Composite unique on `(serviceId, skillId)` in ServiceSkill
 - `ServiceStatus` enum (`DRAFT` / `PUBLISHED` / `UNPUBLISHED`)
+- `tags String[]` on Service — free text, no join table **[New]**
 - Indexes on `Service.profileId`, `Service.categoryId`, `Service.status`,
   `Category.parentId`
 - Composite index supporting the default browse query
@@ -341,7 +372,7 @@ re-exposed here.
 
 | Param          | Behaviour                                                |
 | -------------- | -------------------------------------------------------- |
-| `q`            | Case-insensitive substring on service title/description  |
+| `q`            | Case-insensitive substring on title, description, tags   |
 | `category`     | Category slug; matches the category **and its children** |
 | `skills`       | Comma-separated skill IDs; service must match all        |
 | `location`     | Substring match against `Profile.location`               |
@@ -439,6 +470,8 @@ Service
 - Delivery time required, positive integer
 - Visibility and status restricted to their enums
 - Skills must reference existing `Skill` rows
+- Tags: optional; capped count per service; capped length each; trimmed;
+  empty and duplicate entries dropped rather than rejected **[New]**
 
 ---
 
@@ -613,6 +646,14 @@ Services
 - Update another provider's service → 403
 - Change visibility
 - Soft delete
+
+Tags
+
+- Create a service with tags → searchable by tag keyword
+- Duplicate and whitespace-only tags → silently cleaned, not rejected
+- Exceed tag count or length cap → rejected
+- Tag value is not accepted as a filter param
+- Tag containing markup → stored escaped, no XSS on render
 
 Mass assignment / field-level authorization
 
