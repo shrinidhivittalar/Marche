@@ -3,7 +3,7 @@ services:
     name: marche-api
     env: node
     plan: standard
-    buildCommand: npm ci && npm run db:generate && npm run build
+    buildCommand: npm ci && npm run db:generate && npm run build -w @marche/db && npm run build -w @marche/api
     startCommand: npm run start -w @marche/api
     rootDir: apps/api
     envVars:
