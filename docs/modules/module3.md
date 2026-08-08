@@ -230,12 +230,12 @@ Lets a provider describe work the seeded `Skill` taxonomy doesn't cover
 
 **[Decision]** Two mechanisms deliberately, with different jobs:
 
-| | `ServiceSkill` (seeded) | `tags` (free text) |
-| --- | --- | --- |
-| Who defines the values | Platform, seeded | The provider |
-| Powers filters / facets | **Yes** | **Never** |
-| Searched by `q` | Yes | Yes |
-| Displayed on the card | Yes | Yes |
+|                         | `ServiceSkill` (seeded) | `tags` (free text) |
+| ----------------------- | ----------------------- | ------------------ |
+| Who defines the values  | Platform, seeded        | The provider       |
+| Powers filters / facets | **Yes**                 | **Never**          |
+| Searched by `q`         | Yes                     | Yes                |
+| Displayed on the card   | Yes                     | Yes                |
 
 The reason skills are seeded at all is that filtering only works when
 everyone uses the same label — free text produces "Photography",
@@ -372,7 +372,7 @@ re-exposed here.
 
 | Param          | Behaviour                                                |
 | -------------- | -------------------------------------------------------- |
-| `q`            | Case-insensitive substring on title, description, tags   |
+| `q`            | Substring on title/description; whole-tag match on tags  |
 | `category`     | Category slug; matches the category **and its children** |
 | `skills`       | Comma-separated skill IDs; service must match all        |
 | `location`     | Substring match against `Profile.location`               |
@@ -382,6 +382,20 @@ re-exposed here.
 | `sort`         | See below                                                |
 | `page`         | Positive integer, default 1                              |
 | `limit`        | Default and maximum enforced                             |
+
+**[Corrected — verified in implementation]** `q` matches **substrings** of
+title and description, but **whole tags only**. Prisma's `String[]`
+filters compare complete elements and offer no substring operator or
+`mode: 'insensitive'`, so `q=balloon` does not surface the tag
+`balloon artistry`. Tags are normalised to lowercase on write, which is
+what makes the tag arm case-insensitive at all.
+
+True substring matching on tags would require a raw
+`EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ...)` fragment, which
+this spec rules out of the search path. Accepted rather than worked
+around: tags are an escape hatch for work the seeded Skill list doesn't
+cover, not a primary search surface, and title and description still match
+on substring. Revisit if tag search turns out to matter in practice.
 
 ## Sorting
 
@@ -756,6 +770,16 @@ Deliberate Phase 1 limitations.
   "Bengaluru", and "Bangalore, India" do not match each other. Radius
   search and location normalisation are both deferred. The UI should
   present location as a loose filter, not a precise one.
+
+- **The pagination envelope differs from the Profiles module.** Marketplace
+  returns `{ data, pagination: { page, limit, total, totalPages, hasNext,
+hasPrevious } }` as specified above; Profiles returns
+  `{ items, total, page, limit }`. Two shapes in one API is poor DX, and
+  the intended fix is to migrate Profiles onto this richer envelope — but
+  that is a breaking change to endpoints that are already shipped and
+  wired into the frontend, so it is deliberately not done as a side effect
+  of Module 3. Tracked here so the inconsistency is a known debt rather
+  than an accident.
 
 - **Marketplace loading / empty / error states are frontend concerns.**
   The backend contributes a correct empty `data` array with valid
