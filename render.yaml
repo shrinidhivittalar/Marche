@@ -3,15 +3,62 @@ services:
     name: marche-api
     env: node
     plan: standard
-    buildCommand: npm ci && npm run db:generate && npm run build -w @marche/db && npm run build -w @marche/api
+
+    # Runs from the repo root, not apps/api — this is an npm workspaces
+    # monorepo, so `npm ci` and the workspace-scoped builds need the root
+    # package-lock.json and node_modules.
+    #
+    # db:deploy runs `prisma migrate deploy`, never `migrate dev`:
+    # migrate dev can prompt, and can reset the database when it detects
+    # drift. It must never run against a deployed environment.
+    #
+    # db:seed populates the category taxonomy and the skill list. Both are
+    # reference data the app cannot function without — with no categories,
+    # a provider cannot create a service at all. The seed upserts by slug
+    # and by name, so running it on every deploy is safe and re-running it
+    # never duplicates rows or overwrites categories added by an admin.
+    buildCommand: >-
+      npm ci &&
+      npm run db:generate &&
+      npm run db:deploy &&
+      npm run db:seed &&
+      npm run build -w @marche/db &&
+      npm run build -w @marche/api
     startCommand: npm run start -w @marche/api
-    rootDir: apps/api
+
+    healthCheckPath: /categories
+
     envVars:
       - key: NODE_ENV
         value: production
+
+      # Postgres connection string (Neon). Prisma reads this at runtime and
+      # during the migrate/seed steps above.
       - key: DATABASE_URL
         sync: false
-      - key: JWT_SECRET
+
+      # Signs and verifies access tokens. identity/strategies/jwt.strategy.ts
+      # throws on boot if this is missing, so a wrong or absent value fails
+      # the deploy loudly rather than silently disabling auth.
+      #
+      # There is deliberately no refresh-token secret: refresh tokens are
+      # random strings stored as hashes in the sessions table, not JWTs.
+      - key: JWT_ACCESS_SECRET
         sync: false
-      - key: JWT_REFRESH_SECRET
+
+      # Exact origin of the deployed frontend, no trailing slash. CORS uses
+      # credentials, so the browser rejects a wildcard and rejects any
+      # mismatch — a trailing slash here is enough to break every request.
+      - key: FRONTEND_ORIGIN
         sync: false
+
+      # Transactional email for verification and password-reset links.
+      # Without RESEND_API_KEY the links are logged instead of sent, which
+      # means nobody can verify their email and therefore nobody can log in.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+      - key: LOG_LEVEL
+        value: info

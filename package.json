@@ -22,6 +22,7 @@
     "dev:api": "npm run dev -w @marche/api",
     "db:generate": "npm run generate -w @marche/db",
     "db:migrate": "npm run migrate:dev -w @marche/db",
+    "db:deploy": "npm run migrate:deploy -w @marche/db",
     "db:studio": "npm run studio -w @marche/db",
     "db:seed": "npm run seed -w @marche/db",
     "prepare": "husky"
