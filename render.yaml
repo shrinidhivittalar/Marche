@@ -3,7 +3,7 @@ services:
     name: marche-api
     env: node
     plan: standard
-    buildCommand: npm ci && npm run db:generate && npm run build -- --filter='@marche/api'
+    buildCommand: npm ci && npm run db:generate && npm run build
     startCommand: npm run start -w @marche/api
     rootDir: apps/api
     envVars:
