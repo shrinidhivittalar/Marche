@@ -8,6 +8,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
 import { IdentityModule } from './identity/identity.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ProfilesModule } from './profiles/profiles.module';
     AuditModule,
     IdentityModule,
     ProfilesModule,
+    MarketplaceModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
