@@ -9,6 +9,7 @@
 ## Category
 
 - **Deleting a category that has services** — rejected, not cascaded. Cascading would silently delete providers' listings. The delete endpoint returns a 409 listing the blocking service count; the admin must move or remove those services first.
+- **[Verified against the DB]** The service layer must **pre-check** before deleting, not catch a Prisma error code. Both `RESTRICT` violations (`categories_parentId_fkey`, `services_categoryId_fkey`) surface as an **unmapped `PrismaClientUnknownRequestError`** with no `code` — not `P2003`. Catching `P2003` would silently never match and turn an intended 409 into a 500.
 - **Deleting a category that has children** — rejected for the same reason, even if the parent itself has no services directly attached.
 - **Category soft-deleted while services reference it** — soft delete hides it from the public tree and from filter options, but existing services keep their `categoryId`. Those services stop being discoverable by category browse while remaining reachable by search. Acceptable and recoverable; a hard delete would not be.
 - **Child assigned a child (three levels)** — rejected at validation. The spec fixes hierarchy at two levels so every category query stays a single join rather than a recursive CTE.
