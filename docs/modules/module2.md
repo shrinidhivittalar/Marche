@@ -783,3 +783,13 @@ Stage 4 → Public Profile + Portfolio
 Stage 5 → Testing
 
 Stage 6 → Documentation
+
+---
+
+# Known Gaps / Pending UI Changes
+
+Identified during a post-implementation audit. Neither blocks Phase 1 sign-off — both are deliberate placeholders pending other modules — but both need UI-side follow-up once unblocked.
+
+- **Professional Statistics are hardcoded, not real.** `GET /profiles/:id` and `GET /u/:username` currently return `{ completedProjects: 0, averageRating: null, totalReviews: 0 }` for every profile, regardless of the provider's actual history. The spec's `ProfileStatistics` table (Completed Projects, Jobs In Progress, Average Rating, Total Reviews, Member Since, Response Rate, Response Time) was not built as real, system-computed data because it depends on the Jobs/Contracts and Reviews modules, which don't exist yet. UI should treat these fields as not-yet-meaningful (e.g. avoid prominently displaying "0 completed projects" as if it's a real signal) until this is wired up post-Jobs/Reviews.
+
+- **Portfolio "images" are pasted URLs, not real file uploads.** The spec calls for file upload validation and secure media storage. What's implemented instead is a plain `https://` URL text field (validated for scheme + length only) — there is no upload pipeline, no server-side storage, and no file-type/size validation. The UI should present this as "paste an image link" rather than a file picker/upload widget until real upload support is added.
