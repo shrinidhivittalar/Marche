@@ -98,7 +98,10 @@ export interface ApiProfile {
   displayName: string;
   headline: string | null;
   bio: string | null;
+  /** Signed and short-lived, generated per read. Never send this back. */
   avatar: string | null;
+  /** What a save actually sets. Null removes the picture. */
+  avatarMediaId: string | null;
   location: string | null;
   timezone: string | null;
   visibility: Visibility;
@@ -152,7 +155,9 @@ export interface ApiPortfolio {
   category: string | null;
   coverImage: string | null;
   projectDate: string | null;
-  images?: { id: string; url: string }[];
+  // Signed at read time from the stored file; null when the media was
+  // deleted or never finished uploading.
+  images?: { id: string; url: string | null }[];
 }
 
 export interface ApiSkill {
@@ -192,6 +197,10 @@ export interface ApiServiceCard {
   };
   skills: { skill: { id: string; name: string } }[];
   status?: ServiceStatus;
+  // `id` identifies the attachment (what a delete targets); `mediaId`
+  // identifies the underlying file (what an upload returns). The two are
+  // not interchangeable.
+  images?: { id: string; mediaId: string; sortOrder: number; url: string | null }[];
 }
 
 export interface ApiProviderCard {
@@ -221,7 +230,7 @@ export const profilesApi = {
         | 'displayName'
         | 'headline'
         | 'bio'
-        | 'avatar'
+        | 'avatarMediaId'
         | 'location'
         | 'timezone'
         | 'username'
@@ -367,4 +376,17 @@ export const marketplaceApi = {
 
   deleteService: (token: string, id: string) =>
     apiFetch<void>(`/services/${id}`, token, { method: 'DELETE' }),
+
+  // Images are attached one call at a time rather than as part of the
+  // service body: the file is already uploaded by the time it is attached,
+  // so there is nothing to batch.
+  addServiceImage: (token: string, serviceId: string, mediaId: string) =>
+    apiFetch<{ id: string; mediaId: string; sortOrder: number }>(
+      `/services/${serviceId}/images`,
+      token,
+      { method: 'POST', body: JSON.stringify({ mediaId }) },
+    ),
+
+  removeServiceImage: (token: string, serviceId: string, imageId: string) =>
+    apiFetch<void>(`/services/${serviceId}/images/${imageId}`, token, { method: 'DELETE' }),
 };

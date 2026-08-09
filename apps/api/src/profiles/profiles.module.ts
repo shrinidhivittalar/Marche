@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MediaModule } from '../media/media.module';
 import { ProfilesController } from './controllers/profiles.controller';
 import { PortfolioController } from './controllers/portfolio.controller';
 import { ExperienceController } from './controllers/experience.controller';
@@ -22,6 +23,9 @@ import { SkillsRepository } from './repositories/skills.repository';
 import { LanguagesRepository } from './repositories/languages.repository';
 
 @Module({
+  // Profiles attaches uploaded files to portfolio pieces and avatars, so it
+  // needs MediaService's ownership checks. It never touches storage itself.
+  imports: [MediaModule],
   controllers: [
     ProfilesController,
     PortfolioController,

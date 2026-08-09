@@ -41,6 +41,7 @@ model User {
   verificationTokens VerificationToken[]
   passwordResets     PasswordReset[]
   profile            Profile?
+  media              Media[]
 
   @@index([email])
   @@map("users")
@@ -165,7 +166,11 @@ model Profile {
   displayName String
   headline    String?
   bio         String?
-  avatar      String?
+  // Uploaded file rather than a pasted URL. SetNull so deleting the image
+  // leaves the profile intact and simply avatar-less, which is a real state
+  // — unlike a portfolio piece, a profile without a picture still works.
+  avatarMediaId String?
+  avatarMedia   Media?  @relation(fields: [avatarMediaId], references: [id], onDelete: SetNull)
   location    String?
   timezone    String?
   socialLinks Json?
@@ -215,14 +220,24 @@ model Portfolio {
   @@map("portfolio_items")
 }
 
+// Now a join between a portfolio piece and an uploaded file, rather than a
+// pasted URL. No URL is stored: one is signed at read time from the media's
+// objectKey, so moving bucket or provider never means rewriting rows.
 model PortfolioImage {
   id          String    @id @default(uuid())
   portfolioId String
   portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  url         String
+
+  // Restrict, not cascade: deleting a file that is still on someone's
+  // published portfolio should fail loudly rather than silently blank the
+  // piece. The owner detaches it first.
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
 
+  // The same file twice in one piece is a mistake, not a feature.
+  @@unique([portfolioId, mediaId])
   @@index([portfolioId])
   @@map("portfolio_images")
 }
@@ -419,12 +434,35 @@ model Service {
   deletedAt DateTime?
 
   skills ServiceSkill[]
+  images ServiceImage[]
 
   @@index([profileId])
   @@index([categoryId])
   // Serves the default browse query: published services, newest first.
   @@index([status, createdAt])
   @@map("services")
+}
+
+// Deferred out of Module 3 because image handling was pasted-URL-only at
+// the time (phase_scope1.2.0.md). The upload pipeline is what makes this
+// worth building, so it lands here rather than as a third URL-string table.
+model ServiceImage {
+  id        String  @id @default(uuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  // Which image leads on the card. Explicit rather than "first by
+  // createdAt", so reordering does not depend on insertion order.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([serviceId, mediaId])
+  @@index([serviceId])
+  @@map("service_images")
 }
 
 // Maps a Service to the seeded, platform-wide Skill list. These are the
@@ -445,4 +483,75 @@ model ServiceSkill {
   // is the direction the skill filter actually queries.
   @@index([skillId])
   @@map("service_skills")
+}
+
+// Media / upload pipeline (shared infrastructure, not a business module).
+//
+// One table serving Portfolio, Service images and — once Module 4 exists —
+// Job and Proposal attachments. Media deliberately knows nothing about any
+// of them: business entities hold a mediaId, never the reverse. That is
+// what stops this becoming a dumping ground that every new module has to
+// extend.
+//
+// The database stores ownership and metadata. The bytes live in object
+// storage, and nothing in this schema references a URL — a URL is derived
+// from objectKey at read time, so moving buckets or providers never
+// requires a data migration.
+
+enum MediaStatus {
+  PENDING
+  UPLOADED
+  FAILED
+  DELETED
+}
+
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Media {
+  id String @id @default(uuid())
+
+  // Not a cascade delete to User: a soft-deleted account's media must not
+  // vanish from under a published listing mid-request. Cleanup is a
+  // deliberate action, not a side effect of account deletion.
+  ownerUserId String
+  owner       User   @relation(fields: [ownerUserId], references: [id])
+
+  // Server-generated, always users/{userId}/{uuid}. The client never picks
+  // a path — an attacker-chosen key is how you get collisions and traversal.
+  // Unique so a retry can never quietly overwrite someone else's object.
+  objectKey String @unique
+
+  // Metadata only. Never used as a storage path, and never trusted: the
+  // declared mimeType is what the client claims, and is re-verified against
+  // the file's actual signature before the row reaches UPLOADED.
+  originalFileName String
+  mimeType         String
+  sizeBytes        Int
+
+  // PENDING until the object is confirmed present in storage. Anything that
+  // never completes is an abandoned upload, not a file — attaching one would
+  // put a broken image on a public profile.
+  status MediaStatus @default(PENDING)
+
+  // Phase 1 issues PUBLIC only. PRIVATE lands with Job and Proposal
+  // attachments in Module 4, when there is finally something worth
+  // protecting; the column exists now so that is a behaviour change rather
+  // than a migration.
+  visibility MediaVisibility @default(PUBLIC)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  portfolioImages PortfolioImage[]
+  serviceImages   ServiceImage[]
+  avatarForProfiles Profile[]
+
+  @@index([ownerUserId])
+  // Serves the orphan sweep: stale PENDING rows, oldest first.
+  @@index([status, createdAt])
+  @@map("media")
 }

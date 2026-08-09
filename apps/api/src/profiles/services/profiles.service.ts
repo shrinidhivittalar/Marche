@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProfilesRepository } from '../repositories/profiles.repository';
+import { MediaService } from '../../media/media.service';
 import { assertProviderRole } from '../profile-access.util';
 import type { UpdateProfileDto } from '../dto/update-profile.dto';
 import type { UpdateAvailabilityDto } from '../dto/update-availability.dto';
@@ -41,7 +42,10 @@ export interface ProfileStatistics {
 
 @Injectable()
 export class ProfilesService {
-  constructor(private readonly profilesRepository: ProfilesRepository) {}
+  constructor(
+    private readonly profilesRepository: ProfilesRepository,
+    private readonly mediaService: MediaService,
+  ) {}
 
   // Called once, at registration — see AuthService.register. Makes "user
   // exists but has no Profile" structurally impossible instead of
@@ -52,6 +56,30 @@ export class ProfilesService {
     tx?: Prisma.TransactionClient,
   ): Promise<Profile> {
     return this.profilesRepository.create({ userId, displayName }, tx);
+  }
+
+  /**
+   * Replaces each portfolio image's stored media reference with a signed,
+   * short-lived URL. Nothing persists a URL, so this is the only point at
+   * which an image becomes viewable — and the signature expires, which a
+   * stored link never would.
+   */
+  private async withSignedImages(items: unknown[]): Promise<unknown[]> {
+    return Promise.all(
+      (items as { images?: { media?: { objectKey: string; status: string } | null }[] }[]).map(
+        async (item) => ({
+          ...item,
+          images: await Promise.all(
+            // media is dropped rather than spread: objectKey is the storage
+            // path and no client needs it.
+            (item.images ?? []).map(async ({ media, ...image }) => ({
+              ...image,
+              url: await this.mediaService.signViewUrl(media),
+            })),
+          ),
+        }),
+      ),
+    );
   }
 
   // Returns the nested collections, not just the base row. Without them an
@@ -66,7 +94,11 @@ export class ProfilesService {
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
-    return profile;
+    return {
+      ...profile,
+      avatar: await this.mediaService.signViewUrl(profile.avatarMedia),
+      portfolioItems: await this.withSignedImages(profile.portfolioItems ?? []),
+    };
   }
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<Profile> {
@@ -83,6 +115,14 @@ export class ProfilesService {
       if (existing) {
         throw new ConflictException('That username is already taken');
       }
+    }
+
+    // Same rule as a portfolio image: the file must belong to this user and
+    // have finished uploading. Without it, anyone who learns a media id can
+    // wear someone else's picture. Null is allowed through untouched — it
+    // clears the avatar rather than setting one.
+    if (dto.avatarMediaId) {
+      await this.mediaService.assertAttachable(userId, dto.avatarMediaId);
     }
 
     return this.profilesRepository.update(profile.id, dto);
@@ -141,12 +181,14 @@ export class ProfilesService {
       displayName: profile.displayName,
       headline: profile.headline,
       bio: profile.bio,
-      avatar: profile.avatar,
+      // Signed at read time from the stored objectKey. No URL is persisted,
+      // so moving bucket or provider never means rewriting profile rows.
+      avatar: await this.mediaService.signViewUrl(profile.avatarMedia),
       location: profile.location,
       role: profile.user.role,
       verified: profile.verifiedAt !== null,
       availabilityStatus: profile.availabilityStatus,
-      portfolioItems: details?.portfolioItems ?? [],
+      portfolioItems: await this.withSignedImages(details?.portfolioItems ?? []),
       experiences: details?.experiences ?? [],
       educations: details?.educations ?? [],
       certifications: details?.certifications ?? [],

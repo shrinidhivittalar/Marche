@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { ServicesService } from '../services/services.service';
 import { CreateServiceDto, ServiceVisibilityDto, UpdateServiceDto } from '../dto/service.dto';
 import { SearchServicesDto } from '../dto/search-services.dto';
+import { AttachImageDto } from '../dto/attach-image.dto';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 
 @ApiTags('services')
@@ -90,6 +91,36 @@ export class ServicesController {
     @Body() dto: ServiceVisibilityDto,
   ) {
     return this.servicesService.setVisibility(user.id, id, dto);
+  }
+
+  // Images live under the service that owns them, so the route carries both
+  // ids and neither can be checked in isolation.
+  @Post(':id/images')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Attach an uploaded image to your own service',
+    description: 'The media must belong to you and have finished uploading.',
+  })
+  @UseGuards(JwtAuthGuard)
+  addImage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: AttachImageDto,
+  ) {
+    return this.servicesService.addImage(user.id, id, dto.mediaId);
+  }
+
+  @Delete(':id/images/:imageId')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove an image from your own service' })
+  @UseGuards(JwtAuthGuard)
+  async removeImage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ) {
+    await this.servicesService.removeImage(user.id, id, imageId);
   }
 
   @Delete(':id')

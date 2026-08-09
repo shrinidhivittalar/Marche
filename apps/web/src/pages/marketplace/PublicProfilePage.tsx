@@ -174,28 +174,35 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
         <Card className="p-8 space-y-4" data-testid="public-portfolio">
           <h2 className="text-lg font-semibold text-ink">Portfolio</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {portfolio.map((item) => (
-              <div
-                key={item.id}
-                data-testid="public-portfolio-item"
-                className="rounded-lg border border-border overflow-hidden"
-              >
-                {item.images?.[0] && (
-                  <img
-                    src={item.images[0].url}
-                    alt={item.title}
-                    className="w-full h-40 object-cover"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
-                <div className="p-4 space-y-1">
-                  <p className="font-medium text-ink">{item.title}</p>
-                  <p className="text-xs text-muted">{item.description}</p>
+            {portfolio.map((item) => {
+              // The first image that actually has a signed URL. One can be
+              // null when its file was deleted, and skipping those beats
+              // rendering a broken tile.
+              const cover = item.images?.find((image) => image.url)?.url;
+
+              return (
+                <div
+                  key={item.id}
+                  data-testid="public-portfolio-item"
+                  className="rounded-lg border border-border overflow-hidden"
+                >
+                  {cover && (
+                    <img
+                      src={cover}
+                      alt={item.title}
+                      className="w-full h-40 object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div className="p-4 space-y-1">
+                    <p className="font-medium text-ink">{item.title}</p>
+                    <p className="text-xs text-muted">{item.description}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

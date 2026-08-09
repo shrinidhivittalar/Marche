@@ -11,6 +11,7 @@ describe('PortfolioService', () => {
   let profilesRepository: jest.Mocked<ProfilesRepository>;
   let portfolioRepository: jest.Mocked<PortfolioRepository>;
   let service: PortfolioService;
+  let mediaService: { assertAttachable: jest.Mock };
 
   beforeEach(() => {
     profilesRepository = { findByUserId: jest.fn() } as unknown as jest.Mocked<ProfilesRepository>;
@@ -20,7 +21,10 @@ describe('PortfolioService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
     } as unknown as jest.Mocked<PortfolioRepository>;
-    service = new PortfolioService(profilesRepository, portfolioRepository);
+    // Every attached file is verified as the caller's own and fully
+    // uploaded before a portfolio piece is written.
+    mediaService = { assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }) };
+    service = new PortfolioService(profilesRepository, portfolioRepository, mediaService as never);
   });
 
   describe('create', () => {
@@ -30,7 +34,7 @@ describe('PortfolioService', () => {
       );
 
       await expect(
-        service.create('user_1', { title: 't', description: 'd', imageUrls: ['https://x/1.png'] }),
+        service.create('user_1', { title: 't', description: 'd', mediaIds: ['media_1'] }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(portfolioRepository.create).not.toHaveBeenCalled();
     });
@@ -42,11 +46,11 @@ describe('PortfolioService', () => {
       await service.create('user_1', {
         title: 't',
         description: 'd',
-        imageUrls: ['https://x/1.png'],
+        mediaIds: ['media_1'],
       });
 
       expect(portfolioRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ profileId: 'profile_1', imageUrls: ['https://x/1.png'] }),
+        expect.objectContaining({ profileId: 'profile_1', mediaIds: ['media_1'] }),
       );
     });
   });
@@ -86,6 +90,39 @@ describe('PortfolioService', () => {
       await service.remove('user_1', 'p_1');
 
       expect(portfolioRepository.softDelete).toHaveBeenCalledWith('p_1');
+    });
+  });
+
+  describe('media ownership', () => {
+    beforeEach(() => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+    });
+
+    // The attack this prevents: provider B putting provider A's photograph
+    // on their own portfolio by passing A's media id.
+    it('refuses to attach a file the caller does not own', async () => {
+      mediaService.assertAttachable.mockRejectedValue(new ForbiddenException());
+
+      await expect(
+        service.create('user_1', {
+          title: 't',
+          description: 'd',
+          mediaIds: ['someone-elses-media'],
+        } as never),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      // Nothing is written when a single file fails the check.
+      expect(portfolioRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('checks every file, not just the first', async () => {
+      await service.create('user_1', {
+        title: 't',
+        description: 'd',
+        mediaIds: ['media_1', 'media_2', 'media_3'],
+      } as never);
+
+      expect(mediaService.assertAttachable).toHaveBeenCalledTimes(3);
     });
   });
 });

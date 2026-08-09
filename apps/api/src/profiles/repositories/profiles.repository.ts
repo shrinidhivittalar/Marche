@@ -19,7 +19,10 @@ export class ProfilesRepository {
   findByUserId(userId: string) {
     return this.prisma.client.profile.findFirst({
       where: { userId, deletedAt: null },
-      include: { user: { select: { role: true } } },
+      include: {
+        user: { select: { role: true } },
+        avatarMedia: { select: { objectKey: true, status: true } },
+      },
     });
   }
 
@@ -34,9 +37,12 @@ export class ProfilesRepository {
       where: { userId, deletedAt: null },
       include: {
         user: { select: { role: true } },
+        avatarMedia: { select: { objectKey: true, status: true } },
         portfolioItems: {
           where: { deletedAt: null },
-          include: { images: true },
+          include: {
+            images: { include: { media: { select: { objectKey: true, status: true } } } },
+          },
           take: MAX_NESTED_ITEMS,
         },
         experiences: { take: MAX_NESTED_ITEMS },
@@ -51,14 +57,20 @@ export class ProfilesRepository {
   findById(id: string) {
     return this.prisma.client.profile.findFirst({
       where: { id, deletedAt: null },
-      include: { user: { select: { role: true } } },
+      include: {
+        user: { select: { role: true } },
+        avatarMedia: { select: { objectKey: true, status: true } },
+      },
     });
   }
 
   findByUsername(username: string) {
     return this.prisma.client.profile.findFirst({
       where: { username, deletedAt: null },
-      include: { user: { select: { role: true } } },
+      include: {
+        user: { select: { role: true } },
+        avatarMedia: { select: { objectKey: true, status: true } },
+      },
     });
   }
 
@@ -83,7 +95,9 @@ export class ProfilesRepository {
       include: {
         portfolioItems: {
           where: { deletedAt: null },
-          include: { images: true },
+          include: {
+            images: { include: { media: { select: { objectKey: true, status: true } } } },
+          },
           take: MAX_NESTED_ITEMS,
         },
         experiences: { take: MAX_NESTED_ITEMS },

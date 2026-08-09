@@ -4,6 +4,7 @@ import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
+import { ImageUploader } from '../../components/media/ImageUploader';
 import { marketplaceApi, profilesApi, type ApiServiceCard } from '../../lib/marketplace-api';
 
 // Provider-side management for Module 3: create a listing, publish or
@@ -263,6 +264,7 @@ export const MyServicesPage: React.FC = () => {
               {editingId === s.id ? (
                 <EditServiceForm
                   service={s}
+                  token={token as string}
                   busy={busy}
                   onCancel={() => setEditingId(null)}
                   onSave={(body) =>
@@ -270,6 +272,21 @@ export const MyServicesPage: React.FC = () => {
                       () => marketplaceApi.updateService(token as string, s.id, body),
                       'Service updated.',
                     ).then(() => setEditingId(null))
+                  }
+                  // Not folded into Save: the image is already attached by
+                  // the time these resolve, so the editor stays open and the
+                  // refetched list is what confirms it.
+                  onAttachImage={(mediaId) =>
+                    void run(
+                      () => marketplaceApi.addServiceImage(token as string, s.id, mediaId),
+                      'Image added.',
+                    )
+                  }
+                  onDetachImage={(imageId) =>
+                    void run(
+                      () => marketplaceApi.removeServiceImage(token as string, s.id, imageId),
+                      'Image removed.',
+                    )
                   }
                 />
               ) : (
@@ -367,16 +384,75 @@ export const MyServicesPage: React.FC = () => {
 //
 // Status is deliberately absent: it moves through the publish/unpublish
 // buttons, which is the one auditable path for a visibility change.
+// Matches ServicesService.MAX_IMAGES. The cap exists because these ride on
+// every card of a browse page, unlike a portfolio a client opens on purpose.
+const MAX_SERVICE_IMAGES = 8;
+
+// Images are not part of the edit form's body. They have their own
+// endpoints and are attached the moment they upload, so what is rendered
+// here is the saved server state rather than a draft — there is nothing to
+// discard on Cancel.
+function ServiceImagesEditor({
+  service,
+  token,
+  disabled,
+  onAttach,
+  onDetach,
+}: {
+  service: ApiServiceCard;
+  token: string;
+  disabled: boolean;
+  onAttach: (mediaId: string) => void;
+  onDetach: (imageId: string) => void;
+}) {
+  const attached = service.images ?? [];
+  const images = attached.map((image) => ({
+    mediaId: image.mediaId,
+    fileName: 'Service image',
+    url: image.url ?? undefined,
+  }));
+
+  return (
+    <ImageUploader
+      token={token}
+      images={images}
+      max={MAX_SERVICE_IMAGES}
+      disabled={disabled}
+      label="Listing images"
+      onChange={(next) => {
+        // The uploader hands back the whole list, so what changed is a
+        // diff. Matching on mediaId and translating to the attachment id is
+        // what keeps a delete pointed at this listing's row rather than the
+        // underlying file, which other listings may also use.
+        const added = next.find((image) => !attached.some((a) => a.mediaId === image.mediaId));
+        if (added) {
+          onAttach(added.mediaId);
+          return;
+        }
+
+        const removed = attached.find((a) => !next.some((image) => image.mediaId === a.mediaId));
+        if (removed) onDetach(removed.id);
+      }}
+    />
+  );
+}
+
 function EditServiceForm({
   service,
+  token,
   busy,
   onCancel,
   onSave,
+  onAttachImage,
+  onDetachImage,
 }: {
   service: ApiServiceCard;
+  token: string;
   busy: boolean;
   onCancel: () => void;
   onSave: (body: Record<string, unknown>) => void;
+  onAttachImage: (mediaId: string) => void;
+  onDetachImage: (imageId: string) => void;
 }) {
   const [title, setTitle] = useState(service.title);
   const [description, setDescription] = useState(service.description ?? '');
@@ -427,6 +503,15 @@ function EditServiceForm({
           placeholder="Tags, comma separated"
         />
       </div>
+
+      <ServiceImagesEditor
+        service={service}
+        token={token}
+        disabled={busy}
+        onAttach={onAttachImage}
+        onDetach={onDetachImage}
+      />
+
       <div className="flex items-center gap-2">
         <Button
           disabled={busy}

@@ -51,13 +51,26 @@ const CARD_FIELDS = {
       username: true,
       displayName: true,
       headline: true,
-      avatar: true,
+      // status as well as objectKey: an avatar that never finished
+      // uploading must not be signed into a card.
+      avatarMedia: { select: { objectKey: true, status: true } },
       location: true,
       availabilityStatus: true,
       verifiedAt: true,
     },
   },
   skills: { select: { skill: { select: { id: true, name: true } } } },
+  images: {
+    // mediaId travels to the client so the editor can match an attached
+    // image back to the file it uploaded; objectKey never does.
+    select: {
+      id: true,
+      sortOrder: true,
+      mediaId: true,
+      media: { select: { objectKey: true, status: true } },
+    },
+    orderBy: { sortOrder: 'asc' },
+  },
 } satisfies Prisma.ServiceSelect;
 
 @Injectable()
@@ -162,7 +175,9 @@ export class ServicesRepository {
         username: true,
         displayName: true,
         headline: true,
-        avatar: true,
+        // status as well as objectKey: an avatar that never finished
+        // uploading must not be signed into a card.
+        avatarMedia: { select: { objectKey: true, status: true } },
         location: true,
         availabilityStatus: true,
         verifiedAt: true,
@@ -185,6 +200,22 @@ export class ServicesRepository {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  // ---------- service images ----------
+
+  addImage(serviceId: string, mediaId: string, sortOrder: number) {
+    return this.prisma.client.serviceImage.create({ data: { serviceId, mediaId, sortOrder } });
+  }
+
+  removeImage(serviceId: string, imageId: string) {
+    // Scoped by serviceId as well as imageId: checking the image id alone
+    // would let any owner delete any other listing's image.
+    return this.prisma.client.serviceImage.deleteMany({ where: { id: imageId, serviceId } });
+  }
+
+  countImages(serviceId: string) {
+    return this.prisma.client.serviceImage.count({ where: { serviceId } });
   }
 
   // ---------- service skills ----------
