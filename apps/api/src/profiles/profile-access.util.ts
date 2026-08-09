@@ -11,6 +11,16 @@ export function assertProviderRole(role: string): void {
   }
 }
 
+// The mirror of the above, for the client side of the marketplace. Posting
+// a requirement is a Client action: a Provider doing it would be hiring
+// through an account built for being hired, and the two sides of a job
+// must stay distinguishable for Module 5.
+export function assertClientRole(role: string): void {
+  if (role !== 'CLIENT') {
+    throw new ForbiddenException('This is only available to Clients');
+  }
+}
+
 export function assertOwnership(resourceProfileId: string, callerProfileId: string): void {
   if (resourceProfileId !== callerProfileId) {
     throw new ForbiddenException('You do not have access to this resource');

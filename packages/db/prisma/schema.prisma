@@ -194,6 +194,7 @@ model Profile {
   skills         UserSkill[]
   languages      UserLanguage[]
   services       Service[]
+  jobs           Job[]
 
   @@index([username])
   @@map("profiles")
@@ -387,6 +388,7 @@ model Category {
   deletedAt DateTime?
 
   services Service[]
+  jobs     Job[]
 
   @@index([parentId])
   @@map("categories")
@@ -483,6 +485,88 @@ model ServiceSkill {
   // is the direction the skill filter actually queries.
   @@index([skillId])
   @@map("service_skills")
+}
+
+// ---------------------------------------------------------------------------
+// Module 4 — Jobs (Requirements)
+// ---------------------------------------------------------------------------
+//
+// A Job is the client side of the marketplace: "here is what I need", posted
+// for providers to find. "Requirement" is the product word for the same
+// thing; "Job" is the domain word, and only this one appears in code.
+//
+// Deliberate omissions, each of which module4.md lists:
+//
+// - No `visibility` column. module4.md specifies status and visibility as
+//   separate concepts, but a PUBLISHED-yet-PRIVATE job has no audience in
+//   Phase 1: there is no invite, no share link, nothing that would let
+//   anyone reach it. DRAFT already means "only the owner sees this". This
+//   is the same call the Service model made for the same reason.
+//
+// - No PROPOSAL_ACTIVITY status. It is derivable — a job either has
+//   proposals or it does not — and storing a derived fact means Module 5
+//   must remember to flip it on every proposal, and unflip it on every
+//   withdrawal. Module 5 counts proposals instead.
+//
+// - No `deadline`. module4.md defines eventDate (when the work happens) and
+//   deadline (when it must be delivered), then says to ship one if only one
+//   is needed. Two date fields whose difference nobody can articulate is how
+//   both end up populated inconsistently.
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  FILLED
+  CANCELLED
+}
+
+model Job {
+  id String @id @default(uuid())
+
+  // The owning client, by profile rather than user — matching Service,
+  // which hangs off Profile for the same reason: discovery needs the
+  // poster's display name and location, and a Profile is guaranteed to
+  // exist from registration onward. Role is still read through
+  // profile.user.role, since role is a user-level fact.
+  clientProfileId String
+  clientProfile   Profile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+
+  // onDelete omitted, so Prisma's Restrict applies: deleting a category
+  // that still has jobs must fail loudly rather than cascade away clients'
+  // requirements.
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  title       String
+  description String
+
+  // Both optional and both a range, because a client posting work often
+  // knows "somewhere between X and Y" and not an exact figure. Ordering
+  // (min <= max) is enforced in the DTO, where the caller gets told which
+  // way round it should be.
+  budgetMin Decimal? @db.Decimal(10, 2)
+  budgetMax Decimal? @db.Decimal(10, 2)
+
+  location  String?
+  eventDate DateTime?
+
+  status JobStatus @default(DRAFT)
+
+  // Set on first publish and never rewritten, so cancelling and reposting
+  // cannot bump a job up the "newest" sort. Same rule as Service.
+  publishedAt DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([clientProfileId])
+  @@index([categoryId])
+  // Serves the provider discovery query: published jobs, newest first.
+  @@index([status, publishedAt])
+  // Serves the event_date sort and the "happening before X" filter.
+  @@index([eventDate])
+  @@map("jobs")
 }
 
 // Media / upload pipeline (shared infrastructure, not a business module).
