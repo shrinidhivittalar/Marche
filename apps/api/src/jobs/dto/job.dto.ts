@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsDateString,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -28,6 +31,62 @@ class BudgetRangeOrdered implements ValidatorConstraintInterface {
 
   defaultMessage(): string {
     return 'budgetMax must be greater than or equal to budgetMin';
+  }
+}
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Enough for a real brief, few enough that the field is a list rather than
+// a second description someone pasted in bullet form.
+const MAX_DELIVERABLES = 20;
+
+// An event time with no event date describes nothing — "the event runs
+// 18:00 to 23:00" on no particular day. Caught here rather than stored,
+// because a half-specified schedule is worse than none: a provider reads
+// the hours and assumes the date is implied somewhere.
+@ValidatorConstraint({ name: 'requiresEventDate' })
+class RequiresEventDate implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments): boolean {
+    const { eventDate } = args.object as CreateJobDto;
+    return value === undefined || Boolean(eventDate);
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} needs an eventDate to belong to`;
+  }
+}
+
+// Same evening only. An event crossing midnight would need a second date
+// to say so, and inventing one here would be guessing at what the client
+// meant; they can say so in the description until a real end-date exists.
+@ValidatorConstraint({ name: 'endTimeAfterStart' })
+class EndTimeAfterStart implements ValidatorConstraintInterface {
+  validate(eventEndTime: unknown, args: ValidationArguments): boolean {
+    const { eventStartTime } = args.object as CreateJobDto;
+    if (typeof eventEndTime !== 'string' || typeof eventStartTime !== 'string') return true;
+    // Zero-padded HH:MM compares correctly as a string, which is one of the
+    // reasons the format is pinned by regex above.
+    return eventEndTime > eventStartTime;
+  }
+
+  defaultMessage(): string {
+    return 'eventEndTime must be later than eventStartTime on the same day';
+  }
+}
+
+// Proposals that arrive after the event are worthless, so the cutoff
+// cannot sit past it. Equal is allowed: "quote me right up to the day" is
+// a real, if tight, ask.
+@ValidatorConstraint({ name: 'deadlineNotAfterEvent' })
+class DeadlineNotAfterEvent implements ValidatorConstraintInterface {
+  validate(proposalDeadline: unknown, args: ValidationArguments): boolean {
+    const { eventDate } = args.object as CreateJobDto;
+    if (typeof proposalDeadline !== 'string' || typeof eventDate !== 'string') return true;
+    return new Date(proposalDeadline).getTime() <= new Date(eventDate).getTime();
+  }
+
+  defaultMessage(): string {
+    return 'proposalDeadline cannot be after the event date';
   }
 }
 
@@ -91,6 +150,41 @@ export class CreateJobDto {
   @IsOptional()
   @IsDateString()
   eventDate?: string;
+
+  // "HH:MM", 24-hour. Wall-clock at the venue rather than an instant — see
+  // the schema. The regex is the whole validation: anything that parses
+  // here is displayable as written, with no timezone in the middle.
+  @ApiPropertyOptional({ example: '18:00', description: 'Event start, 24-hour HH:MM' })
+  @IsOptional()
+  @Matches(TIME_PATTERN, { message: 'eventStartTime must be a 24-hour time, e.g. 18:00' })
+  @Validate(RequiresEventDate)
+  eventStartTime?: string;
+
+  @ApiPropertyOptional({ example: '23:00', description: 'Event end, 24-hour HH:MM' })
+  @IsOptional()
+  @Matches(TIME_PATTERN, { message: 'eventEndTime must be a 24-hour time, e.g. 23:00' })
+  @Validate(RequiresEventDate)
+  @Validate(EndTimeAfterStart)
+  eventEndTime?: string;
+
+  // The cutoff for providers to propose.
+  @ApiPropertyOptional({ description: 'Last date providers may submit a proposal' })
+  @IsOptional()
+  @IsDateString()
+  @Validate(DeadlineNotAfterEvent)
+  proposalDeadline?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: MAX_DELIVERABLES,
+    description: 'What the client expects delivered',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_DELIVERABLES)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  deliverables?: string[];
 }
 
 // Safe as a blanket Partial because CreateJobDto contains only

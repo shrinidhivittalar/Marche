@@ -549,6 +549,27 @@ model Job {
   location  String?
   eventDate DateTime?
 
+  // Wall-clock "HH:MM" strings, not DateTimes, and deliberately so. These
+  // are the hours of an event at its own venue: a 6pm ceremony is at 6pm
+  // for everyone standing in the room, whatever timezone the server or the
+  // reader is in. Storing them as instants would make the displayed time
+  // depend on who is looking, which is precisely wrong for this field.
+  //
+  // Only meaningful alongside eventDate; the DTO enforces that.
+  eventStartTime String?
+  eventEndTime   String?
+
+  // The cutoff for providers to propose. Job-side rather than Proposal-side:
+  // it is the client's term for their own requirement, and it must exist
+  // before any proposal does. Module 5 reads it to refuse late proposals.
+  proposalDeadline DateTime?
+
+  // What the client expects delivered — the part providers actually price
+  // against. A String[] rather than a table for the same reason Service.tags
+  // is: they are free text written once by one person, displayed as written,
+  // and never filtered on.
+  deliverables String[] @default([])
+
   status JobStatus @default(DRAFT)
 
   // Set on first publish and never rewritten, so cancelling and reposting
@@ -568,6 +589,9 @@ model Job {
   @@index([status, publishedAt])
   // Serves the event_date sort and the "happening before X" filter.
   @@index([eventDate])
+  // Serves "still open for proposals", which Module 5 checks on every
+  // submission and discovery will want once expiry exists.
+  @@index([proposalDeadline])
   @@map("jobs")
 }
 

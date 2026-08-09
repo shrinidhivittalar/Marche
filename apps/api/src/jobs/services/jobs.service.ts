@@ -69,6 +69,10 @@ export class JobsService {
       budgetMax: dto.budgetMax,
       location: dto.location,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
+      eventStartTime: dto.eventStartTime,
+      eventEndTime: dto.eventEndTime,
+      proposalDeadline: dto.proposalDeadline ? new Date(dto.proposalDeadline) : undefined,
+      deliverables: dto.deliverables ?? [],
     });
   }
 
@@ -92,6 +96,12 @@ export class JobsService {
       budgetMax: dto.budgetMax,
       location: dto.location,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
+      eventStartTime: dto.eventStartTime,
+      eventEndTime: dto.eventEndTime,
+      proposalDeadline: dto.proposalDeadline ? new Date(dto.proposalDeadline) : undefined,
+      // Absent means "leave them alone"; an empty array means "clear them".
+      // Collapsing the two would make removing every deliverable impossible.
+      ...(dto.deliverables !== undefined ? { deliverables: dto.deliverables } : {}),
       ...(dto.categoryId ? { category: { connect: { id: dto.categoryId } } } : {}),
     });
   }
