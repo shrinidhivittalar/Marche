@@ -41,6 +41,7 @@ model User {
   verificationTokens VerificationToken[]
   passwordResets     PasswordReset[]
   profile            Profile?
+  media              Media[]
 
   @@index([email])
   @@map("users")
@@ -445,4 +446,71 @@ model ServiceSkill {
   // is the direction the skill filter actually queries.
   @@index([skillId])
   @@map("service_skills")
+}
+
+// Media / upload pipeline (shared infrastructure, not a business module).
+//
+// One table serving Portfolio, Service images and — once Module 4 exists —
+// Job and Proposal attachments. Media deliberately knows nothing about any
+// of them: business entities hold a mediaId, never the reverse. That is
+// what stops this becoming a dumping ground that every new module has to
+// extend.
+//
+// The database stores ownership and metadata. The bytes live in object
+// storage, and nothing in this schema references a URL — a URL is derived
+// from objectKey at read time, so moving buckets or providers never
+// requires a data migration.
+
+enum MediaStatus {
+  PENDING
+  UPLOADED
+  FAILED
+  DELETED
+}
+
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Media {
+  id String @id @default(uuid())
+
+  // Not a cascade delete to User: a soft-deleted account's media must not
+  // vanish from under a published listing mid-request. Cleanup is a
+  // deliberate action, not a side effect of account deletion.
+  ownerUserId String
+  owner       User   @relation(fields: [ownerUserId], references: [id])
+
+  // Server-generated, always users/{userId}/{uuid}. The client never picks
+  // a path — an attacker-chosen key is how you get collisions and traversal.
+  // Unique so a retry can never quietly overwrite someone else's object.
+  objectKey String @unique
+
+  // Metadata only. Never used as a storage path, and never trusted: the
+  // declared mimeType is what the client claims, and is re-verified against
+  // the file's actual signature before the row reaches UPLOADED.
+  originalFileName String
+  mimeType         String
+  sizeBytes        Int
+
+  // PENDING until the object is confirmed present in storage. Anything that
+  // never completes is an abandoned upload, not a file — attaching one would
+  // put a broken image on a public profile.
+  status MediaStatus @default(PENDING)
+
+  // Phase 1 issues PUBLIC only. PRIVATE lands with Job and Proposal
+  // attachments in Module 4, when there is finally something worth
+  // protecting; the column exists now so that is a behaviour change rather
+  // than a migration.
+  visibility MediaVisibility @default(PUBLIC)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([ownerUserId])
+  // Serves the orphan sweep: stale PENDING rows, oldest first.
+  @@index([status, createdAt])
+  @@map("media")
 }

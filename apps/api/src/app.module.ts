@@ -9,6 +9,7 @@ import { AuditModule } from './audit/audit.module';
 import { IdentityModule } from './identity/identity.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
     IdentityModule,
     ProfilesModule,
     MarketplaceModule,
+    MediaModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
