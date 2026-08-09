@@ -23,6 +23,31 @@ export class ProfilesRepository {
     });
   }
 
+  // The owner's own profile, nested collections included, in one round trip.
+  // getMyProfile previously called findByUserId and then withDetails, which
+  // meant two sequential queries plus their nested reads — enough latency
+  // against a hosted database to leave the profile page sitting on its
+  // loading state for several seconds.
+  findByUserIdWithDetails(userId: string) {
+    const MAX_NESTED_ITEMS = 100;
+    return this.prisma.client.profile.findFirst({
+      where: { userId, deletedAt: null },
+      include: {
+        user: { select: { role: true } },
+        portfolioItems: {
+          where: { deletedAt: null },
+          include: { images: true },
+          take: MAX_NESTED_ITEMS,
+        },
+        experiences: { take: MAX_NESTED_ITEMS },
+        educations: { take: MAX_NESTED_ITEMS },
+        certifications: { take: MAX_NESTED_ITEMS },
+        skills: { include: { skill: true }, take: MAX_NESTED_ITEMS },
+        languages: { take: MAX_NESTED_ITEMS },
+      },
+    });
+  }
+
   findById(id: string) {
     return this.prisma.client.profile.findFirst({
       where: { id, deletedAt: null },

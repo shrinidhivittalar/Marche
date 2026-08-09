@@ -9,6 +9,7 @@ import {
   type ApiProfile,
   type AvailabilityStatus,
   type LanguageProficiency,
+  type Visibility,
 } from '../../lib/marketplace-api';
 
 // The real Profiles module (docs/modules/module2.md), as opposed to the
@@ -208,6 +209,9 @@ function CoreProfileForm({
   const [headline, setHeadline] = useState(profile.headline ?? '');
   const [bio, setBio] = useState(profile.bio ?? '');
   const [location, setLocation] = useState(profile.location ?? '');
+  const [username, setUsername] = useState(profile.username ?? '');
+  const [avatar, setAvatar] = useState(profile.avatar ?? '');
+  const [visibility, setVisibility] = useState<Visibility>(profile.visibility ?? 'PUBLIC');
 
   return (
     <Card className="p-8 space-y-5">
@@ -219,6 +223,44 @@ function CoreProfileForm({
         onChange={(e) => setDisplayName(e.target.value)}
         data-testid="input-displayName"
       />
+
+      {/* Username is what makes the public profile page reachable at all —
+          /u/:username 404s for everyone until one is set. */}
+      <TextField
+        label="Username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="e.g. priya-menon"
+        hint={
+          username
+            ? `Your public page: /u/${username}`
+            : 'Lowercase letters, numbers and hyphens. Sets your public profile link.'
+        }
+        data-testid="input-username"
+      />
+
+      <TextField
+        label="Avatar URL"
+        value={avatar}
+        onChange={(e) => setAvatar(e.target.value)}
+        placeholder="https://…"
+        hint="Paste a link to an image. Must start with https."
+        data-testid="input-avatar"
+      />
+      {avatar.trim() !== '' && (
+        <img
+          src={avatar}
+          alt="Avatar preview"
+          data-testid="avatar-preview"
+          // A broken link is the most likely failure with pasted URLs, so
+          // it fails visibly here rather than silently on every card.
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+          className="w-16 h-16 rounded-xl object-cover ring-2 ring-border"
+        />
+      )}
+
       <TextField
         label="Headline"
         value={headline}
@@ -244,6 +286,40 @@ function CoreProfileForm({
         data-testid="input-location"
       />
 
+      {/* Visibility is a business rule in module2.md — the owner controls
+          it — and a PRIVATE profile is excluded from marketplace discovery
+          entirely. Until now there was no way to exercise that, so the rule
+          existed only in the backend. The consequence is spelled out
+          because "private" alone does not tell a provider their listings
+          will stop appearing in search. */}
+      <div
+        className="flex flex-col gap-2 rounded-lg border border-border p-4"
+        data-testid="visibility-card"
+      >
+        <span className="text-sm font-medium text-ink">Profile visibility</span>
+        <div className="flex gap-2">
+          <Button
+            variant={visibility === 'PUBLIC' ? 'primary' : 'secondary'}
+            data-testid="visibility-PUBLIC"
+            onClick={() => setVisibility('PUBLIC')}
+          >
+            Public
+          </Button>
+          <Button
+            variant={visibility === 'PRIVATE' ? 'primary' : 'secondary'}
+            data-testid="visibility-PRIVATE"
+            onClick={() => setVisibility('PRIVATE')}
+          >
+            Private
+          </Button>
+        </div>
+        <p className="text-xs text-muted" data-testid="visibility-explainer">
+          {visibility === 'PUBLIC'
+            ? 'Clients can find you in the marketplace and view your profile.'
+            : 'Your profile is hidden and your services will not appear in marketplace search.'}
+        </p>
+      </div>
+
       <div className="flex items-center gap-3">
         <Button
           disabled={saving}
@@ -252,10 +328,15 @@ function CoreProfileForm({
             onSave({
               displayName: displayName.trim(),
               // Empty strings are sent as null so clearing a field actually
-              // clears it rather than storing "".
+              // clears it rather than storing "". Sending "" for username or
+              // avatar would fail their format validation instead of
+              // clearing them.
               headline: headline.trim() || null,
               bio: bio.trim() || null,
               location: location.trim() || null,
+              username: username.trim() || null,
+              avatar: avatar.trim() || null,
+              visibility,
             })
           }
         >
@@ -352,7 +433,13 @@ function ExperienceCard({
 }) {
   const [company, setCompany] = useState('');
   const [position, setPosition] = useState('');
+  const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  // Defaults to a finished role, not a current one. The previous version
+  // hardcoded currentlyWorking: true, which made it impossible to record
+  // any past job — the common case for a work history.
+  const [currentlyWorking, setCurrentlyWorking] = useState(false);
 
   return (
     <Card className="p-8 space-y-4" data-testid="experience-card">
@@ -371,6 +458,14 @@ function ExperienceCard({
           >
             <span className="text-sm text-ink">
               {exp.position} — {exp.company}
+              <span className="block text-xs text-muted">
+                {new Date(exp.startDate).getFullYear()} –{' '}
+                {exp.currentlyWorking
+                  ? 'Present'
+                  : exp.endDate
+                    ? new Date(exp.endDate).getFullYear()
+                    : '—'}
+              </span>
             </span>
             <button
               type="button"
@@ -385,26 +480,75 @@ function ExperienceCard({
           </div>
         ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         <Input
           placeholder="Company"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           data-testid="experience-company"
+          aria-label="Company"
         />
         <Input
           placeholder="Position"
           value={position}
           onChange={(e) => setPosition(e.target.value)}
           data-testid="experience-position"
-        />
-        <Input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          data-testid="experience-start"
+          aria-label="Position"
         />
       </div>
+
+      <Textarea
+        placeholder="What did you do in this role? (optional)"
+        rows={2}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        data-testid="experience-description"
+        aria-label="Role description"
+      />
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="experience-start" className="text-xs text-muted">
+            Start date
+          </label>
+          <Input
+            id="experience-start"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            data-testid="experience-start"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="experience-end" className="text-xs text-muted">
+            End date
+          </label>
+          <Input
+            id="experience-end"
+            type="date"
+            value={endDate}
+            // Disabled rather than merely validated: the API rejects an end
+            // date alongside "currently working", so the contradiction is
+            // made unreachable instead of explained after the fact.
+            disabled={currentlyWorking}
+            onChange={(e) => setEndDate(e.target.value)}
+            data-testid="experience-end"
+          />
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={currentlyWorking}
+          onChange={(e) => {
+            setCurrentlyWorking(e.target.checked);
+            if (e.target.checked) setEndDate('');
+          }}
+          data-testid="experience-current"
+        />
+        I currently work here
+      </label>
       <Button
         disabled={disabled || !company.trim() || !position.trim() || !startDate}
         data-testid="add-experience"
@@ -412,12 +556,17 @@ function ExperienceCard({
           onAdd({
             company: company.trim(),
             position: position.trim(),
+            description: description.trim() || undefined,
             startDate: new Date(startDate).toISOString(),
-            currentlyWorking: true,
+            endDate: !currentlyWorking && endDate ? new Date(endDate).toISOString() : undefined,
+            currentlyWorking,
           });
           setCompany('');
           setPosition('');
+          setDescription('');
           setStartDate('');
+          setEndDate('');
+          setCurrentlyWorking(false);
         }}
       >
         Add experience

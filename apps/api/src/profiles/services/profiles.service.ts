@@ -54,19 +54,19 @@ export class ProfilesService {
     return this.profilesRepository.create({ userId, displayName }, tx);
   }
 
+  // Returns the nested collections, not just the base row. Without them an
+  // owner could add a skill, an experience or a language and never see it on
+  // their own profile — every sub-resource POST appeared to do nothing.
+  //
+  // One query rather than a lookup followed by a details fetch: the two-call
+  // version doubled the latency on the page every provider opens first, and
+  // against a hosted database that was several seconds of loading state.
   async getMyProfile(userId: string) {
-    const profile = await this.profilesRepository.findByUserId(userId);
+    const profile = await this.profilesRepository.findByUserIdWithDetails(userId);
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
-
-    // Returns the nested collections, not just the base row. Without this
-    // an owner could add a skill, an experience or a language and never see
-    // it on their own profile — every sub-resource POST appeared to do
-    // nothing. Found by the frontend wiring: the public profile endpoints
-    // already used withDetails, and only this one did not.
-    const details = await this.profilesRepository.withDetails(profile.id);
-    return { ...profile, ...details };
+    return profile;
   }
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<Profile> {

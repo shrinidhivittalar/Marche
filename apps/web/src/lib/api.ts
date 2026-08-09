@@ -62,8 +62,30 @@ export function loginRequest(data: { email: string; password: string }) {
   });
 }
 
+// Concurrent refreshes share one request, and this is not an optimisation.
+// Refresh tokens are single-use and rotating: the server revokes the old
+// session on every refresh. Two calls with the same cookie therefore mean
+// the first rotates it and the second arrives holding a revoked token and
+// gets a 401 — silently signing the user out.
+//
+// That is reachable in normal use. React StrictMode double-invokes the
+// mount effect in development, and outside that any two components or tabs
+// refreshing at once collide the same way. De-duplicating here rather than
+// at the call site keeps the guarantee wherever the refresh comes from.
+let inFlightRefresh: Promise<{ accessToken: string }> | null = null;
+
 export function refreshRequest() {
-  return apiFetch<{ accessToken: string }>('/auth/refresh', { method: 'POST' });
+  if (!inFlightRefresh) {
+    inFlightRefresh = apiFetch<{ accessToken: string }>('/auth/refresh', {
+      method: 'POST',
+    }).finally(() => {
+      // Cleared once settled so a later refresh — after this token has been
+      // used and rotated — issues a fresh request rather than replaying a
+      // stale resolved promise.
+      inFlightRefresh = null;
+    });
+  }
+  return inFlightRefresh;
 }
 
 export function logoutRequest() {

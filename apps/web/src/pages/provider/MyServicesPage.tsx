@@ -33,6 +33,7 @@ export const MyServicesPage: React.FC = () => {
   const [deliveryDays, setDeliveryDays] = useState('');
   const [tags, setTags] = useState('');
   const [skillId, setSkillId] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const run = async (action: () => Promise<unknown>, message: string) => {
     setError(null);
@@ -254,71 +255,103 @@ export const MyServicesPage: React.FC = () => {
           {services.data.items.map((s: ApiServiceCard) => (
             <Card
               key={s.id}
-              className="p-5 flex flex-wrap items-center justify-between gap-4"
+              className="p-5 space-y-3"
               data-testid="owned-service"
               data-service-title={s.title}
               data-service-status={s.status}
             >
-              <div>
-                <h3 className="font-semibold text-ink">{s.title}</h3>
-                <p className="text-xs text-muted">
-                  {s.category.name} · ₹{s.startingPrice} · {s.deliveryDays} days
-                </p>
-                <span
-                  data-testid={`status-${s.id}`}
-                  className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-muted"
-                >
-                  {s.status ?? 'DRAFT'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {s.status === 'PUBLISHED' ? (
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    data-testid={`unpublish-${s.id}`}
-                    onClick={() =>
-                      run(
-                        () =>
-                          marketplaceApi.setServiceVisibility(token as string, s.id, 'UNPUBLISHED'),
-                        'Service unpublished.',
-                      )
-                    }
-                  >
-                    Unpublish
-                  </Button>
-                ) : (
-                  <Button
-                    disabled={busy}
-                    data-testid={`publish-${s.id}`}
-                    onClick={() =>
-                      run(
-                        () =>
-                          marketplaceApi.setServiceVisibility(token as string, s.id, 'PUBLISHED'),
-                        'Service published.',
-                      )
-                    }
-                  >
-                    Publish
-                  </Button>
-                )}
-                <button
-                  type="button"
-                  aria-label={`Delete ${s.title}`}
-                  data-testid={`delete-${s.id}`}
-                  disabled={busy}
-                  onClick={() =>
+              {editingId === s.id ? (
+                <EditServiceForm
+                  service={s}
+                  busy={busy}
+                  onCancel={() => setEditingId(null)}
+                  onSave={(body) =>
                     run(
-                      () => marketplaceApi.deleteService(token as string, s.id),
-                      'Service deleted.',
-                    )
+                      () => marketplaceApi.updateService(token as string, s.id, body),
+                      'Service updated.',
+                    ).then(() => setEditingId(null))
                   }
-                  className="text-muted hover:text-danger"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+                />
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-ink">{s.title}</h3>
+                    <p className="text-xs text-muted">
+                      {s.category.name} · ₹{s.startingPrice} · {s.deliveryDays} days
+                    </p>
+                    <span
+                      data-testid={`status-${s.id}`}
+                      className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-muted"
+                    >
+                      {s.status ?? 'DRAFT'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      data-testid={`edit-${s.id}`}
+                      onClick={() => setEditingId(s.id)}
+                    >
+                      Edit
+                    </Button>
+                    {s.status === 'PUBLISHED' ? (
+                      <Button
+                        variant="secondary"
+                        disabled={busy}
+                        data-testid={`unpublish-${s.id}`}
+                        onClick={() =>
+                          run(
+                            () =>
+                              marketplaceApi.setServiceVisibility(
+                                token as string,
+                                s.id,
+                                'UNPUBLISHED',
+                              ),
+                            'Service unpublished.',
+                          )
+                        }
+                      >
+                        Unpublish
+                      </Button>
+                    ) : (
+                      <Button
+                        disabled={busy}
+                        data-testid={`publish-${s.id}`}
+                        onClick={() =>
+                          run(
+                            () =>
+                              marketplaceApi.setServiceVisibility(
+                                token as string,
+                                s.id,
+                                'PUBLISHED',
+                              ),
+                            'Service published.',
+                          )
+                        }
+                      >
+                        Publish
+                      </Button>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Delete ${s.title}`}
+                      data-testid={`delete-${s.id}`}
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          () => marketplaceApi.deleteService(token as string, s.id),
+                          'Service deleted.',
+                        )
+                      }
+                      className="text-muted hover:text-danger"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -326,3 +359,97 @@ export const MyServicesPage: React.FC = () => {
     </div>
   );
 };
+
+// Inline editor, mounted only for the row being edited and seeded from that
+// row's current values. PATCH /services/:id existed and was tested from the
+// day the API shipped, but nothing in the UI called it — a provider could
+// publish and delete a listing yet never correct a typo in its title.
+//
+// Status is deliberately absent: it moves through the publish/unpublish
+// buttons, which is the one auditable path for a visibility change.
+function EditServiceForm({
+  service,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  service: ApiServiceCard;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const [title, setTitle] = useState(service.title);
+  const [description, setDescription] = useState(service.description ?? '');
+  const [price, setPrice] = useState(String(service.startingPrice));
+  const [deliveryDays, setDeliveryDays] = useState(String(service.deliveryDays));
+  const [tags, setTags] = useState((service.tags ?? []).join(', '));
+
+  return (
+    <div className="space-y-3" data-testid={`edit-form-${service.id}`}>
+      <TextField
+        label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        data-testid="edit-title"
+      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`edit-description-${service.id}`} className="text-sm font-medium text-ink">
+          Description
+        </label>
+        <Textarea
+          id={`edit-description-${service.id}`}
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          data-testid="edit-description"
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Input
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          data-testid="edit-price"
+          aria-label="Starting price"
+        />
+        <Input
+          type="number"
+          value={deliveryDays}
+          onChange={(e) => setDeliveryDays(e.target.value)}
+          data-testid="edit-delivery"
+          aria-label="Delivery days"
+        />
+        <Input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          data-testid="edit-tags"
+          aria-label="Tags"
+          placeholder="Tags, comma separated"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          disabled={busy}
+          data-testid="save-edit"
+          onClick={() =>
+            onSave({
+              title: title.trim(),
+              description: description.trim(),
+              startingPrice: Number(price),
+              deliveryDays: Number(deliveryDays),
+              tags: tags
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean),
+            })
+          }
+        >
+          {busy ? 'Saving…' : 'Save changes'}
+        </Button>
+        <Button variant="secondary" disabled={busy} data-testid="cancel-edit" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
