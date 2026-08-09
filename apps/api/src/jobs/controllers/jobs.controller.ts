@@ -17,6 +17,7 @@ import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { JobsService } from '../services/jobs.service';
 import { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
+import { SearchJobsDto } from '../dto/search-jobs.dto';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 
 // "Requirement" in every summary, "job" in every path and type name — the
@@ -34,6 +35,15 @@ export class JobsController {
   // as a job id. Same trap as the services controller; covered by a test.
   // ---------------------------------------------------------------------
 
+  @Get()
+  @ApiOperation({
+    summary: 'Browse and search published requirements. Public — no authentication required.',
+    description: 'Drafts, cancelled and filled requirements never appear here, whoever is asking.',
+  })
+  search(@Query() query: SearchJobsDto) {
+    return this.jobsService.search(query);
+  }
+
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: "The caller's own requirements, including drafts" })
@@ -48,6 +58,16 @@ export class JobsController {
   @UseGuards(JwtAuthGuard)
   findMine(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.jobsService.findMineById(user.id, id);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary:
+      'A single published requirement. Public. Returns 404 for hidden ones, ' +
+      'indistinguishably from ones that do not exist.',
+  })
+  findOne(@Param('id') id: string) {
+    return this.jobsService.findPublicById(id);
   }
 
   @Post()

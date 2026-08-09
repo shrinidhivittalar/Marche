@@ -25,24 +25,25 @@ describe('jobs route registration', () => {
   const routes = routesOf(JobsController);
   const gets = routes.filter((r) => r.method === RequestMethod.GET);
 
-  it("declares the literal 'me' routes before any ':id' route", () => {
-    const lastMe = gets.map((r) => r.path).lastIndexOf('me/:id');
-    const byId = gets.findIndex((r) => r.path === ':id');
+  it("declares both literal 'me' routes before the ':id' route", () => {
+    const paths = gets.map((r) => r.path);
+    const byId = paths.indexOf(':id');
 
-    expect(gets.findIndex((r) => r.path === 'me')).toBe(0);
-    // No GET /:id exists yet — provider discovery lands in the next pass.
-    // When it does, it must come after both 'me' routes.
-    if (byId >= 0) {
-      expect(lastMe).toBeLessThan(byId);
-    }
+    expect(paths.indexOf('me')).toBeGreaterThanOrEqual(0);
+    expect(paths.indexOf('me/:id')).toBeGreaterThanOrEqual(0);
+    expect(byId).toBeGreaterThanOrEqual(0);
+    expect(paths.indexOf('me')).toBeLessThan(byId);
+    expect(paths.indexOf('me/:id')).toBeLessThan(byId);
   });
 
-  it('exposes the owner endpoints module4.md specifies', () => {
+  it('exposes the endpoints module4.md specifies', () => {
     const signature = routes.map((r) => `${RequestMethod[r.method]} /${r.path}`.replace(/\/$/, ''));
     expect(signature).toEqual(
       expect.arrayContaining([
+        'GET /',
         'GET /me',
         'GET /me/:id',
+        'GET /:id',
         'POST /',
         'PATCH /:id',
         'POST /:id/publish',
@@ -50,6 +51,17 @@ describe('jobs route registration', () => {
         'DELETE /:id',
       ]),
     );
+  });
+
+  // Browse and single-requirement reads carry no auth guard: a provider
+  // evaluating whether to sign up must be able to see the work on offer.
+  it('leaves the two public reads unguarded', () => {
+    const guarded = (handler: string) =>
+      Boolean(Reflect.getMetadata('__guards__', JobsController.prototype[handler as never]));
+
+    expect(guarded('search')).toBe(false);
+    expect(guarded('findOne')).toBe(false);
+    expect(guarded('create')).toBe(true);
   });
 
   // FILLED is reached by accepting a proposal, in Module 5. A route here

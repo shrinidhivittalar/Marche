@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
+import { CategoriesService } from '../../marketplace/services/categories.service';
 import { assertClientRole } from '../../profiles/profile-access.util';
-import { JobsRepository } from '../repositories/jobs.repository';
+import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
+import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 import type { Job, JobStatus } from '@marche/db';
 
@@ -40,6 +42,7 @@ export class JobsService {
     private readonly jobsRepository: JobsRepository,
     private readonly profilesRepository: ProfilesRepository,
     private readonly categoriesRepository: CategoriesRepository,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   // ---------- client-owned writes ----------
@@ -200,7 +203,56 @@ export class JobsService {
     return job;
   }
 
+  // ---------- public reads ----------
+
+  async findPublicById(jobId: string) {
+    const job = await this.jobsRepository.findPublicById(jobId);
+    if (!job) {
+      // Deliberately indistinguishable from "does not exist". A draft or
+      // cancelled requirement answering differently would confirm it is
+      // there, which is exactly what hiding it is meant to prevent.
+      throw new NotFoundException('Requirement not found');
+    }
+    return job;
+  }
+
+  async search(dto: SearchJobsDto) {
+    const filters = await this.buildFilters(dto);
+    const { page, limit } = dto;
+
+    const [data, total] = await Promise.all([
+      this.jobsRepository.search(filters, dto.sort, (page - 1) * limit, limit),
+      this.jobsRepository.countSearch(filters),
+    ]);
+
+    return paginate(data, total, page, limit);
+  }
+
   // ---------- helpers ----------
+
+  private async buildFilters(dto: SearchJobsDto): Promise<JobSearchFilters> {
+    let categoryIds: string[] | undefined;
+    if (dto.category) {
+      // Resolves a slug to the category and its children, so filtering by
+      // a parent returns everything beneath it. Reused from Marketplace
+      // rather than reimplemented — it is the same taxonomy.
+      const resolved = await this.categoriesService.resolveFilterIds(dto.category);
+      if (!resolved) {
+        throw new BadRequestException(`Unknown category "${dto.category}"`);
+      }
+      categoryIds = resolved;
+    }
+
+    return {
+      q: dto.q,
+      categoryIds,
+      location: dto.location,
+      minBudget: dto.minBudget,
+      maxBudget: dto.maxBudget,
+      eventFrom: dto.eventFrom ? new Date(dto.eventFrom) : undefined,
+      eventUntil: dto.eventUntil ? new Date(dto.eventUntil) : undefined,
+    };
+  }
 
   private assertTransition(from: JobStatus, to: JobStatus): void {
     if (!ALLOWED_TRANSITIONS[from].includes(to)) {

@@ -3,7 +3,9 @@ import { JobsService } from '../services/jobs.service';
 import { JobsRepository } from '../repositories/jobs.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
+import { CategoriesService } from '../../marketplace/services/categories.service';
 import type { CreateJobDto } from '../dto/job.dto';
+import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { JobStatus } from '@marche/db';
 
 const OWNER = { id: 'profile_1', userId: 'user_1', user: { role: 'CLIENT' } };
@@ -25,15 +27,23 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     findByIdForOwner: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
     listByProfile: jest.fn().mockResolvedValue([]),
     countByProfile: jest.fn().mockResolvedValue(0),
+    findPublicById: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
+    search: jest.fn().mockResolvedValue([]),
+    countSearch: jest.fn().mockResolvedValue(0),
   };
+  const categoriesService = { resolveFilterIds: jest.fn().mockResolvedValue(['cat_1']) };
 
   const service = new JobsService(
     jobs as unknown as JobsRepository,
     profiles as unknown as ProfilesRepository,
     categories as unknown as CategoriesRepository,
+    categoriesService as unknown as CategoriesService,
   );
-  return { service, jobs, profiles, categories };
+  return { service, jobs, profiles, categories, categoriesService };
 }
+
+const searchDto = (over: Partial<SearchJobsDto> = {}): SearchJobsDto =>
+  ({ page: 1, limit: 20, sort: 'newest', ...over }) as SearchJobsDto;
 
 const dto: CreateJobDto = {
   title: 'Wedding photographer needed',
@@ -193,6 +203,79 @@ describe('JobsService', () => {
 
       await expect(service.remove('user_1', 'job_1')).rejects.toThrow(/[Cc]ancel/);
       expect(jobs.softDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('discovery', () => {
+    it('404s for a requirement that is not publicly visible', async () => {
+      const { service, jobs } = build();
+      // The repository applies publicJobWhere, so a draft simply is not
+      // found — the service never has to know why.
+      jobs.findPublicById.mockResolvedValue(null);
+
+      await expect(service.findPublicById('job_1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects an unknown category slug rather than returning nothing', async () => {
+      const { service, categoriesService, jobs } = build();
+      categoriesService.resolveFilterIds.mockResolvedValue(null);
+
+      await expect(service.search(searchDto({ category: 'nope' }))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(jobs.search).not.toHaveBeenCalled();
+    });
+
+    it('expands a category slug to the category and its children', async () => {
+      const { service, categoriesService, jobs } = build();
+      categoriesService.resolveFilterIds.mockResolvedValue(['cat_1', 'cat_child']);
+
+      await service.search(searchDto({ category: 'photography' }));
+
+      const [filters] = jobs.search.mock.calls[0];
+      expect(filters.categoryIds).toEqual(['cat_1', 'cat_child']);
+    });
+
+    it('passes the same filters to the page query and the count', async () => {
+      const { service, jobs } = build();
+
+      await service.search(searchDto({ q: 'wedding', location: 'Bangalore', minBudget: 10000 }));
+
+      // A page whose total came from different filters is a paginator that
+      // reports the wrong number of pages.
+      expect(jobs.search.mock.calls[0][0]).toEqual(jobs.countSearch.mock.calls[0][0]);
+    });
+
+    it('converts event date bounds to Date objects', async () => {
+      const { service, jobs } = build();
+
+      await service.search(
+        searchDto({
+          eventFrom: '2026-09-01T00:00:00.000Z',
+          eventUntil: '2026-12-01T00:00:00.000Z',
+        }),
+      );
+
+      const [filters] = jobs.search.mock.calls[0];
+      expect(filters.eventFrom).toBeInstanceOf(Date);
+      expect(filters.eventUntil).toBeInstanceOf(Date);
+    });
+
+    it('returns the standard pagination envelope', async () => {
+      const { service, jobs } = build();
+      jobs.search.mockResolvedValue([{ id: 'job_1' }]);
+      jobs.countSearch.mockResolvedValue(45);
+
+      const result = await service.search(searchDto({ page: 2, limit: 20 }));
+
+      expect(result.pagination).toEqual({
+        page: 2,
+        limit: 20,
+        total: 45,
+        totalPages: 3,
+        hasNext: true,
+        hasPrevious: true,
+      });
     });
   });
 
