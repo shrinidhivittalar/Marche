@@ -130,16 +130,76 @@ end of the range would have silently hidden it.
 
 ---
 
+## Browser results — 13 of 13 pass
+
+`apps/web/e2e/jobs.spec.ts`, driven with Playwright against the same real API
+and database. Each run creates its own tagged accounts and deletes them in
+teardown.
+
+| Journey                                                                               | Result |
+| ------------------------------------------------------------------------------------- | ------ |
+| Client posts a requirement, publishes it, provider finds it on the board and opens it | ✅     |
+| Saved draft is reachable from the dashboard, as the toast promises                    | ✅     |
+| Published requirement cancelled from the list                                         | ✅     |
+| State filters count real requirements                                                 | ✅     |
+| Draft never appears in provider discovery                                             | ✅     |
+| Cancelled requirement leaves discovery                                                | ✅     |
+| Client cannot reach the provider board                                                | ✅     |
+| Wizard refuses an empty title                                                         | ✅     |
+| Wizard refuses a description shorter than the API accepts                             | ✅     |
+| Minimum with no maximum publishes as an open-ended budget                             | ✅     |
+| Category list populated from the seeded taxonomy                                      | ✅     |
+| Provider can browse the board                                                         | ✅     |
+| All four sorts accepted by the API                                                    | ✅     |
+
+### Two bugs the browser run found
+
+**1. An open-ended budget could not be published.** The wizard read a maximum
+left at zero as "less than the minimum" and blocked publishing, even though
+the API accepts an open-ended range and the card renders it as "From
+₹25,000". The mock hid it by pre-filling both budget fields; the rewired form
+starts empty, so the first real client entering only a minimum would have hit
+a wall with an error that made no sense. Fixed, with a regression test.
+
+**2. The dashboard promised something it did not deliver.** Saving a draft
+said "you can find it on your dashboard", and the dashboard still listed mock
+data — so a real draft was reachable only by URL. The list now reads
+`GET /jobs/me`. Fixed, with a test that asserts the promise specifically.
+
+A third failure was my own test harness, not the product: `Invoke-WebRequest`
+prompting in non-interactive mode made draft deletion look broken. Verified
+separately — deletion works.
+
+---
+
 ## Not tested
 
 - **Attachments.** `apps/api/.env` has no `STORAGE_*` variables, so uploads
   fail with "storage is not configured" — the media module behaving as
   designed, failing only media requests instead of refusing to boot. The
-  _authorisation_ around attachments was verified (401/403/404 above); the
-  upload path itself was not. Needs R2 credentials or local MinIO.
-- **The browser UI.** Every result here is HTTP-level. The rewired screens
-  type-check, lint and build, but have not been driven in a browser. A
-  Playwright run over the real flow is still outstanding.
+  _authorisation_ around attachments was verified (401/403/404 above), and the
+  UI states its file types and limits, but no file has ever been uploaded.
+  Needs R2 credentials or local MinIO.
+- **Event dates and times through the UI.** The API round-trip is verified
+  above; the browser tests leave dates empty rather than driving the custom
+  date and time widgets, which would test those components instead of this
+  flow.
+
+---
+
+## Open gap: public discovery is unreachable in the UI
+
+`GET /jobs` is deliberately public, and the provider detail page already
+handles a signed-out reader ("Sign in to view the files"). But `App.tsx:227`
+gates every `/provider/*` route to `role === 'vendor'`, and a signed-out
+visitor defaults to `client` — so they are bounced to the client dashboard
+and never reach the board.
+
+The backend and the frontend disagree about who may browse requirements.
+Nothing is broken or leaking; the public capability simply has no door.
+Recorded rather than fixed, because changing app-wide routing is not Module
+4's decision to make. Worth settling before launch: either open a public
+route to the board, or drop the pretence that discovery is public.
 
 ---
 
