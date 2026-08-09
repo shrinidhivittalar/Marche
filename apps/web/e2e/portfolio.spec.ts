@@ -3,6 +3,22 @@ import { test, expect, signIn } from './fixtures';
 // Portfolio had a table, endpoints, validation and no UI whatsoever — the
 // surface a client actually judges a provider on. These cover the rule the
 // API enforces most strictly: a piece cannot exist without an image.
+//
+// Rewritten when images became real uploads. The original tests pasted https
+// URLs into a text field and asserted the API rejecting a non-https one;
+// both the field and the rule are gone, because a portfolio image is now a
+// media id and there is nothing to paste.
+//
+// The upload itself is not driven here. It needs object storage, and
+// STORAGE_* is unset in this environment, so a chosen file fails at the API
+// with "storage is not configured" — the media module behaving exactly as
+// designed. Asserting around that would test the gap rather than the
+// feature, so the upload path is recorded as untested in
+// module4-e2e-results.md instead of being faked green.
+//
+// What remains is everything that is still true and still worth defending:
+// the API's "at least one image" rule reaching the button, and the fact that
+// portfolio is Provider-only.
 
 test.describe('portfolio', () => {
   test.beforeEach(async ({ page, users }) => {
@@ -11,73 +27,31 @@ test.describe('portfolio', () => {
     await expect(page.getByTestId('portfolio-card')).toBeVisible({ timeout: 40_000 });
   });
 
-  test('starts empty and tells you an image is required', async ({ page }) => {
+  test('starts empty, with an uploader rather than a URL field', async ({ page }) => {
     await expect(page.getByTestId('portfolio-empty')).toBeVisible();
-    await expect(page.getByTestId('portfolio-image-hint')).toContainText('at least one image');
-    // Saying so up front beats letting someone write a description and
-    // then be refused by the API.
-    await expect(page.getByTestId('add-portfolio')).toBeDisabled();
+
+    // The pasted-link inputs are gone for good.
+    await expect(page.getByTestId('portfolio-image-url')).toHaveCount(0);
+    await expect(page.getByTestId('portfolio-add-image')).toHaveCount(0);
   });
 
-  test('adds a piece with several images, then removes it', async ({ page }) => {
-    const title = `E2E piece ${Date.now()}`;
-
-    await page.getByTestId('portfolio-title').fill(title);
-    await page.getByTestId('portfolio-description').fill('A wedding shoot in Coorg.');
-    await page.getByTestId('portfolio-category').fill('Wedding');
-
-    await page.getByTestId('portfolio-image-url').fill('https://example.com/one.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-    await page.getByTestId('portfolio-image-url').fill('https://example.com/two.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-
-    await expect(page.getByTestId('portfolio-pending-image')).toHaveCount(2);
-    await expect(page.getByTestId('portfolio-image-hint')).toContainText('2 images ready');
-
-    await page.getByTestId('add-portfolio').click();
-    await expect(page.getByTestId('profile-success')).toBeVisible({ timeout: 30_000 });
-
-    const item = page.locator(`[data-portfolio-title="${title}"]`);
-    await expect(item).toBeVisible();
-    await expect(item).toContainText('2 images');
-
-    await item.getByRole('button').click();
-    await expect(page.getByTestId('profile-success')).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator(`[data-portfolio-title="${title}"]`)).toHaveCount(0);
-  });
-
-  test('the save button stays disabled until title, description and an image exist', async ({
-    page,
-  }) => {
+  test('the save button stays disabled until an image is attached', async ({ page }) => {
     await page.getByTestId('portfolio-title').fill('Only a title');
     await expect(page.getByTestId('add-portfolio')).toBeDisabled();
 
     await page.getByTestId('portfolio-description').fill('And a description.');
-    // Still disabled: the API requires at least one image.
+    // Still disabled: the API requires at least one image, and saying so
+    // here beats letting someone write a description and then be refused.
     await expect(page.getByTestId('add-portfolio')).toBeDisabled();
 
-    await page.getByTestId('portfolio-image-url').fill('https://example.com/pic.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-    await expect(page.getByTestId('add-portfolio')).toBeEnabled();
+    await expect(page.getByTestId('uploaded-image')).toHaveCount(0);
   });
 
-  test('a non-https image is rejected by the API with its message shown', async ({ page }) => {
-    await page.getByTestId('portfolio-title').fill(`E2E insecure ${Date.now()}`);
-    await page.getByTestId('portfolio-description').fill('Should not save.');
-    await page.getByTestId('portfolio-image-url').fill('http://example.com/insecure.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-    await page.getByTestId('add-portfolio').click();
-
-    await expect(page.getByTestId('profile-error')).toBeVisible({ timeout: 30_000 });
-  });
-
-  test('the same image cannot be added twice', async ({ page }) => {
-    await page.getByTestId('portfolio-image-url').fill('https://example.com/same.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-    await page.getByTestId('portfolio-image-url').fill('https://example.com/same.jpg');
-    await page.getByTestId('portfolio-add-image').click();
-
-    await expect(page.getByTestId('portfolio-pending-image')).toHaveCount(1);
+  test('the uploader states its limit before anything is chosen', async ({ page }) => {
+    const uploader = page.getByTestId('image-uploader').filter({ hasText: /image/i }).first();
+    await expect(uploader).toBeVisible();
+    // Capacity is shown up front rather than discovered by hitting it.
+    await expect(uploader.getByTestId('uploader-count')).toContainText('0 of');
   });
 });
 
