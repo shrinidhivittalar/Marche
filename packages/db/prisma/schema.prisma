@@ -560,6 +560,8 @@ model Job {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  attachments JobAttachment[]
+
   @@index([clientProfileId])
   @@index([categoryId])
   // Serves the provider discovery query: published jobs, newest first.
@@ -567,6 +569,38 @@ model Job {
   // Serves the event_date sort and the "happening before X" filter.
   @@index([eventDate])
   @@map("jobs")
+}
+
+// A file the client attached to their requirement — a floor plan, a mood
+// board, a brief.
+//
+// These are uploaded as PRIVATE media, unlike portfolio and service images.
+// A portfolio photo is advertising and is meant to be seen; a requirement's
+// attachment is working material that may name a venue, a guest list or a
+// budget. Nothing is served from the public requirement route because of
+// it: attachments have their own authenticated endpoint, so who may see a
+// file is decided in one place rather than inferred from where it appears.
+model JobAttachment {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Restrict, matching PortfolioImage and ServiceImage: deleting a file
+  // still attached to a live requirement must fail loudly rather than
+  // silently blank it. The owner detaches it first.
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  // Explicit rather than "first by createdAt", so ordering does not depend
+  // on insertion order. Same reasoning as ServiceImage.sortOrder.
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  // The same file twice on one requirement is a mistake, not a feature.
+  @@unique([jobId, mediaId])
+  @@index([jobId])
+  @@map("job_attachments")
 }
 
 // Media / upload pipeline (shared infrastructure, not a business module).
@@ -632,6 +666,7 @@ model Media {
 
   portfolioImages PortfolioImage[]
   serviceImages   ServiceImage[]
+  jobAttachments  JobAttachment[]
   avatarForProfiles Profile[]
 
   @@index([ownerUserId])

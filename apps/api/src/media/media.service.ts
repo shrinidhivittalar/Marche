@@ -157,6 +157,24 @@ export class MediaService {
   }
 
   /**
+   * Marks a file private, because of what it was attached to.
+   *
+   * Visibility is decided by use, not declared at upload: the uploader has
+   * no idea yet where a file will end up, and letting the client claim it
+   * would make it a request rather than a fact. A portfolio photo is
+   * advertising; a requirement's attachment is working material that may
+   * name a venue, a guest list or a budget.
+   *
+   * PRIVATE is not self-enforcing. Nothing is served straight from storage
+   * — every URL is signed by a business route that has already decided the
+   * caller may see the thing the file hangs off. This records the intent
+   * and is what a future direct-serving path would have to honour.
+   */
+  async markPrivate(mediaId: string): Promise<void> {
+    await this.mediaRepository.update(mediaId, { visibility: 'PRIVATE' });
+  }
+
+  /**
    * A short-lived viewable URL for a stored file, or null when there is no
    * media or it never completed.
    *

@@ -7,6 +7,7 @@ import {
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
 import { CategoriesService } from '../../marketplace/services/categories.service';
+import { MediaService } from '../../media/media.service';
 import { assertClientRole } from '../../profiles/profile-access.util';
 import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
@@ -43,6 +44,7 @@ export class JobsService {
     private readonly profilesRepository: ProfilesRepository,
     private readonly categoriesRepository: CategoriesRepository,
     private readonly categoriesService: CategoriesService,
+    private readonly mediaService: MediaService,
   ) {}
 
   // ---------- client-owned writes ----------
@@ -201,6 +203,94 @@ export class JobsService {
       throw new NotFoundException('Requirement not found');
     }
     return job;
+  }
+
+  // ---------- attachments ----------
+
+  // Capped for the same reason service images are: a requirement with
+  // forty files attached is a document dump, not a brief.
+  private static readonly MAX_ATTACHMENTS = 10;
+
+  async addAttachment(userId: string, jobId: string, mediaId: string) {
+    const { job } = await this.getOwnJob(userId, jobId);
+
+    if (!EDITABLE_STATUSES.includes(job.status)) {
+      throw new BadRequestException(
+        `A ${job.status.toLowerCase()} requirement can no longer be changed`,
+      );
+    }
+
+    // Both halves of the rule: the file is this user's, and it finished
+    // uploading. Without the second, a requirement could carry a file that
+    // never arrived.
+    await this.mediaService.assertAttachable(userId, mediaId);
+
+    const existing = await this.jobsRepository.countAttachments(job.id);
+    if (existing >= JobsService.MAX_ATTACHMENTS) {
+      throw new BadRequestException(
+        `A requirement can have at most ${JobsService.MAX_ATTACHMENTS} attachments`,
+      );
+    }
+
+    // Marked private because of where it landed, not because the uploader
+    // said so. See MediaService.markPrivate.
+    await this.mediaService.markPrivate(mediaId);
+
+    return this.jobsRepository.addAttachment(job.id, mediaId, existing);
+  }
+
+  async removeAttachment(userId: string, jobId: string, attachmentId: string): Promise<void> {
+    const { job } = await this.getOwnJob(userId, jobId);
+
+    const result = await this.jobsRepository.removeAttachment(job.id, attachmentId);
+    if (result.count === 0) {
+      throw new NotFoundException('Attachment not found on this requirement');
+    }
+    // The Media row is deliberately left alone. The file belongs to the
+    // user, not to this requirement, and they may want to attach it
+    // elsewhere. Deleting it is a separate, explicit action.
+  }
+
+  /**
+   * Attachments for a requirement, with signed URLs.
+   *
+   * Authenticated callers only, and never on the public requirement route:
+   * a guest can read what a client is asking for, but not download their
+   * floor plan. The owner sees their own in any state; everyone else sees
+   * them only while the requirement is actually published, so cancelling
+   * withdraws the files along with the ask.
+   */
+  async listAttachments(userId: string, jobId: string) {
+    const job = await this.jobsRepository.findById(jobId);
+    if (!job) {
+      throw new NotFoundException('Requirement not found');
+    }
+
+    const profile = await this.getOwnProfile(userId);
+    const isOwner = job.clientProfileId === profile.id;
+
+    if (!isOwner) {
+      // Re-read through the public filter rather than checking status
+      // inline: that way "who may see this" has one definition, and a
+      // suspended client's attachments disappear with their requirement.
+      const visible = await this.jobsRepository.findPublicById(jobId);
+      if (!visible) {
+        throw new ForbiddenException('You do not have access to this requirement');
+      }
+    }
+
+    const attachments = await this.jobsRepository.listAttachments(jobId);
+
+    return Promise.all(
+      // media is dropped rather than spread: objectKey is the storage path
+      // and no client needs it.
+      attachments.map(async ({ media, ...attachment }) => ({
+        ...attachment,
+        fileName: media?.originalFileName ?? null,
+        mimeType: media?.mimeType ?? null,
+        url: await this.mediaService.signViewUrl(media),
+      })),
+    );
   }
 
   // ---------- public reads ----------

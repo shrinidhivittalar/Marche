@@ -135,6 +135,39 @@ export class JobsRepository {
     });
   }
 
+  // ---------- attachments ----------
+
+  listAttachments(jobId: string) {
+    return this.prisma.client.jobAttachment.findMany({
+      where: { jobId },
+      orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        displayOrder: true,
+        mediaId: true,
+        media: {
+          select: { objectKey: true, status: true, originalFileName: true, mimeType: true },
+        },
+      },
+    });
+  }
+
+  addAttachment(jobId: string, mediaId: string, displayOrder: number) {
+    return this.prisma.client.jobAttachment.create({
+      data: { jobId, mediaId, displayOrder },
+    });
+  }
+
+  removeAttachment(jobId: string, attachmentId: string) {
+    // Scoped by jobId as well as attachmentId: checking the attachment id
+    // alone would let any client detach any other requirement's file.
+    return this.prisma.client.jobAttachment.deleteMany({ where: { id: attachmentId, jobId } });
+  }
+
+  countAttachments(jobId: string) {
+    return this.prisma.client.jobAttachment.count({ where: { jobId } });
+  }
+
   // ---------- filter construction ----------
 
   /**

@@ -21,6 +21,9 @@ function routesOf(controller: new (...args: never[]) => unknown): Route[] {
     .filter((route) => route.path !== undefined);
 }
 
+const guarded = (handler: string) =>
+  Boolean(Reflect.getMetadata('__guards__', JobsController.prototype[handler as never]));
+
 describe('jobs route registration', () => {
   const routes = routesOf(JobsController);
   const gets = routes.filter((r) => r.method === RequestMethod.GET);
@@ -56,12 +59,24 @@ describe('jobs route registration', () => {
   // Browse and single-requirement reads carry no auth guard: a provider
   // evaluating whether to sign up must be able to see the work on offer.
   it('leaves the two public reads unguarded', () => {
-    const guarded = (handler: string) =>
-      Boolean(Reflect.getMetadata('__guards__', JobsController.prototype[handler as never]));
-
     expect(guarded('search')).toBe(false);
     expect(guarded('findOne')).toBe(false);
     expect(guarded('create')).toBe(true);
+  });
+
+  // The requirement is public; its files are not. A guest can read what a
+  // client is asking for without being able to download their floor plan,
+  // which is the whole reason attachments are not folded into GET /jobs/:id.
+  it('guards attachment reads even though the requirement itself is public', () => {
+    expect(guarded('listAttachments')).toBe(true);
+    expect(guarded('addAttachment')).toBe(true);
+    expect(guarded('removeAttachment')).toBe(true);
+  });
+
+  it('scopes attachment routes under the requirement that owns them', () => {
+    const paths = routes.map((r) => r.path);
+    expect(paths).toContain(':id/attachments');
+    expect(paths).toContain(':id/attachments/:attachmentId');
   });
 
   // FILLED is reached by accepting a proposal, in Module 5. A route here

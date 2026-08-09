@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { MarketplaceModule } from '../marketplace/marketplace.module';
+import { MediaModule } from '../media/media.module';
 import { JobsController } from './controllers/jobs.controller';
 import { JobsRepository } from './repositories/jobs.repository';
 import { JobsService } from './services/jobs.service';
@@ -13,7 +14,7 @@ import { JobsService } from './services/jobs.service';
 // JobsService is exported for Module 5, which needs markFilled when a
 // proposal is accepted.
 @Module({
-  imports: [ProfilesModule, MarketplaceModule],
+  imports: [ProfilesModule, MarketplaceModule, MediaModule],
   controllers: [JobsController],
   providers: [JobsRepository, JobsService],
   exports: [JobsService],

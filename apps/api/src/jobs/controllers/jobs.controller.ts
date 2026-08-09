@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { JobsService } from '../services/jobs.service';
 import { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import { SearchJobsDto } from '../dto/search-jobs.dto';
+import { AttachFileDto } from '../dto/attach-file.dto';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 
 // "Requirement" in every summary, "job" in every path and type name — the
@@ -114,6 +115,56 @@ export class JobsController {
   @UseGuards(JwtAuthGuard)
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.jobsService.cancel(user.id, id);
+  }
+
+  // Attachments live under the requirement that owns them, so the route
+  // carries both ids and neither can be checked in isolation.
+  //
+  // Reads are authenticated even though the requirement itself is public: a
+  // guest can see what a client is asking for, but not download their floor
+  // plan. This is why attachments are not folded into GET /jobs/:id.
+  @Get(':id/attachments')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Files attached to a requirement, as short-lived signed URLs',
+    description:
+      'The owner sees their own in any state. Everyone else sees them only while the ' +
+      'requirement is published.',
+  })
+  @UseGuards(JwtAuthGuard)
+  listAttachments(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.jobsService.listAttachments(user.id, id);
+  }
+
+  @Post(':id/attachments')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Attach an uploaded file to your own requirement',
+    description: 'The file must belong to you and have finished uploading.',
+  })
+  @UseGuards(JwtAuthGuard)
+  addAttachment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: AttachFileDto,
+  ) {
+    return this.jobsService.addAttachment(user.id, id, dto.mediaId);
+  }
+
+  @Delete(':id/attachments/:attachmentId')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Detach a file from your own requirement',
+    description: 'The file itself is kept — it belongs to you, not to the requirement.',
+  })
+  @UseGuards(JwtAuthGuard)
+  async removeAttachment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    await this.jobsService.removeAttachment(user.id, id, attachmentId);
   }
 
   @Delete(':id')
