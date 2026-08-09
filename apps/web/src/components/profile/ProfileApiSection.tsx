@@ -181,6 +181,17 @@ export const ProfileApiSection: React.FC = () => {
             onAdd={(body) => run(() => profilesApi.addLanguage(token, body), 'Language added.')}
             onRemove={(id) => run(() => profilesApi.removeLanguage(token, id), 'Language removed.')}
           />
+
+          <PortfolioCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) =>
+              run(() => profilesApi.addPortfolio(token, body), 'Portfolio piece added.')
+            }
+            onRemove={(id) =>
+              run(() => profilesApi.removePortfolio(token, id), 'Portfolio piece removed.')
+            }
+          />
         </>
       )}
     </div>
@@ -723,6 +734,201 @@ function LanguagesCard({
         }}
       >
         Add language
+      </Button>
+    </Card>
+  );
+}
+
+// Portfolio is the surface a client actually judges a provider on, and it
+// had no UI at all — the table, the endpoints and the validation all
+// existed and were unreachable.
+//
+// Images are a list rather than one field because the API requires at
+// least one and accepts many (ArrayMinSize(1) in portfolio.dto.ts). They
+// are pasted https URLs, not uploads: there is no storage pipeline yet,
+// which is a known gap recorded in module2.md.
+function PortfolioCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [projectDate, setProjectDate] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+
+  const addImage = () => {
+    const url = imageUrl.trim();
+    if (!url || imageUrls.includes(url)) return;
+    setImageUrls([...imageUrls, url]);
+    setImageUrl('');
+  };
+
+  const reset = () => {
+    setTitle('');
+    setDescription('');
+    setCategory('');
+    setProjectDate('');
+    setImageUrl('');
+    setImageUrls([]);
+  };
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="portfolio-card">
+      <h2 className="text-lg font-semibold text-ink">Portfolio</h2>
+
+      <div className="space-y-2" data-testid="portfolio-list">
+        {(profile.portfolioItems ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="portfolio-empty">
+            No portfolio pieces yet. Add your best work so clients can see it.
+          </p>
+        )}
+        {(profile.portfolioItems ?? []).map((item) => (
+          <div
+            key={item.id}
+            data-testid="portfolio-item"
+            data-portfolio-title={item.title}
+            className="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">{item.title}</p>
+              <p className="text-xs text-muted truncate">{item.description}</p>
+              <p className="text-xs text-muted">
+                {(item.images ?? []).length} image
+                {(item.images ?? []).length === 1 ? '' : 's'}
+                {item.projectDate ? ` · ${new Date(item.projectDate).getFullYear()}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label={`Remove ${item.title}`}
+              data-testid={`remove-portfolio-${item.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(item.id)}
+              className="text-muted hover:text-danger shrink-0"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          data-testid="portfolio-title"
+          aria-label="Portfolio title"
+        />
+        <Input
+          placeholder="Category (optional)"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          data-testid="portfolio-category"
+          aria-label="Portfolio category"
+        />
+      </div>
+
+      <Textarea
+        placeholder="What was this project?"
+        rows={2}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        data-testid="portfolio-description"
+        aria-label="Portfolio description"
+      />
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="portfolio-date" className="text-xs text-muted">
+          Project date (optional)
+        </label>
+        <Input
+          id="portfolio-date"
+          type="date"
+          value={projectDate}
+          onChange={(e) => setProjectDate(e.target.value)}
+          data-testid="portfolio-date"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://… image link"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addImage();
+              }
+            }}
+            data-testid="portfolio-image-url"
+            aria-label="Image URL"
+          />
+          <Button
+            variant="secondary"
+            disabled={disabled || !imageUrl.trim()}
+            data-testid="portfolio-add-image"
+            onClick={addImage}
+          >
+            Add image
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2" data-testid="portfolio-pending-images">
+          {imageUrls.map((url) => (
+            <span
+              key={url}
+              data-testid="portfolio-pending-image"
+              className="inline-flex items-center gap-2 rounded-full bg-surface-subtle border border-border px-3 py-1 text-xs max-w-full"
+            >
+              <span className="truncate max-w-[16rem]">{url}</span>
+              <button
+                type="button"
+                aria-label={`Remove image ${url}`}
+                onClick={() => setImageUrls(imageUrls.filter((u) => u !== url))}
+                className="text-muted hover:text-danger"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
+        {/* The API rejects a piece with no images. Saying so up front beats
+            letting someone write a description and then be refused. */}
+        <p className="text-xs text-muted" data-testid="portfolio-image-hint">
+          {imageUrls.length === 0
+            ? 'Add at least one image link (https) to save a portfolio piece.'
+            : `${imageUrls.length} image${imageUrls.length === 1 ? '' : 's'} ready.`}
+        </p>
+      </div>
+
+      <Button
+        disabled={disabled || !title.trim() || !description.trim() || imageUrls.length === 0}
+        data-testid="add-portfolio"
+        onClick={() => {
+          onAdd({
+            title: title.trim(),
+            description: description.trim(),
+            category: category.trim() || undefined,
+            projectDate: projectDate ? new Date(projectDate).toISOString() : undefined,
+            imageUrls,
+          });
+          reset();
+        }}
+      >
+        Add portfolio piece
       </Button>
     </Card>
   );
