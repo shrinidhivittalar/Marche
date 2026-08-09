@@ -13,7 +13,7 @@ export class PortfolioRepository {
     category?: string;
     coverImage?: string;
     projectDate?: Date;
-    imageUrls: string[];
+    mediaIds: string[];
   }): Promise<Portfolio> {
     return this.prisma.client.portfolio.create({
       data: {
@@ -23,7 +23,7 @@ export class PortfolioRepository {
         category: data.category,
         coverImage: data.coverImage,
         projectDate: data.projectDate,
-        images: { create: data.imageUrls.map((url) => ({ url })) },
+        images: { create: data.mediaIds.map((mediaId) => ({ mediaId })) },
       },
     });
   }

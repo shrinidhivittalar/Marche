@@ -6,6 +6,7 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   IsUrl,
   MaxLength,
 } from 'class-validator';
@@ -37,12 +38,15 @@ export class CreatePortfolioDto {
   @IsDateString()
   projectDate?: string;
 
-  @ApiProperty({ type: [String], description: 'At least one image URL is required' })
+  // Ids of files already uploaded through /media, not URLs. The service
+  // checks each one belongs to the caller and has finished uploading, so a
+  // portfolio piece can never reference someone else's file or one that
+  // never arrived.
+  @ApiProperty({ type: [String], description: 'Ids of uploaded media; at least one is required' })
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one image is required' })
-  @IsUrl({ protocols: ['https'], require_protocol: true }, { each: true })
-  @MaxLength(300, { each: true })
-  imageUrls!: string[];
+  @IsUUID(undefined, { each: true })
+  mediaIds!: string[];
 }
 
 export class UpdatePortfolioDto {

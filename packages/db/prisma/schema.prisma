@@ -166,7 +166,11 @@ model Profile {
   displayName String
   headline    String?
   bio         String?
-  avatar      String?
+  // Uploaded file rather than a pasted URL. SetNull so deleting the image
+  // leaves the profile intact and simply avatar-less, which is a real state
+  // — unlike a portfolio piece, a profile without a picture still works.
+  avatarMediaId String?
+  avatarMedia   Media?  @relation(fields: [avatarMediaId], references: [id], onDelete: SetNull)
   location    String?
   timezone    String?
   socialLinks Json?
@@ -216,14 +220,24 @@ model Portfolio {
   @@map("portfolio_items")
 }
 
+// Now a join between a portfolio piece and an uploaded file, rather than a
+// pasted URL. No URL is stored: one is signed at read time from the media's
+// objectKey, so moving bucket or provider never means rewriting rows.
 model PortfolioImage {
   id          String    @id @default(uuid())
   portfolioId String
   portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  url         String
+
+  // Restrict, not cascade: deleting a file that is still on someone's
+  // published portfolio should fail loudly rather than silently blank the
+  // piece. The owner detaches it first.
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
 
+  // The same file twice in one piece is a mistake, not a feature.
+  @@unique([portfolioId, mediaId])
   @@index([portfolioId])
   @@map("portfolio_images")
 }
@@ -420,12 +434,35 @@ model Service {
   deletedAt DateTime?
 
   skills ServiceSkill[]
+  images ServiceImage[]
 
   @@index([profileId])
   @@index([categoryId])
   // Serves the default browse query: published services, newest first.
   @@index([status, createdAt])
   @@map("services")
+}
+
+// Deferred out of Module 3 because image handling was pasted-URL-only at
+// the time (phase_scope1.2.0.md). The upload pipeline is what makes this
+// worth building, so it lands here rather than as a third URL-string table.
+model ServiceImage {
+  id        String  @id @default(uuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  // Which image leads on the card. Explicit rather than "first by
+  // createdAt", so reordering does not depend on insertion order.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([serviceId, mediaId])
+  @@index([serviceId])
+  @@map("service_images")
 }
 
 // Maps a Service to the seeded, platform-wide Skill list. These are the
@@ -508,6 +545,10 @@ model Media {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  portfolioImages PortfolioImage[]
+  serviceImages   ServiceImage[]
+  avatarForProfiles Profile[]
 
   @@index([ownerUserId])
   // Serves the orphan sweep: stale PENDING rows, oldest first.

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProfilesModule } from '../profiles/profiles.module';
+import { MediaModule } from '../media/media.module';
 import { CategoriesController } from './controllers/categories.controller';
 import { ServicesController } from './controllers/services.controller';
 import { MarketplaceController } from './controllers/marketplace.controller';
@@ -13,7 +14,7 @@ import { ServicesService } from './services/services.service';
 // only ever reads profiles — it resolves service owners and filters
 // discovery by location and availability, and never writes profile data.
 @Module({
-  imports: [ProfilesModule],
+  imports: [ProfilesModule, MediaModule],
   controllers: [CategoriesController, ServicesController, MarketplaceController],
   providers: [CategoriesRepository, ServicesRepository, CategoriesService, ServicesService],
   exports: [CategoriesService, ServicesService],

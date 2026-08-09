@@ -25,6 +25,11 @@ export const mediaConfig = {
   // large file on a poor connection. Applies to upload URLs only.
   uploadUrlTtlSeconds: Number(process.env.MEDIA_UPLOAD_URL_TTL ?? 300),
 
+  // Longer than an upload URL because a browser may hold a page open, but
+  // still short: a leaked image link should stop working quickly. Long
+  // enough that a listing page does not expire while being read.
+  downloadUrlTtlSeconds: Number(process.env.MEDIA_DOWNLOAD_URL_TTL ?? 3600),
+
   // A PENDING row older than this is an abandoned upload — the browser
   // asked for a URL and never finished. Swept lazily; see MediaService.
   orphanAgeMinutes: Number(process.env.MEDIA_ORPHAN_AGE_MINUTES ?? 60),

@@ -138,6 +138,19 @@ export class StorageService {
   }
 
   /**
+   * A short-lived URL for reading an object.
+   *
+   * The bucket is private, so even PUBLIC media is served this way rather
+   * than by a bare URL — "public" describes who may ask for it, not that
+   * the object is world-readable. Signing is local crypto with no network
+   * call, so generating one per image on a listing page is cheap.
+   */
+  async createDownloadUrl(objectKey: string, ttlSeconds: number): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
+    return getSignedUrl(this.client, command, { expiresIn: ttlSeconds });
+  }
+
+  /**
    * Best-effort removal. A failure here is logged rather than thrown: the
    * caller is usually cleaning up after a rejected upload, and turning that
    * into a 500 would report failure for an operation that already succeeded

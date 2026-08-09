@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { PortfolioRepository } from '../repositories/portfolio.repository';
+import { MediaService } from '../../media/media.service';
 import { assertOwnership, assertProviderRole } from '../profile-access.util';
 import type { CreatePortfolioDto, UpdatePortfolioDto } from '../dto/portfolio.dto';
 import type { Portfolio } from '@marche/db';
@@ -10,11 +11,20 @@ export class PortfolioService {
   constructor(
     private readonly profilesRepository: ProfilesRepository,
     private readonly portfolioRepository: PortfolioRepository,
+    private readonly mediaService: MediaService,
   ) {}
 
   async create(userId: string, dto: CreatePortfolioDto): Promise<Portfolio> {
     const profile = await this.getOwnProfile(userId);
     assertProviderRole(profile.user.role);
+
+    // Every file is checked before anything is written. assertAttachable
+    // enforces both halves of the rule: the file belongs to this user, and
+    // it actually finished uploading. Without the first, one provider could
+    // put another's photo on their portfolio; without the second, a piece
+    // could reference a file that never arrived and render permanently
+    // broken on a public profile.
+    await Promise.all(dto.mediaIds.map((id) => this.mediaService.assertAttachable(userId, id)));
 
     return this.portfolioRepository.create({
       profileId: profile.id,
@@ -23,7 +33,7 @@ export class PortfolioService {
       category: dto.category,
       coverImage: dto.coverImage,
       projectDate: dto.projectDate ? new Date(dto.projectDate) : undefined,
-      imageUrls: dto.imageUrls,
+      mediaIds: dto.mediaIds,
     });
   }
 

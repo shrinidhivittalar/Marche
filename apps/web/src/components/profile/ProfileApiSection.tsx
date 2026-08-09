@@ -3,6 +3,8 @@ import { Trash2 } from 'lucide-react';
 import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
+import { ImageUploader } from '../media/ImageUploader';
+import type { UploadedImage } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import {
   profilesApi,
@@ -112,6 +114,7 @@ export const ProfileApiSection: React.FC = () => {
       <CoreProfileForm
         key={p.id}
         profile={p}
+        token={token}
         saving={saving}
         error={error}
         success={success}
@@ -184,6 +187,7 @@ export const ProfileApiSection: React.FC = () => {
 
           <PortfolioCard
             profile={p}
+            token={token}
             disabled={saving}
             onAdd={(body) =>
               run(() => profilesApi.addPortfolio(token, body), 'Portfolio piece added.')
@@ -205,12 +209,14 @@ export const ProfileApiSection: React.FC = () => {
 // it, so a save never discards what the user has typed.
 function CoreProfileForm({
   profile,
+  token,
   saving,
   error,
   success,
   onSave,
 }: {
   profile: ApiProfile;
+  token: string;
   saving: boolean;
   error: string | null;
   success: string | null;
@@ -221,7 +227,19 @@ function CoreProfileForm({
   const [bio, setBio] = useState(profile.bio ?? '');
   const [location, setLocation] = useState(profile.location ?? '');
   const [username, setUsername] = useState(profile.username ?? '');
-  const [avatar, setAvatar] = useState(profile.avatar ?? '');
+  // Seeded from the saved media id, with the signed URL the server returned
+  // as its preview. The URL is display only — a save sends the id.
+  const [avatar, setAvatar] = useState<UploadedImage[]>(
+    profile.avatarMediaId
+      ? [
+          {
+            mediaId: profile.avatarMediaId,
+            fileName: 'Profile picture',
+            url: profile.avatar ?? undefined,
+          },
+        ]
+      : [],
+  );
   const [visibility, setVisibility] = useState<Visibility>(profile.visibility ?? 'PUBLIC');
 
   return (
@@ -250,27 +268,17 @@ function CoreProfileForm({
         data-testid="input-username"
       />
 
-      <TextField
-        label="Avatar URL"
-        value={avatar}
-        onChange={(e) => setAvatar(e.target.value)}
-        placeholder="https://…"
-        hint="Paste a link to an image. Must start with https."
-        data-testid="input-avatar"
+      {/* A profile has one picture, so the uploader is capped at one and
+          changing it means removing the current one first. Saving with none
+          clears it, which is a real state rather than an error. */}
+      <ImageUploader
+        token={token}
+        images={avatar}
+        max={1}
+        disabled={saving}
+        onChange={setAvatar}
+        label="Profile picture"
       />
-      {avatar.trim() !== '' && (
-        <img
-          src={avatar}
-          alt="Avatar preview"
-          data-testid="avatar-preview"
-          // A broken link is the most likely failure with pasted URLs, so
-          // it fails visibly here rather than silently on every card.
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
-          className="w-16 h-16 rounded-xl object-cover ring-2 ring-border"
-        />
-      )}
 
       <TextField
         label="Headline"
@@ -339,14 +347,15 @@ function CoreProfileForm({
             onSave({
               displayName: displayName.trim(),
               // Empty strings are sent as null so clearing a field actually
-              // clears it rather than storing "". Sending "" for username or
-              // avatar would fail their format validation instead of
-              // clearing them.
+              // clears it rather than storing "". Sending "" for username
+              // would fail its format validation instead of clearing it.
               headline: headline.trim() || null,
               bio: bio.trim() || null,
               location: location.trim() || null,
               username: username.trim() || null,
-              avatar: avatar.trim() || null,
+              // The id, never the signed URL. No picture is sent as null,
+              // which is what clears it.
+              avatarMediaId: avatar[0]?.mediaId ?? null,
               visibility,
             })
           }
@@ -745,15 +754,19 @@ function LanguagesCard({
 //
 // Images are a list rather than one field because the API requires at
 // least one and accepts many (ArrayMinSize(1) in portfolio.dto.ts). They
-// are pasted https URLs, not uploads: there is no storage pipeline yet,
-// which is a known gap recorded in module2.md.
+// are real uploads, and what is submitted is the media ids — the pasted-URL
+// fields they replaced were only ever a stand-in for the upload pipeline.
+const MAX_PORTFOLIO_IMAGES = 10;
+
 function PortfolioCard({
   profile,
+  token,
   disabled,
   onAdd,
   onRemove,
 }: {
   profile: ApiProfile;
+  token: string;
   disabled: boolean;
   onAdd: (body: Record<string, unknown>) => void;
   onRemove: (id: string) => void;
@@ -762,23 +775,14 @@ function PortfolioCard({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [projectDate, setProjectDate] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-
-  const addImage = () => {
-    const url = imageUrl.trim();
-    if (!url || imageUrls.includes(url)) return;
-    setImageUrls([...imageUrls, url]);
-    setImageUrl('');
-  };
+  const [images, setImages] = useState<UploadedImage[]>([]);
 
   const reset = () => {
     setTitle('');
     setDescription('');
     setCategory('');
     setProjectDate('');
-    setImageUrl('');
-    setImageUrls([]);
+    setImages([]);
   };
 
   return (
@@ -860,62 +864,17 @@ function PortfolioCard({
         />
       </div>
 
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <Input
-            placeholder="https://… image link"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addImage();
-              }
-            }}
-            data-testid="portfolio-image-url"
-            aria-label="Image URL"
-          />
-          <Button
-            variant="secondary"
-            disabled={disabled || !imageUrl.trim()}
-            data-testid="portfolio-add-image"
-            onClick={addImage}
-          >
-            Add image
-          </Button>
-        </div>
-
-        <div className="flex flex-wrap gap-2" data-testid="portfolio-pending-images">
-          {imageUrls.map((url) => (
-            <span
-              key={url}
-              data-testid="portfolio-pending-image"
-              className="inline-flex items-center gap-2 rounded-full bg-surface-subtle border border-border px-3 py-1 text-xs max-w-full"
-            >
-              <span className="truncate max-w-[16rem]">{url}</span>
-              <button
-                type="button"
-                aria-label={`Remove image ${url}`}
-                onClick={() => setImageUrls(imageUrls.filter((u) => u !== url))}
-                className="text-muted hover:text-danger"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-
-        {/* The API rejects a piece with no images. Saying so up front beats
-            letting someone write a description and then be refused. */}
-        <p className="text-xs text-muted" data-testid="portfolio-image-hint">
-          {imageUrls.length === 0
-            ? 'Add at least one image link (https) to save a portfolio piece.'
-            : `${imageUrls.length} image${imageUrls.length === 1 ? '' : 's'} ready.`}
-        </p>
-      </div>
+      <ImageUploader
+        token={token}
+        images={images}
+        max={MAX_PORTFOLIO_IMAGES}
+        disabled={disabled}
+        onChange={setImages}
+        label="Images"
+      />
 
       <Button
-        disabled={disabled || !title.trim() || !description.trim() || imageUrls.length === 0}
+        disabled={disabled || !title.trim() || !description.trim() || images.length === 0}
         data-testid="add-portfolio"
         onClick={() => {
           onAdd({
@@ -923,7 +882,7 @@ function PortfolioCard({
             description: description.trim(),
             category: category.trim() || undefined,
             projectDate: projectDate ? new Date(projectDate).toISOString() : undefined,
-            imageUrls,
+            mediaIds: images.map((image) => image.mediaId),
           });
           reset();
         }}

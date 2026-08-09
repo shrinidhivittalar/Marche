@@ -4,6 +4,7 @@ import { assertOwnership, assertProviderRole } from '../../profiles/profile-acce
 import { CategoriesRepository } from '../repositories/categories.repository';
 import { ServicesRepository, type ServiceSearchFilters } from '../repositories/services.repository';
 import { CategoriesService } from './categories.service';
+import { MediaService } from '../../media/media.service';
 import { normalizeTags } from '../service-tags.util';
 import { paginate, type Paginated } from '../pagination';
 import type { CreateServiceDto, ServiceVisibilityDto, UpdateServiceDto } from '../dto/service.dto';
@@ -20,6 +21,7 @@ export class ServicesService {
     private readonly servicesRepository: ServicesRepository,
     private readonly categoriesRepository: CategoriesRepository,
     private readonly categoriesService: CategoriesService,
+    private readonly mediaService: MediaService,
   ) {}
 
   // ---------- provider-owned writes ----------
@@ -119,10 +121,87 @@ export class ServicesService {
       this.servicesRepository.listByProfile(profile.id, (page - 1) * limit, limit),
       this.servicesRepository.countByProfile(profile.id),
     ]);
-    return paginate(data, total, page, limit);
+    return paginate(
+      await Promise.all(data.map((row) => this.withSignedImages(row))),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  // ---------- images ----------
+
+  // Capped because these ride on search-result payloads. Unlike portfolio
+  // pieces, which a client opens deliberately, service images load for
+  // every card on a browse page.
+  private static readonly MAX_IMAGES = 8;
+
+  async addImage(userId: string, serviceId: string, mediaId: string) {
+    const { service } = await this.getOwnService(userId, serviceId);
+
+    // Both halves of the rule: the file is this user's, and it finished
+    // uploading. Without the second, a listing could carry a permanently
+    // broken image on a public search page.
+    await this.mediaService.assertAttachable(userId, mediaId);
+
+    const existing = await this.servicesRepository.countImages(service.id);
+    if (existing >= ServicesService.MAX_IMAGES) {
+      throw new BadRequestException(
+        `A service can have at most ${ServicesService.MAX_IMAGES} images`,
+      );
+    }
+
+    return this.servicesRepository.addImage(service.id, mediaId, existing);
+  }
+
+  async removeImage(userId: string, serviceId: string, imageId: string): Promise<void> {
+    const { service } = await this.getOwnService(userId, serviceId);
+    const result = await this.servicesRepository.removeImage(service.id, imageId);
+    if (result.count === 0) {
+      throw new NotFoundException('Image not found on this service');
+    }
   }
 
   // ---------- public reads ----------
+
+  /**
+   * Swaps stored media references for signed, short-lived URLs — the
+   * listing's own images, and the provider avatar embedded in the card.
+   * The bucket is private, so this is the only way either reaches a
+   * browser, and the objectKey never leaves the API.
+   */
+  private async withSignedImages<T extends { images?: unknown[]; profile?: unknown }>(
+    row: T,
+  ): Promise<T> {
+    const images = (row.images ?? []) as {
+      media?: { objectKey: string; status: string } | null;
+    }[];
+
+    return {
+      ...row,
+      ...(row.profile ? { profile: await this.withSignedAvatar(row.profile) } : {}),
+      images: await Promise.all(
+        images.map(async ({ media, ...image }) => ({
+          ...image,
+          // media itself is dropped: objectKey is the storage path, and a
+          // client that has it plus a signed URL learns how keys are shaped.
+          url: await this.mediaService.signViewUrl(media),
+        })),
+      ),
+    };
+  }
+
+  /**
+   * Replaces a profile summary's avatarMedia with a signed `avatar`.
+   * Separate from withSignedImages because a provider card *is* the
+   * profile, whereas a service card merely embeds one.
+   */
+  private async withSignedAvatar<T>(profile: T): Promise<T> {
+    const { avatarMedia, ...rest } = profile as T & {
+      avatarMedia?: { objectKey: string; status: string } | null;
+    };
+    return { ...rest, avatar: await this.mediaService.signViewUrl(avatarMedia) } as T;
+  }
 
   async findPublicById(serviceId: string) {
     const service = await this.servicesRepository.findPublicById(serviceId);
@@ -132,7 +211,7 @@ export class ServicesService {
       // for unpublished listings.
       throw new NotFoundException('Service not found');
     }
-    return service;
+    return this.withSignedImages(service);
   }
 
   async search(dto: SearchServicesDto) {
@@ -142,7 +221,12 @@ export class ServicesService {
       this.servicesRepository.search(filters, dto.sort, (page - 1) * limit, limit),
       this.servicesRepository.countSearch(filters),
     ]);
-    return paginate(data, total, page, limit);
+    return paginate(
+      await Promise.all(data.map((row) => this.withSignedImages(row))),
+      total,
+      page,
+      limit,
+    );
   }
 
   async searchProviders(dto: SearchServicesDto): Promise<Paginated<unknown>> {
@@ -174,7 +258,12 @@ export class ServicesService {
       })
       .filter((row): row is NonNullable<typeof row> => row !== null);
 
-    return paginate(data, total, page, limit);
+    return paginate(
+      await Promise.all(data.map((row) => this.withSignedAvatar(row))),
+      total,
+      page,
+      limit,
+    );
   }
 
   // ---------- helpers ----------

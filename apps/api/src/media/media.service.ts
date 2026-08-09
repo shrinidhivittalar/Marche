@@ -156,6 +156,25 @@ export class MediaService {
     return media;
   }
 
+  /**
+   * A short-lived viewable URL for a stored file, or null when there is no
+   * media or it never completed.
+   *
+   * The bucket is private, so this is the only way an image reaches a
+   * browser — "PUBLIC" describes who may ask, not that the object is
+   * world-readable. Signing is local crypto with no network call, so doing
+   * this per image on a listing page is cheap.
+   *
+   * Takes the objectKey rather than an id so callers that already loaded
+   * the media through a relation do not pay for a second query.
+   */
+  async signViewUrl(
+    media: { objectKey: string; status?: string } | null | undefined,
+  ): Promise<string | null> {
+    if (!media || (media.status && media.status !== 'UPLOADED')) return null;
+    return this.storage.createDownloadUrl(media.objectKey, mediaConfig.downloadUrlTtlSeconds);
+  }
+
   private async getOwned(userId: string, mediaId: string): Promise<Media> {
     const media = await this.mediaRepository.findById(mediaId);
     if (!media) {

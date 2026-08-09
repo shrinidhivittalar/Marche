@@ -33,17 +33,25 @@ function build() {
     findProviderCards: jest.fn().mockResolvedValue([]),
     countExistingSkills: jest.fn().mockResolvedValue(0),
     findSkillIds: jest.fn().mockResolvedValue([]),
+    addImage: jest.fn().mockResolvedValue({ id: 'image_1' }),
+    removeImage: jest.fn().mockResolvedValue({ count: 1 }),
+    countImages: jest.fn().mockResolvedValue(0),
     addSkill: jest.fn().mockResolvedValue({}),
     removeSkill: jest.fn().mockResolvedValue({}),
   };
 
+  const mediaService = {
+    assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
+    signViewUrl: jest.fn().mockResolvedValue('https://signed.example/img'),
+  };
   const service = new ServicesService(
     profiles as unknown as ProfilesRepository,
     services as unknown as ServicesRepository,
     categories as unknown as CategoriesRepository,
     categoriesService as unknown as CategoriesService,
+    mediaService as never,
   );
-  return { service, profiles, services, categories, categoriesService };
+  return { service, profiles, services, categories, categoriesService, mediaService };
 }
 
 const dto: CreateServiceDto = {
@@ -307,6 +315,72 @@ describe('ServicesService', () => {
       services.findProviderCards.mockResolvedValue([{ id: 'p1' }]);
       const result = await service.searchProviders(searchDto());
       expect((result.data[0] as { startingFrom: number }).startingFrom).toBe(1500);
+    });
+  });
+
+  describe('images', () => {
+    it('attaches an uploaded image the caller owns', async () => {
+      const { service, services, mediaService } = build();
+      await service.addImage('user_1', 'svc_1', 'media_1');
+
+      expect(mediaService.assertAttachable).toHaveBeenCalledWith('user_1', 'media_1');
+      expect(services.addImage).toHaveBeenCalledWith('svc_1', 'media_1', 0);
+    });
+
+    // The attack: attaching another provider's photograph to your listing.
+    it('refuses to attach a file the caller does not own', async () => {
+      const { service, services, mediaService } = build();
+      mediaService.assertAttachable.mockRejectedValue(new ForbiddenException());
+
+      await expect(service.addImage('user_1', 'svc_1', 'someone_elses')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(services.addImage).not.toHaveBeenCalled();
+    });
+
+    it("refuses to attach an image to another provider's service", async () => {
+      const { service, services } = build();
+      services.findById.mockResolvedValue({ id: 'svc_1', profileId: 'someone_else' });
+
+      await expect(service.addImage('user_1', 'svc_1', 'media_1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(services.addImage).not.toHaveBeenCalled();
+    });
+
+    // Capped because these load on every card of a browse page, unlike a
+    // portfolio piece which a client opens deliberately.
+    it('enforces the image cap', async () => {
+      const { service, services } = build();
+      services.countImages.mockResolvedValue(8);
+
+      await expect(service.addImage('user_1', 'svc_1', 'media_1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(services.addImage).not.toHaveBeenCalled();
+    });
+
+    it('assigns sort order from the current count rather than trusting a client', async () => {
+      const { service, services } = build();
+      services.countImages.mockResolvedValue(3);
+      await service.addImage('user_1', 'svc_1', 'media_1');
+      expect(services.addImage).toHaveBeenCalledWith('svc_1', 'media_1', 3);
+    });
+
+    it('removes an image scoped to its own service', async () => {
+      const { service, services } = build();
+      await service.removeImage('user_1', 'svc_1', 'image_1');
+      // Scoped by both ids: checking the image id alone would let any owner
+      // delete any other listing's image.
+      expect(services.removeImage).toHaveBeenCalledWith('svc_1', 'image_1');
+    });
+
+    it('404s when the image does not belong to that service', async () => {
+      const { service, services } = build();
+      services.removeImage.mockResolvedValue({ count: 0 });
+      await expect(service.removeImage('user_1', 'svc_1', 'other')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

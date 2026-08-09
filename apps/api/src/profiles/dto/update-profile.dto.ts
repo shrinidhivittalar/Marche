@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -90,11 +91,12 @@ export class UpdateProfileDto {
   @MaxLength(1000)
   bio?: string;
 
-  @ApiPropertyOptional()
+  // An uploaded file, not a pasted link. Null clears the picture, which is
+  // a real state — a profile without one still works.
+  @ApiPropertyOptional({ description: 'Id of an uploaded image, or null to remove' })
   @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  @MaxLength(300)
-  avatar?: string;
+  @IsUUID()
+  avatarMediaId?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

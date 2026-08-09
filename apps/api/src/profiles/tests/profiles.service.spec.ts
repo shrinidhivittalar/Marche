@@ -29,6 +29,7 @@ function buildProfile(overrides: Record<string, unknown> = {}) {
 describe('ProfilesService', () => {
   let profilesRepository: jest.Mocked<ProfilesRepository>;
   let service: ProfilesService;
+  let mediaService: { signViewUrl: jest.Mock; assertAttachable: jest.Mock };
 
   beforeEach(() => {
     profilesRepository = {
@@ -42,7 +43,14 @@ describe('ProfilesService', () => {
       withDetails: jest.fn(),
     } as unknown as jest.Mocked<ProfilesRepository>;
 
-    service = new ProfilesService(profilesRepository);
+    // Signs the avatar URL from stored media. Returns null here because
+    // these fixtures have no avatar — a profile without a picture is a real
+    // state, not a broken one.
+    mediaService = {
+      signViewUrl: jest.fn().mockResolvedValue(null),
+      assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
+    };
+    service = new ProfilesService(profilesRepository, mediaService as never);
   });
 
   describe('createForNewUser', () => {
@@ -103,6 +111,26 @@ describe('ProfilesService', () => {
 
       expect(profilesRepository.update).toHaveBeenCalledWith('profile_1', { username: 'jane-doe' });
       expect(result).toEqual(expect.objectContaining({ username: 'jane-doe' }));
+    });
+
+    it('refuses an avatar the caller does not own', async () => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+      mediaService.assertAttachable.mockRejectedValue(new ForbiddenException());
+
+      await expect(
+        service.updateMyProfile('user_1', { avatarMediaId: 'media_owned_by_someone_else' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(profilesRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('clears the avatar without checking media when given null', async () => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+      profilesRepository.update.mockResolvedValue(buildProfile() as never);
+
+      await service.updateMyProfile('user_1', { avatarMediaId: null });
+
+      expect(mediaService.assertAttachable).not.toHaveBeenCalled();
+      expect(profilesRepository.update).toHaveBeenCalledWith('profile_1', { avatarMediaId: null });
     });
   });
 
