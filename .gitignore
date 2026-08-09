@@ -17,3 +17,4 @@ docs/modules/*status*.md
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/.test-users.json
+apps/web/e2e/.auth/

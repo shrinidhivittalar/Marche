@@ -97,7 +97,7 @@ test.describe('profile — positive', () => {
   });
 });
 
-test.describe('profile — negative', () => {
+test.describe('profile — negative, as a client', () => {
   test('a client sees no provider-only sections', async ({ page, users }) => {
     await signIn(page, users.client);
     await page.goto('/client/profile');
@@ -110,9 +110,14 @@ test.describe('profile — negative', () => {
     await expect(page.getByTestId('availability-card')).toHaveCount(0);
     await expect(page.getByTestId('experience-card')).toHaveCount(0);
   });
+});
 
-  test('an over-long headline is rejected with the API message shown', async ({ page, users }) => {
+test.describe('profile — negative, as a provider', () => {
+  test.beforeEach(async ({ page, users }) => {
     await signIn(page, users.provider);
+  });
+
+  test('an over-long headline is rejected with the API message shown', async ({ page }) => {
     await page.goto('/provider/profile');
 
     await page.getByTestId('input-headline').fill('x'.repeat(500));
@@ -124,8 +129,7 @@ test.describe('profile — negative', () => {
     await expect(page.getByTestId('profile-success')).toHaveCount(0);
   });
 
-  test('an empty display name is rejected', async ({ page, users }) => {
-    await signIn(page, users.provider);
+  test('an empty display name is rejected', async ({ page }) => {
     await page.goto('/provider/profile');
 
     await page.getByTestId('input-displayName').fill('');
@@ -134,11 +138,7 @@ test.describe('profile — negative', () => {
     await expect(page.getByTestId('profile-error')).toBeVisible();
   });
 
-  test('a duplicate language is rejected rather than silently added twice', async ({
-    page,
-    users,
-  }) => {
-    await signIn(page, users.provider);
+  test('a duplicate language is rejected rather than silently added twice', async ({ page }) => {
     await page.goto('/provider/profile');
 
     await page.getByTestId('language-name').fill('Tamil');
@@ -151,14 +151,18 @@ test.describe('profile — negative', () => {
     await expect(page.getByTestId('profile-error')).toBeVisible();
     await expect(page.getByTestId('language-item')).toHaveCount(1);
   });
+});
 
+test.describe('profile — negative, signed out', () => {
   test('a signed-out visitor is not shown the API-backed profile', async ({ page }) => {
     await page.goto('/provider/profile');
     // No token means every profile call is a 401, so the section must not
     // render at all rather than render broken.
     await expect(page.getByTestId('profile-api-section')).toHaveCount(0);
   });
+});
 
+test.describe('profile — negative, API failure', () => {
   test('a failing API surfaces an error with a retry, not a blank screen', async ({
     page,
     users,

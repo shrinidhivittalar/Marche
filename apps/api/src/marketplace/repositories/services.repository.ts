@@ -73,13 +73,17 @@ export class ServicesRepository {
     });
   }
 
+  // Owner view, so it carries status and publishedAt on top of the public
+  // card fields. Without status a provider cannot tell a draft from a live
+  // listing on their own management screen — the one place that distinction
+  // matters most.
   listByProfile(profileId: string, skip: number, take: number) {
     return this.prisma.client.service.findMany({
       where: { profileId, deletedAt: null },
       orderBy: SORT_ORDER.newest,
       skip,
       take,
-      select: CARD_FIELDS,
+      select: { ...CARD_FIELDS, status: true, publishedAt: true, description: true },
     });
   }
 

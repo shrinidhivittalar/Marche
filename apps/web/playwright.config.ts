@@ -51,6 +51,12 @@ export default defineConfig({
         PORT: String(API_PORT),
         NODE_ENV: 'development',
         FRONTEND_ORIGIN: WEB_URL,
+        // Auth routes are limited to 5/min in production, which a suite
+        // that signs in per test trips almost immediately. Sessions cannot
+        // be shared instead: refresh tokens are single-use and rotating, so
+        // a saved cookie jar is dead after its first use. Raised only for
+        // this process; the application default is untouched.
+        AUTH_RATE_LIMIT: '500',
       },
     },
     {
