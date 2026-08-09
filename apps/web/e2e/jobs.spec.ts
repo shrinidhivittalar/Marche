@@ -119,6 +119,58 @@ test.describe('module 4 — the core client/provider journey', () => {
   });
 });
 
+test.describe('module 4 — the client requirement list', () => {
+  test('a saved draft is reachable from the dashboard, as the toast promises', async ({
+    page,
+    users,
+  }) => {
+    const title = uniqueTitle('draft-listed');
+
+    await signIn(page, users.client);
+    await fillWizard(page, title);
+    await page.getByRole('button', { name: /save as draft/i }).click();
+    await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 30_000 });
+
+    // The toast says "you can find it on your dashboard" — this is that
+    // promise being kept rather than assumed.
+    await page.goto('/client/jobs');
+    const row = page.getByTestId('requirement-row').filter({ hasText: title });
+    await expect(row).toBeVisible({ timeout: 40_000 });
+    await expect(row).toHaveAttribute('data-status', 'DRAFT');
+  });
+
+  test('a published requirement can be cancelled from the list', async ({ page, users }) => {
+    const title = uniqueTitle('list-cancel');
+
+    await signIn(page, users.client);
+    await publishRequirement(page, title);
+
+    await page.goto('/client/jobs');
+    const row = page.getByTestId('requirement-row').filter({ hasText: title });
+    await expect(row).toBeVisible({ timeout: 40_000 });
+
+    // By test id, not by accessible name: the row's title is itself a button,
+    // and a requirement whose title happens to contain the word would match
+    // an /cancel/i name lookup too.
+    await row.getByTestId('requirement-cancel').click();
+    await expect(page.getByTestId('requirement-row').filter({ hasText: title })).toHaveAttribute(
+      'data-status',
+      'CANCELLED',
+      { timeout: 30_000 },
+    );
+  });
+
+  test('the filters count real requirements by state', async ({ page, users }) => {
+    await signIn(page, users.client);
+    await page.goto('/client/jobs');
+
+    await expect(page.getByTestId('my-requirements')).toBeVisible({ timeout: 40_000 });
+    await page.getByTestId('requirements-filter-drafts').click();
+    // Whatever the count, the list must answer rather than error.
+    await expect(page.getByTestId('requirements-error')).toHaveCount(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Negative cases — the rules that fail silently if they break
 // ---------------------------------------------------------------------------
