@@ -188,6 +188,7 @@ model Profile {
   certifications Certification[]
   skills         UserSkill[]
   languages      UserLanguage[]
+  services       Service[]
 
   @@index([username])
   @@map("profiles")
@@ -277,12 +278,13 @@ model Certification {
 }
 
 // Predefined, platform-wide skill list — not user-created. Seeded once,
-// referenced by UserSkill.
+// referenced by UserSkill and (from Module 3) ServiceSkill.
 model Skill {
   id   String @id @default(uuid())
   name String @unique
 
-  userSkills UserSkill[]
+  userSkills    UserSkill[]
+  serviceSkills ServiceSkill[]
 
   @@map("skills")
 }
@@ -313,4 +315,134 @@ model UserLanguage {
   @@unique([profileId, language])
   @@index([profileId])
   @@map("user_languages")
+}
+
+// Marketplace module schema (docs/modules/module3.md,
+// docs/modules/module3-edge-cases.md).
+//
+// Deliberate deviations from database1.2.0.md's original table list,
+// decided during the spec/edge-case review:
+// - No SubCategory table: a nullable self-referencing Category.parentId
+//   expresses the same two-level taxonomy without a second table and a
+//   second set of CRUD paths.
+// - No ServiceImage table: deferred with Portfolio uploads until object
+//   storage (R2) exists, so the upload pipeline is built once rather than
+//   twice. Cards use the Profile avatar and portfolio previews meanwhile.
+// - No ServicePackage table: a single starting price per Service in
+//   Phase 1. Tiered pricing is the one deferral with real migration cost,
+//   which is exactly why it isn't built speculatively.
+
+enum ServiceStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+// Platform-defined discovery taxonomy — seeded and admin-managed, never
+// user-created. Same lifecycle as Skill.
+//
+// Hierarchy is two levels by convention (a parent and its children), even
+// though parentId is structurally unbounded: forbidding a child-of-a-child
+// in application code keeps every category query a single join instead of
+// a recursive CTE. Deeper nesting stays possible later without a
+// migration if it's ever genuinely needed.
+//
+// No separate "status" column: module3.md lists one, but deletedAt already
+// answers "should this appear?", and two independent ways to hide the same
+// row is how a category ends up visible in one query and missing from
+// another.
+model Category {
+  id           String  @id @default(uuid())
+  name         String
+  slug         String  @unique
+  description  String?
+  icon         String?
+  displayOrder Int     @default(0)
+
+  // Restrict, not the SET NULL Prisma would default to: deleting a parent
+  // that still has children must fail, not silently promote them to
+  // top-level and quietly restructure the taxonomy. The service layer
+  // checks first and returns a 409; this is the backstop.
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryHierarchy")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  services Service[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// A provider's discoverable offering.
+//
+// onDelete is deliberately omitted on the category relation (Prisma
+// defaults to Restrict for a required relation): deleting a category that
+// still has services must fail loudly rather than cascade away providers'
+// listings.
+//
+// status is the single visibility control — module3.md lists both "Status"
+// and "Visibility", but they are the same fact, and two fields would let
+// a service be PUBLISHED-but-hidden with no defined meaning.
+model Service {
+  id        String  @id @default(uuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  title         String
+  description   String
+  startingPrice Decimal @db.Decimal(10, 2)
+  deliveryDays  Int
+
+  status ServiceStatus @default(DRAFT)
+
+  // Free-text, provider-authored. Deliberately NOT a filter and NOT a
+  // join table: tags exist so a provider whose work isn't in the seeded
+  // Skill list has somewhere to put it, and they feed keyword search and
+  // card display only. Filtering on free text fragments ("Photography" /
+  // "photography" / "photo") and would quietly return wrong results — a
+  // tag that earns filtering gets promoted to a seeded Skill instead.
+  tags String[] @default([])
+
+  // Set on first publish only, never overwritten on republish, so
+  // toggling publish state can't bump a listing up the "newest" sort.
+  publishedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  skills ServiceSkill[]
+
+  @@index([profileId])
+  @@index([categoryId])
+  // Serves the default browse query: published services, newest first.
+  @@index([status, createdAt])
+  @@map("services")
+}
+
+// Maps a Service to the seeded, platform-wide Skill list. These are the
+// values discovery filters on, which is why they're constrained to a
+// controlled vocabulary rather than free text.
+model ServiceSkill {
+  id        String  @id @default(uuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([serviceId, skillId])
+  @@index([serviceId])
+  // Supports the reverse lookup — "which services have this skill?" — which
+  // is the direction the skill filter actually queries.
+  @@index([skillId])
+  @@map("service_skills")
 }

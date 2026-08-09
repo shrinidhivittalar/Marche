@@ -7,11 +7,13 @@
   },
   "scripts": {
     "build": "tsc",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
-    "seed": "ts-node --compiler-options {\"module\":\"commonjs\"} prisma/seed.ts"
+    "seed": "prisma db seed"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"commonjs\"} prisma/seed.ts"
@@ -20,6 +22,8 @@
     "@prisma/client": "^6.3.1"
   },
   "devDependencies": {
+    "@marche/config": "*",
+    "eslint": "latest",
     "prisma": "^6.3.1",
     "ts-node": "^10.9.2",
     "typescript": "6.0.3"
