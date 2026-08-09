@@ -25,7 +25,16 @@ const REFRESH_COOKIE_NAME = 'marche_refresh_token';
 // Tighter limit for the endpoints a brute-force/credential-stuffing attempt
 // would actually target — the global 100/min default (app.module.ts) is too
 // loose to stop rapid password guessing on its own.
-const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+//
+// Overridable only by an explicit environment variable, and only upward by
+// whoever sets it; the default is unchanged at 5/min, so production keeps
+// the strict limit unless someone deliberately opts out. This exists for
+// automated end-to-end runs, which sign in far more often than any human
+// would and otherwise trip the limiter partway through a suite. Refresh
+// tokens are single-use and rotating (auth.service.ts), so a test run
+// cannot avoid this by reusing one saved session.
+const AUTH_RATE_LIMIT = Number(process.env.AUTH_RATE_LIMIT ?? 5);
+const AUTH_THROTTLE = { default: { limit: AUTH_RATE_LIMIT, ttl: 60_000 } };
 
 function requestContext(req: Request) {
   return { userAgent: req.headers['user-agent'], ipAddress: req.ip };

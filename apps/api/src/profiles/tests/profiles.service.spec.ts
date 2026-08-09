@@ -34,6 +34,7 @@ describe('ProfilesService', () => {
     profilesRepository = {
       create: jest.fn(),
       findByUserId: jest.fn(),
+      findByUserIdWithDetails: jest.fn(),
       findById: jest.fn(),
       findByUsername: jest.fn(),
       findByUsernameExcludingProfile: jest.fn(),
@@ -62,9 +63,21 @@ describe('ProfilesService', () => {
 
   describe('getMyProfile', () => {
     it('throws NotFoundException if the profile somehow does not exist', async () => {
-      profilesRepository.findByUserId.mockResolvedValue(null);
+      profilesRepository.findByUserIdWithDetails.mockResolvedValue(null);
 
       await expect(service.getMyProfile('user_1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    // One query, not a lookup followed by a details fetch: the two-call
+    // version doubled latency on the page every provider opens first.
+    it('fetches the profile and its collections in a single query', async () => {
+      profilesRepository.findByUserIdWithDetails.mockResolvedValue(buildProfile() as never);
+
+      await service.getMyProfile('user_1');
+
+      expect(profilesRepository.findByUserIdWithDetails).toHaveBeenCalledTimes(1);
+      expect(profilesRepository.withDetails).not.toHaveBeenCalled();
+      expect(profilesRepository.findByUserId).not.toHaveBeenCalled();
     });
   });
 

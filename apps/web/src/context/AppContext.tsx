@@ -72,6 +72,10 @@ interface AppContextType {
   setCurrentUserRole: (role: UserRole) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
   isAuthenticated: boolean;
+  // Exposed so the Profiles and Marketplace clients can authorise their
+  // requests. In memory only — never persisted; the httpOnly refresh cookie
+  // is what survives a reload.
+  accessToken: string | null;
   authLoading: boolean;
   registerAccount: (data: {
     email: string;
@@ -1450,6 +1454,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUserRole,
         updateCurrentUser,
         isAuthenticated: accessToken !== null,
+        accessToken,
         authLoading,
         registerAccount,
         loginWithCredentials,

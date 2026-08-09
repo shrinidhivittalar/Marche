@@ -1,0 +1,935 @@
+import React, { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
+import { useApp } from '../../context/AppContext';
+import { useApiResource } from '../../hooks/useApiResource';
+import { ApiError } from '../../lib/api';
+import {
+  profilesApi,
+  type ApiProfile,
+  type AvailabilityStatus,
+  type LanguageProficiency,
+  type Visibility,
+} from '../../lib/marketplace-api';
+
+// The real Profiles module (docs/modules/module2.md), as opposed to the
+// mock profile fields this app shipped with. Rendered only when there is a
+// live session — without a token every one of these calls is a 401, so the
+// demo experience is left untouched for signed-out visitors.
+//
+// data-testid attributes are here for the Playwright suite: the visible
+// text is copy that will change, the test ids are a contract.
+
+const AVAILABILITY: AvailabilityStatus[] = ['AVAILABLE', 'LIMITED', 'UNAVAILABLE'];
+const PROFICIENCY: LanguageProficiency[] = ['BASIC', 'CONVERSATIONAL', 'FLUENT', 'NATIVE'];
+
+function Feedback({ error, success }: { error: string | null; success: string | null }) {
+  if (error) {
+    return (
+      <p data-testid="profile-error" role="alert" className="text-sm text-danger">
+        {error}
+      </p>
+    );
+  }
+  if (success) {
+    return (
+      <p data-testid="profile-success" role="status" className="text-sm text-success">
+        {success}
+      </p>
+    );
+  }
+  return null;
+}
+
+export const ProfileApiSection: React.FC = () => {
+  const { accessToken, currentUser } = useApp();
+  const token = accessToken;
+  const isProvider = currentUser.role === 'vendor';
+
+  const profile = useApiResource<ApiProfile>(() => profilesApi.me(token as string), [token], {
+    enabled: !!token,
+  });
+
+  const skills = useApiResource(() => profilesApi.listSkills(token), [token], { enabled: !!token });
+
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const run = async (action: () => Promise<unknown>, message: string) => {
+    setError(null);
+    setSuccess(null);
+    setSaving(true);
+    try {
+      await action();
+      // Awaited before reporting success: showing "Saved" while the screen
+      // still displays the previous value is a lie the user can see.
+      await profile.refetch();
+      setSuccess(message);
+    } catch (err) {
+      // The API's validation messages are specific and user-facing
+      // ("Headline must be shorter than..."), so they are surfaced rather
+      // than replaced with a generic failure string.
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Something went wrong. Please check your connection and try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!token) return null;
+
+  if (profile.loading) {
+    return (
+      <Card className="p-8" data-testid="profile-loading">
+        <p className="text-muted">Loading your profile…</p>
+      </Card>
+    );
+  }
+
+  if (profile.error) {
+    return (
+      <Card className="p-8 space-y-4" data-testid="profile-load-error">
+        <p className="text-danger">{profile.error}</p>
+        <Button onClick={() => void profile.refetch()} data-testid="profile-retry">
+          Try again
+        </Button>
+      </Card>
+    );
+  }
+
+  const p = profile.data;
+  if (!p) return null;
+
+  const usedSkillIds = new Set((p.skills ?? []).map((s) => s.skill.id));
+  const availableSkills = (skills.data?.items ?? []).filter((s) => !usedSkillIds.has(s.id));
+
+  return (
+    <div className="space-y-6" data-testid="profile-api-section">
+      <CoreProfileForm
+        key={p.id}
+        profile={p}
+        saving={saving}
+        error={error}
+        success={success}
+        onSave={(fields) =>
+          run(() => profilesApi.updateMe(token, fields as never), 'Profile saved.')
+        }
+      />
+
+      {isProvider && (
+        <>
+          <Card className="p-8 space-y-4" data-testid="availability-card">
+            <h2 className="text-lg font-semibold text-ink">Availability</h2>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABILITY.map((status) => (
+                <Button
+                  key={status}
+                  variant={p.availabilityStatus === status ? 'primary' : 'secondary'}
+                  data-testid={`availability-${status}`}
+                  disabled={saving}
+                  onClick={() =>
+                    run(
+                      () => profilesApi.updateAvailability(token, { availabilityStatus: status }),
+                      'Availability updated.',
+                    )
+                  }
+                >
+                  {status.charAt(0) + status.slice(1).toLowerCase()}
+                </Button>
+              ))}
+            </div>
+            <p className="text-sm text-muted" data-testid="availability-current">
+              Currently: {p.availabilityStatus}
+            </p>
+          </Card>
+
+          <SkillsCard
+            profile={p}
+            availableSkills={availableSkills}
+            disabled={saving}
+            onAdd={(skillId) => run(() => profilesApi.addSkill(token, skillId), 'Skill added.')}
+            onRemove={(userSkillId) =>
+              run(() => profilesApi.removeSkill(token, userSkillId), 'Skill removed.')
+            }
+          />
+
+          <ExperienceCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) => run(() => profilesApi.addExperience(token, body), 'Experience added.')}
+            onRemove={(id) =>
+              run(() => profilesApi.removeExperience(token, id), 'Experience removed.')
+            }
+          />
+
+          <EducationCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) => run(() => profilesApi.addEducation(token, body), 'Education added.')}
+            onRemove={(id) =>
+              run(() => profilesApi.removeEducation(token, id), 'Education removed.')
+            }
+          />
+
+          <LanguagesCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) => run(() => profilesApi.addLanguage(token, body), 'Language added.')}
+            onRemove={(id) => run(() => profilesApi.removeLanguage(token, id), 'Language removed.')}
+          />
+
+          <PortfolioCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) =>
+              run(() => profilesApi.addPortfolio(token, body), 'Portfolio piece added.')
+            }
+            onRemove={(id) =>
+              run(() => profilesApi.removePortfolio(token, id), 'Portfolio piece removed.')
+            }
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
+// Its own component, mounted with key={profile.id}. That is what lets the
+// fields seed from useState initialisers instead of being synchronised in
+// an effect: when the profile identity changes React remounts this and the
+// initialisers run again. A refetch of the same profile does not remount
+// it, so a save never discards what the user has typed.
+function CoreProfileForm({
+  profile,
+  saving,
+  error,
+  success,
+  onSave,
+}: {
+  profile: ApiProfile;
+  saving: boolean;
+  error: string | null;
+  success: string | null;
+  onSave: (fields: Record<string, string | null>) => void;
+}) {
+  const [displayName, setDisplayName] = useState(profile.displayName ?? '');
+  const [headline, setHeadline] = useState(profile.headline ?? '');
+  const [bio, setBio] = useState(profile.bio ?? '');
+  const [location, setLocation] = useState(profile.location ?? '');
+  const [username, setUsername] = useState(profile.username ?? '');
+  const [avatar, setAvatar] = useState(profile.avatar ?? '');
+  const [visibility, setVisibility] = useState<Visibility>(profile.visibility ?? 'PUBLIC');
+
+  return (
+    <Card className="p-8 space-y-5">
+      <h2 className="text-lg font-semibold text-ink">Profile</h2>
+
+      <TextField
+        label="Display name"
+        value={displayName}
+        onChange={(e) => setDisplayName(e.target.value)}
+        data-testid="input-displayName"
+      />
+
+      {/* Username is what makes the public profile page reachable at all —
+          /u/:username 404s for everyone until one is set. */}
+      <TextField
+        label="Username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="e.g. priya-menon"
+        hint={
+          username
+            ? `Your public page: /u/${username}`
+            : 'Lowercase letters, numbers and hyphens. Sets your public profile link.'
+        }
+        data-testid="input-username"
+      />
+
+      <TextField
+        label="Avatar URL"
+        value={avatar}
+        onChange={(e) => setAvatar(e.target.value)}
+        placeholder="https://…"
+        hint="Paste a link to an image. Must start with https."
+        data-testid="input-avatar"
+      />
+      {avatar.trim() !== '' && (
+        <img
+          src={avatar}
+          alt="Avatar preview"
+          data-testid="avatar-preview"
+          // A broken link is the most likely failure with pasted URLs, so
+          // it fails visibly here rather than silently on every card.
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+          className="w-16 h-16 rounded-xl object-cover ring-2 ring-border"
+        />
+      )}
+
+      <TextField
+        label="Headline"
+        value={headline}
+        onChange={(e) => setHeadline(e.target.value)}
+        data-testid="input-headline"
+      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="profile-bio" className="text-sm font-medium text-ink">
+          Bio
+        </label>
+        <Textarea
+          id="profile-bio"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          rows={4}
+          data-testid="input-bio"
+        />
+      </div>
+      <TextField
+        label="Location"
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+        data-testid="input-location"
+      />
+
+      {/* Visibility is a business rule in module2.md — the owner controls
+          it — and a PRIVATE profile is excluded from marketplace discovery
+          entirely. Until now there was no way to exercise that, so the rule
+          existed only in the backend. The consequence is spelled out
+          because "private" alone does not tell a provider their listings
+          will stop appearing in search. */}
+      <div
+        className="flex flex-col gap-2 rounded-lg border border-border p-4"
+        data-testid="visibility-card"
+      >
+        <span className="text-sm font-medium text-ink">Profile visibility</span>
+        <div className="flex gap-2">
+          <Button
+            variant={visibility === 'PUBLIC' ? 'primary' : 'secondary'}
+            data-testid="visibility-PUBLIC"
+            onClick={() => setVisibility('PUBLIC')}
+          >
+            Public
+          </Button>
+          <Button
+            variant={visibility === 'PRIVATE' ? 'primary' : 'secondary'}
+            data-testid="visibility-PRIVATE"
+            onClick={() => setVisibility('PRIVATE')}
+          >
+            Private
+          </Button>
+        </div>
+        <p className="text-xs text-muted" data-testid="visibility-explainer">
+          {visibility === 'PUBLIC'
+            ? 'Clients can find you in the marketplace and view your profile.'
+            : 'Your profile is hidden and your services will not appear in marketplace search.'}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button
+          disabled={saving}
+          data-testid="save-profile"
+          onClick={() =>
+            onSave({
+              displayName: displayName.trim(),
+              // Empty strings are sent as null so clearing a field actually
+              // clears it rather than storing "". Sending "" for username or
+              // avatar would fail their format validation instead of
+              // clearing them.
+              headline: headline.trim() || null,
+              bio: bio.trim() || null,
+              location: location.trim() || null,
+              username: username.trim() || null,
+              avatar: avatar.trim() || null,
+              visibility,
+            })
+          }
+        >
+          {saving ? 'Saving…' : 'Save profile'}
+        </Button>
+        <Feedback error={error} success={success} />
+      </div>
+    </Card>
+  );
+}
+
+function SkillsCard({
+  profile,
+  availableSkills,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  availableSkills: { id: string; name: string }[];
+  disabled: boolean;
+  onAdd: (skillId: string) => void;
+  onRemove: (userSkillId: string) => void;
+}) {
+  const [selected, setSelected] = useState('');
+  return (
+    <Card className="p-8 space-y-4" data-testid="skills-card">
+      <h2 className="text-lg font-semibold text-ink">Skills</h2>
+      <div className="flex flex-wrap gap-2" data-testid="skill-list">
+        {(profile.skills ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="skills-empty">
+            No skills added yet.
+          </p>
+        )}
+        {(profile.skills ?? []).map((entry) => (
+          <span
+            key={entry.id}
+            data-testid={`skill-${entry.skill.name}`}
+            className="inline-flex items-center gap-2 rounded-full bg-surface-subtle border border-border px-3 py-1 text-sm"
+          >
+            {entry.skill.name}
+            <button
+              type="button"
+              aria-label={`Remove ${entry.skill.name}`}
+              data-testid={`remove-skill-${entry.skill.name}`}
+              disabled={disabled}
+              onClick={() => onRemove(entry.id)}
+              className="text-muted hover:text-danger"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          data-testid="skill-select"
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+        >
+          <option value="">Choose a skill…</option>
+          {availableSkills.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <Button
+          disabled={disabled || !selected}
+          data-testid="add-skill"
+          onClick={() => {
+            onAdd(selected);
+            setSelected('');
+          }}
+        >
+          Add
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function ExperienceCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [company, setCompany] = useState('');
+  const [position, setPosition] = useState('');
+  const [description, setDescription] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  // Defaults to a finished role, not a current one. The previous version
+  // hardcoded currentlyWorking: true, which made it impossible to record
+  // any past job — the common case for a work history.
+  const [currentlyWorking, setCurrentlyWorking] = useState(false);
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="experience-card">
+      <h2 className="text-lg font-semibold text-ink">Experience</h2>
+      <div className="space-y-2" data-testid="experience-list">
+        {(profile.experiences ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="experience-empty">
+            No experience added yet.
+          </p>
+        )}
+        {(profile.experiences ?? []).map((exp) => (
+          <div
+            key={exp.id}
+            data-testid="experience-item"
+            className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
+          >
+            <span className="text-sm text-ink">
+              {exp.position} — {exp.company}
+              <span className="block text-xs text-muted">
+                {new Date(exp.startDate).getFullYear()} –{' '}
+                {exp.currentlyWorking
+                  ? 'Present'
+                  : exp.endDate
+                    ? new Date(exp.endDate).getFullYear()
+                    : '—'}
+              </span>
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${exp.position}`}
+              data-testid={`remove-experience-${exp.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(exp.id)}
+              className="text-muted hover:text-danger"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Company"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          data-testid="experience-company"
+          aria-label="Company"
+        />
+        <Input
+          placeholder="Position"
+          value={position}
+          onChange={(e) => setPosition(e.target.value)}
+          data-testid="experience-position"
+          aria-label="Position"
+        />
+      </div>
+
+      <Textarea
+        placeholder="What did you do in this role? (optional)"
+        rows={2}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        data-testid="experience-description"
+        aria-label="Role description"
+      />
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="experience-start" className="text-xs text-muted">
+            Start date
+          </label>
+          <Input
+            id="experience-start"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            data-testid="experience-start"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="experience-end" className="text-xs text-muted">
+            End date
+          </label>
+          <Input
+            id="experience-end"
+            type="date"
+            value={endDate}
+            // Disabled rather than merely validated: the API rejects an end
+            // date alongside "currently working", so the contradiction is
+            // made unreachable instead of explained after the fact.
+            disabled={currentlyWorking}
+            onChange={(e) => setEndDate(e.target.value)}
+            data-testid="experience-end"
+          />
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={currentlyWorking}
+          onChange={(e) => {
+            setCurrentlyWorking(e.target.checked);
+            if (e.target.checked) setEndDate('');
+          }}
+          data-testid="experience-current"
+        />
+        I currently work here
+      </label>
+      <Button
+        disabled={disabled || !company.trim() || !position.trim() || !startDate}
+        data-testid="add-experience"
+        onClick={() => {
+          onAdd({
+            company: company.trim(),
+            position: position.trim(),
+            description: description.trim() || undefined,
+            startDate: new Date(startDate).toISOString(),
+            endDate: !currentlyWorking && endDate ? new Date(endDate).toISOString() : undefined,
+            currentlyWorking,
+          });
+          setCompany('');
+          setPosition('');
+          setDescription('');
+          setStartDate('');
+          setEndDate('');
+          setCurrentlyWorking(false);
+        }}
+      >
+        Add experience
+      </Button>
+    </Card>
+  );
+}
+
+function EducationCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [institution, setInstitution] = useState('');
+  const [degree, setDegree] = useState('');
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="education-card">
+      <h2 className="text-lg font-semibold text-ink">Education</h2>
+      <div className="space-y-2" data-testid="education-list">
+        {(profile.educations ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="education-empty">
+            No education added yet.
+          </p>
+        )}
+        {(profile.educations ?? []).map((edu) => (
+          <div
+            key={edu.id}
+            data-testid="education-item"
+            className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
+          >
+            <span className="text-sm text-ink">
+              {edu.degree} — {edu.institution}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${edu.degree}`}
+              data-testid={`remove-education-${edu.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(edu.id)}
+              className="text-muted hover:text-danger"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Institution"
+          value={institution}
+          onChange={(e) => setInstitution(e.target.value)}
+          data-testid="education-institution"
+        />
+        <Input
+          placeholder="Degree"
+          value={degree}
+          onChange={(e) => setDegree(e.target.value)}
+          data-testid="education-degree"
+        />
+      </div>
+      <Button
+        disabled={disabled || !institution.trim() || !degree.trim()}
+        data-testid="add-education"
+        onClick={() => {
+          onAdd({ institution: institution.trim(), degree: degree.trim() });
+          setInstitution('');
+          setDegree('');
+        }}
+      >
+        Add education
+      </Button>
+    </Card>
+  );
+}
+
+function LanguagesCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: { language: string; proficiency: LanguageProficiency }) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [language, setLanguage] = useState('');
+  const [proficiency, setProficiency] = useState<LanguageProficiency>('CONVERSATIONAL');
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="languages-card">
+      <h2 className="text-lg font-semibold text-ink">Languages</h2>
+      <div className="space-y-2" data-testid="language-list">
+        {(profile.languages ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="languages-empty">
+            No languages added yet.
+          </p>
+        )}
+        {(profile.languages ?? []).map((lang) => (
+          <div
+            key={lang.id}
+            data-testid="language-item"
+            className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
+          >
+            <span className="text-sm text-ink">
+              {lang.language} — {lang.proficiency}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${lang.language}`}
+              data-testid={`remove-language-${lang.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(lang.id)}
+              className="text-muted hover:text-danger"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Language"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          data-testid="language-name"
+        />
+        <select
+          value={proficiency}
+          onChange={(e) => setProficiency(e.target.value as LanguageProficiency)}
+          data-testid="language-proficiency"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+        >
+          {PROFICIENCY.map((level) => (
+            <option key={level} value={level}>
+              {level}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Button
+        disabled={disabled || !language.trim()}
+        data-testid="add-language"
+        onClick={() => {
+          onAdd({ language: language.trim(), proficiency });
+          setLanguage('');
+        }}
+      >
+        Add language
+      </Button>
+    </Card>
+  );
+}
+
+// Portfolio is the surface a client actually judges a provider on, and it
+// had no UI at all — the table, the endpoints and the validation all
+// existed and were unreachable.
+//
+// Images are a list rather than one field because the API requires at
+// least one and accepts many (ArrayMinSize(1) in portfolio.dto.ts). They
+// are pasted https URLs, not uploads: there is no storage pipeline yet,
+// which is a known gap recorded in module2.md.
+function PortfolioCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [projectDate, setProjectDate] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+
+  const addImage = () => {
+    const url = imageUrl.trim();
+    if (!url || imageUrls.includes(url)) return;
+    setImageUrls([...imageUrls, url]);
+    setImageUrl('');
+  };
+
+  const reset = () => {
+    setTitle('');
+    setDescription('');
+    setCategory('');
+    setProjectDate('');
+    setImageUrl('');
+    setImageUrls([]);
+  };
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="portfolio-card">
+      <h2 className="text-lg font-semibold text-ink">Portfolio</h2>
+
+      <div className="space-y-2" data-testid="portfolio-list">
+        {(profile.portfolioItems ?? []).length === 0 && (
+          <p className="text-sm text-muted" data-testid="portfolio-empty">
+            No portfolio pieces yet. Add your best work so clients can see it.
+          </p>
+        )}
+        {(profile.portfolioItems ?? []).map((item) => (
+          <div
+            key={item.id}
+            data-testid="portfolio-item"
+            data-portfolio-title={item.title}
+            className="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">{item.title}</p>
+              <p className="text-xs text-muted truncate">{item.description}</p>
+              <p className="text-xs text-muted">
+                {(item.images ?? []).length} image
+                {(item.images ?? []).length === 1 ? '' : 's'}
+                {item.projectDate ? ` · ${new Date(item.projectDate).getFullYear()}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label={`Remove ${item.title}`}
+              data-testid={`remove-portfolio-${item.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(item.id)}
+              className="text-muted hover:text-danger shrink-0"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          data-testid="portfolio-title"
+          aria-label="Portfolio title"
+        />
+        <Input
+          placeholder="Category (optional)"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          data-testid="portfolio-category"
+          aria-label="Portfolio category"
+        />
+      </div>
+
+      <Textarea
+        placeholder="What was this project?"
+        rows={2}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        data-testid="portfolio-description"
+        aria-label="Portfolio description"
+      />
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="portfolio-date" className="text-xs text-muted">
+          Project date (optional)
+        </label>
+        <Input
+          id="portfolio-date"
+          type="date"
+          value={projectDate}
+          onChange={(e) => setProjectDate(e.target.value)}
+          data-testid="portfolio-date"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://… image link"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addImage();
+              }
+            }}
+            data-testid="portfolio-image-url"
+            aria-label="Image URL"
+          />
+          <Button
+            variant="secondary"
+            disabled={disabled || !imageUrl.trim()}
+            data-testid="portfolio-add-image"
+            onClick={addImage}
+          >
+            Add image
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2" data-testid="portfolio-pending-images">
+          {imageUrls.map((url) => (
+            <span
+              key={url}
+              data-testid="portfolio-pending-image"
+              className="inline-flex items-center gap-2 rounded-full bg-surface-subtle border border-border px-3 py-1 text-xs max-w-full"
+            >
+              <span className="truncate max-w-[16rem]">{url}</span>
+              <button
+                type="button"
+                aria-label={`Remove image ${url}`}
+                onClick={() => setImageUrls(imageUrls.filter((u) => u !== url))}
+                className="text-muted hover:text-danger"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
+        {/* The API rejects a piece with no images. Saying so up front beats
+            letting someone write a description and then be refused. */}
+        <p className="text-xs text-muted" data-testid="portfolio-image-hint">
+          {imageUrls.length === 0
+            ? 'Add at least one image link (https) to save a portfolio piece.'
+            : `${imageUrls.length} image${imageUrls.length === 1 ? '' : 's'} ready.`}
+        </p>
+      </div>
+
+      <Button
+        disabled={disabled || !title.trim() || !description.trim() || imageUrls.length === 0}
+        data-testid="add-portfolio"
+        onClick={() => {
+          onAdd({
+            title: title.trim(),
+            description: description.trim(),
+            category: category.trim() || undefined,
+            projectDate: projectDate ? new Date(projectDate).toISOString() : undefined,
+            imageUrls,
+          });
+          reset();
+        }}
+      >
+        Add portfolio piece
+      </Button>
+    </Card>
+  );
+}

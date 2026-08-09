@@ -61,7 +61,6 @@ import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
 import { ProviderOnboardingPage } from './pages/provider/ProviderOnboardingPage';
 import { SubmitProposalPage } from './pages/provider/SubmitProposalPage';
-import { VendorProfilePage } from './pages/provider/VendorProfilePage';
 import { EditProfilePage } from './pages/EditProfilePage';
 import { MobileMenuPage } from './pages/MobileMenuPage';
 
@@ -71,6 +70,11 @@ import { MessagesPage } from './pages/MessagesPage';
 
 // Exact-path routes. A plain object can't have a duplicate key silently shadow another
 // (TS flags it), which is the shadowing risk the old sequential if/else chain had.
+import { BrowseServicesPage } from './pages/marketplace/BrowseServicesPage';
+import { MyServicesPage } from './pages/provider/MyServicesPage';
+import { PublicProfilePage } from './pages/marketplace/PublicProfilePage';
+import { ServiceDetailPage } from './pages/marketplace/ServiceDetailPage';
+
 const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
   '/client/search': () => <SearchTalentPage />,
@@ -103,11 +107,13 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/search': () => <SearchJobsPage />,
   '/provider/analytics': () => <MyWorkPage />,
   '/provider/profile': () => <EditProfilePage />,
+  '/provider/services': () => <MyServicesPage />,
   '/provider/finances': () => <FinancesPage />,
   '/provider/contracts': () => <ContractsPage />,
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,
   '/admin/profile': () => <EditProfilePage />,
+  '/marketplace': () => <BrowseServicesPage />,
   '/messages': () => <MessagesPage />,
   '/notifications': () => <NotificationsPage />,
   '/menu': () => <MobileMenuPage />,
@@ -121,12 +127,15 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
   { prefix: '/client/proposals/', render: (id) => <ProposalDetailPage id={id} /> },
   { prefix: '/provider/jobs/', render: (id) => <JobDetailProviderView id={id} /> },
   { prefix: '/provider/submit-proposal/', render: (id) => <SubmitProposalPage jobId={id} /> },
-  { prefix: '/profile/', render: (id) => <VendorProfilePage id={id} /> },
+  // Real API-backed profile. The previous VendorProfilePage rendered five
+  // separate mock fixtures, so every marketplace search led to fake data.
+  { prefix: '/profile/', render: (id) => <PublicProfilePage id={id} /> },
+  { prefix: '/services/', render: (id) => <ServiceDetailPage id={id} /> },
   { prefix: '/contracts/', render: (id) => <ContractDetailPage id={id} /> },
 ];
 
 function AppContent() {
-  const { route, goBack, currentUser } = useApp();
+  const { route, goBack, currentUser, authLoading } = useApp();
 
   // Full-bleed views without sidebar. Landing/Sign In/Sign Up always render light —
   // they're pre-authentication brand surfaces, not part of the user's themed workspace.
@@ -166,6 +175,26 @@ function AppContent() {
     return (
       <div data-theme="light">
         <AuthResetPasswordPage />
+      </div>
+    );
+  }
+
+  // The session is restored by a silent refresh after every full page load,
+  // so until it settles `currentUser.role` is whatever localStorage last
+  // held — 'client' by default. Applying the role gates below during that
+  // window sends a signed-in provider deep-linking to /provider/... to the
+  // client dashboard instead, and only corrects itself once the refresh
+  // lands. Waiting is both correct and less jarring than the flash.
+  //
+  // The pre-authentication routes above (landing, sign-in, sign-up, verify,
+  // reset) have already returned, so they are unaffected.
+  if (authLoading) {
+    return (
+      <div
+        className="h-screen bg-bg text-ink flex items-center justify-center font-sans"
+        data-testid="app-auth-loading"
+      >
+        <p className="text-muted text-sm">Loading…</p>
       </div>
     );
   }

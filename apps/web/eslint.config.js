@@ -1,6 +1,16 @@
-import react from "@marche/config/eslint/react";
+import react from '@marche/config/eslint/react';
 
 export default [
-  { ignores: ["dist"] },
+  { ignores: ['dist', 'test-results', 'playwright-report'] },
   ...react,
+  {
+    // Playwright specs are Node test files, not React. The React Hooks
+    // plugin misreads Playwright's `use` fixture callback as a hook call,
+    // and its empty-destructure fixture signature is required by the API.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'no-empty-pattern': 'off',
+    },
+  },
 ];
