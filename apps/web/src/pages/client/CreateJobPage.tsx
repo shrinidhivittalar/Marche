@@ -18,7 +18,7 @@ import { useApp } from '../../context/AppContext';
 import { Button, Card, DatePicker, Input, TimePicker, Textarea } from '@marche/ui';
 import { EventTimingMode } from '../../types';
 import { formatEventSchedule, todayISODate } from '../../lib/formatTime';
-import { formatBudget } from '../../lib/formatBudget';
+import { formatJobBudget } from '../../lib/formatJob';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
 import { marketplaceApi } from '../../lib/marketplace-api';
@@ -270,7 +270,10 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
           (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime)
         );
       case 5:
-        return budgetMode === 'fixed' ? budgetMin >= 0 : budgetMax >= budgetMin;
+        // A maximum of zero means "no upper bound", not "zero rupees" — the
+        // API stores no maximum and the card reads "From ₹25,000". Only a
+        // maximum that was actually entered has to clear the minimum.
+        return budgetMode === 'fixed' || budgetMax === 0 || budgetMax >= budgetMin;
     }
   };
 
@@ -921,11 +924,15 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                       value={budgetMax}
                       onChange={(e) => setBudgetMax(Math.max(0, Number(e.target.value)))}
                       className="font-mono"
-                      aria-invalid={attemptedNext && budgetMax < budgetMin}
+                      aria-invalid={attemptedNext && budgetMax > 0 && budgetMax < budgetMin}
                     />
-                    {attemptedNext && budgetMax < budgetMin && (
+                    {attemptedNext && budgetMax > 0 && budgetMax < budgetMin ? (
                       <p className="text-[11px] text-destructive mt-1 font-medium">
                         Maximum must be at least the minimum.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-ink-muted mt-1">
+                        Leave at zero for no upper limit.
                       </p>
                     )}
                   </div>
@@ -963,10 +970,20 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               </div>
               <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Budget:</span>
-                <span className="font-bold text-primary">
-                  {budgetMin > 0 || budgetMax > 0
-                    ? formatBudget({ budgetMode, budgetMin, budgetMax })
-                    : 'Not stated'}
+                {/* Formatted from the same values buildBody sends, so the
+                    summary cannot claim a budget the API will not store. */}
+                <span className="font-bold text-primary" data-testid="summary-budget">
+                  {formatJobBudget({
+                    budgetMin: budgetMin > 0 ? String(budgetMin) : null,
+                    budgetMax:
+                      budgetMode === 'fixed'
+                        ? budgetMin > 0
+                          ? String(budgetMin)
+                          : null
+                        : budgetMax > 0
+                          ? String(budgetMax)
+                          : null,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between">
