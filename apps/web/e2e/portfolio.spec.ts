@@ -79,7 +79,12 @@ test.describe('portfolio', () => {
 
     await expect(page.getByTestId('portfolio-pending-image')).toHaveCount(1);
   });
+});
 
+// Its own block: the provider beforeEach above would otherwise sign in
+// first, and signing in twice in one test leaves the app holding the
+// previous role long enough for the /client/ route guard to bounce it.
+test.describe('portfolio — as a client', () => {
   test('a client sees no portfolio card', async ({ page, users }) => {
     await signIn(page, users.client);
     await page.goto('/client/profile');

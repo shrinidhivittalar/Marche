@@ -278,10 +278,10 @@ export const BrowseServicesPage: React.FC = () => {
                       )}
                       <Button
                         variant="secondary"
-                        data-testid={`view-provider-${s.profile.id}`}
-                        onClick={() => navigate(`/profile/${s.profile.id}`)}
+                        data-testid={`view-service-${s.id}`}
+                        onClick={() => navigate(`/services/${s.id}`)}
                       >
-                        View profile
+                        View service
                       </Button>
                     </Card>
                   ))

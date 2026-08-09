@@ -61,7 +61,6 @@ import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
 import { ProviderOnboardingPage } from './pages/provider/ProviderOnboardingPage';
 import { SubmitProposalPage } from './pages/provider/SubmitProposalPage';
-import { VendorProfilePage } from './pages/provider/VendorProfilePage';
 import { EditProfilePage } from './pages/EditProfilePage';
 import { MobileMenuPage } from './pages/MobileMenuPage';
 
@@ -73,6 +72,8 @@ import { MessagesPage } from './pages/MessagesPage';
 // (TS flags it), which is the shadowing risk the old sequential if/else chain had.
 import { BrowseServicesPage } from './pages/marketplace/BrowseServicesPage';
 import { MyServicesPage } from './pages/provider/MyServicesPage';
+import { PublicProfilePage } from './pages/marketplace/PublicProfilePage';
+import { ServiceDetailPage } from './pages/marketplace/ServiceDetailPage';
 
 const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
@@ -126,7 +127,10 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
   { prefix: '/client/proposals/', render: (id) => <ProposalDetailPage id={id} /> },
   { prefix: '/provider/jobs/', render: (id) => <JobDetailProviderView id={id} /> },
   { prefix: '/provider/submit-proposal/', render: (id) => <SubmitProposalPage jobId={id} /> },
-  { prefix: '/profile/', render: (id) => <VendorProfilePage id={id} /> },
+  // Real API-backed profile. The previous VendorProfilePage rendered five
+  // separate mock fixtures, so every marketplace search led to fake data.
+  { prefix: '/profile/', render: (id) => <PublicProfilePage id={id} /> },
+  { prefix: '/services/', render: (id) => <ServiceDetailPage id={id} /> },
   { prefix: '/contracts/', render: (id) => <ContractDetailPage id={id} /> },
 ];
 
