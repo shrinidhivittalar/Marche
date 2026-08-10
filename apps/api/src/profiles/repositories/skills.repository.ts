@@ -10,6 +10,21 @@ export class SkillsRepository {
     return this.prisma.client.skill.findUnique({ where: { id: skillId } });
   }
 
+  /**
+   * Case-insensitive lookup, which is the whole defence against a typed
+   * skill fragmenting the list. "Photography", "photography" and
+   * "PHOTOGRAPHY" must all resolve to the one row the filters already use.
+   */
+  findSkillByName(name: string) {
+    return this.prisma.client.skill.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+    });
+  }
+
+  createSkill(name: string) {
+    return this.prisma.client.skill.create({ data: { name } });
+  }
+
   listAllSkills(skip: number, take: number) {
     return this.prisma.client.skill.findMany({ orderBy: { name: 'asc' }, skip, take });
   }

@@ -16,6 +16,8 @@ describe('SkillsService', () => {
     profilesRepository = { findByUserId: jest.fn() } as unknown as jest.Mocked<ProfilesRepository>;
     skillsRepository = {
       findSkillById: jest.fn(),
+      findSkillByName: jest.fn(),
+      createSkill: jest.fn(),
       listAllSkills: jest.fn(),
       countAllSkills: jest.fn(),
       findUserSkill: jest.fn(),
@@ -54,7 +56,9 @@ describe('SkillsService', () => {
       } as never);
       skillsRepository.findUserSkill.mockResolvedValue({ id: 'us_1' } as never);
 
-      await expect(service.addSkill('user_1', 'skill_1')).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.addSkill('user_1', { skillId: 'skill_1' })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
       expect(skillsRepository.addSkill).not.toHaveBeenCalled();
     });
 
@@ -63,7 +67,7 @@ describe('SkillsService', () => {
         buildProfile({ user: { role: 'CLIENT' } }) as never,
       );
 
-      await expect(service.addSkill('user_1', 'skill_1')).rejects.toBeInstanceOf(
+      await expect(service.addSkill('user_1', { skillId: 'skill_1' })).rejects.toBeInstanceOf(
         ForbiddenException,
       );
     });
@@ -77,9 +81,80 @@ describe('SkillsService', () => {
       skillsRepository.findUserSkill.mockResolvedValue(null);
       skillsRepository.addSkill.mockResolvedValue({ id: 'us_1' } as never);
 
-      await service.addSkill('user_1', 'skill_1');
+      await service.addSkill('user_1', { skillId: 'skill_1' });
 
       expect(skillsRepository.addSkill).toHaveBeenCalledWith('profile_1', 'skill_1');
+    });
+  });
+
+  describe('addSkill by name', () => {
+    beforeEach(() => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+      skillsRepository.findUserSkill.mockResolvedValue(null);
+      skillsRepository.addSkill.mockResolvedValue({ id: 'us_1' } as never);
+    });
+
+    it('attaches the listed skill when the typed name already exists', async () => {
+      skillsRepository.findSkillByName.mockResolvedValue({
+        id: 'skill_1',
+        name: 'Photography',
+      } as never);
+
+      await service.addSkill('user_1', { name: 'photography' });
+
+      // The whole point of matching case-insensitively: a typed
+      // "photography" must attach the row the filters already use, not a
+      // near-duplicate sitting beside it.
+      expect(skillsRepository.createSkill).not.toHaveBeenCalled();
+      expect(skillsRepository.addSkill).toHaveBeenCalledWith('profile_1', 'skill_1');
+    });
+
+    it('creates the skill only when nothing matches', async () => {
+      skillsRepository.findSkillByName.mockResolvedValue(null);
+      skillsRepository.createSkill.mockResolvedValue({
+        id: 'skill_new',
+        name: 'Drone piloting',
+      } as never);
+
+      await service.addSkill('user_1', { name: 'Drone piloting' });
+
+      expect(skillsRepository.createSkill).toHaveBeenCalledWith('Drone piloting');
+      expect(skillsRepository.addSkill).toHaveBeenCalledWith('profile_1', 'skill_new');
+    });
+
+    it('reads back the winner when two providers type the same new skill at once', async () => {
+      skillsRepository.findSkillByName
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'skill_race', name: 'Drone piloting' } as never);
+      skillsRepository.createSkill.mockRejectedValue(
+        Object.assign(new Error('duplicate'), { code: 'P2002' }),
+      );
+
+      await service.addSkill('user_1', { name: 'Drone piloting' });
+
+      // The loser of the race did nothing wrong, so it attaches the row the
+      // winner created rather than failing.
+      expect(skillsRepository.addSkill).toHaveBeenCalledWith('profile_1', 'skill_race');
+    });
+
+    it('does not swallow an unrelated database error', async () => {
+      skillsRepository.findSkillByName.mockResolvedValue(null);
+      skillsRepository.createSkill.mockRejectedValue(new Error('connection lost'));
+
+      await expect(service.addSkill('user_1', { name: 'Drone piloting' })).rejects.toThrow(
+        'connection lost',
+      );
+    });
+
+    it('still refuses a Client', async () => {
+      profilesRepository.findByUserId.mockResolvedValue(
+        buildProfile({ user: { role: 'CLIENT' } }) as never,
+      );
+
+      await expect(service.addSkill('user_1', { name: 'Drone piloting' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(skillsRepository.createSkill).not.toHaveBeenCalled();
     });
   });
 

@@ -48,15 +48,34 @@ test.describe('profile — positive', () => {
   test('adds and removes a skill from the seeded taxonomy', async ({ page }) => {
     await expect(page.getByTestId('skills-empty')).toBeVisible();
 
-    const select = page.getByTestId('skill-select');
-    const firstSkill = await select.locator('option').nth(1).textContent();
-    await select.selectOption({ index: 1 });
+    // A combobox now, not a native select: it has to be opened before its
+    // options exist, and it accepts typed skills as well as listed ones.
+    await page.getByTestId('skill-select').click();
+    const firstOption = page.getByTestId('skill-select-options').locator('button').first();
+    const firstSkill = (await firstOption.textContent())?.trim();
+    await firstOption.click();
     await page.getByTestId('add-skill').click();
 
     await expect(page.getByTestId(`skill-${firstSkill}`)).toBeVisible();
 
     await page.getByTestId(`remove-skill-${firstSkill}`).click();
     await expect(page.getByTestId('skills-empty')).toBeVisible();
+  });
+
+  test('adds a skill the provider types themselves', async ({ page }) => {
+    // The seeded list cannot cover every craft. Typing one is the point of
+    // the change; the server matches it against the list case-insensitively
+    // before creating anything.
+    const typed = `E2E Skill ${Date.now()}`;
+
+    await page.getByTestId('skill-select').click();
+    await page.getByPlaceholder(/search or type/i).fill(typed);
+    await page.getByRole('button', { name: new RegExp(`Add "${typed}"`, 'i') }).click();
+
+    await expect(page.getByTestId(`skill-${typed}`)).toBeVisible({ timeout: 30_000 });
+
+    await page.getByTestId(`remove-skill-${typed}`).click();
+    await expect(page.getByTestId(`skill-${typed}`)).toHaveCount(0);
   });
 
   test('adds and removes experience', async ({ page }) => {

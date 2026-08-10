@@ -227,6 +227,16 @@ export const profilesApi = {
     ),
   addSkill: (token: string, skillId: string) =>
     apiFetch<unknown>('/skills', token, { method: 'POST', body: JSON.stringify({ skillId }) }),
+
+  /**
+   * Adds a skill the provider typed themselves.
+   *
+   * Sends a name rather than an id, and the server matches it against the
+   * platform list case-insensitively before creating anything — so typing
+   * "photography" attaches the existing skill instead of a second one.
+   */
+  addSkillByName: (token: string, name: string) =>
+    apiFetch<unknown>('/skills', token, { method: 'POST', body: JSON.stringify({ name }) }),
   removeSkill: (token: string, userSkillId: string) =>
     apiFetch<void>(`/skills/${userSkillId}`, token, { method: 'DELETE' }),
 
