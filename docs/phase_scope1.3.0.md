@@ -1,0 +1,502 @@
+# Phase Scope
+
+> Version: 1.3.0
+>
+> Status: Draft
+>
+> Last Updated: 2026-08-10
+>
+> **[Updated]** Changelog from 1.2.0 (minor): "Jobs" and "Proposals" sections
+> reconciled with docs/modules/module5.md and with what Module 04 actually
+> shipped. Jobs gains the items Module 04 built that this list never
+> mentioned (attachments, search and filtering, cancel-rather-than-close);
+> Proposals gains attachments, the Connection, and four explicit exclusions
+> that were previously silent. Module 04 shipped without a version bump, so
+> its reconciliation lands here alongside Module 05's. No other section
+> changed.
+>
+> **[Updated]** Changelog from 1.1.0 (minor): "Marketplace" section
+> reconciled with docs/modules/module3.md. Categories clarified as
+> hierarchical with admin management; skill-, location-, and
+> availability-based discovery and provider discovery added (they were
+> implied by "Search"/"Filters" but never listed). "Service Images" moved
+> to Excluded — it remains a Phase 1 intention but is deliberately not
+> built by Module 3, and is recorded as a known gap rather than silently
+> dropped. No other section changed.
+>
+> **[Updated]** Changelog from 1.0.0 (minor): "Profiles" section reconciled
+> with docs/modules/module2.md — added items module2.md scopes in that
+> this list didn't originally mention (Education, Certifications,
+> Languages, Availability, Profile Statistics, a lightweight Verified
+> badge). "Identity Verification" / "KYC" remain excluded, now clarified
+> as distinct from the new lightweight badge. "Administration > Excluded >
+> Audit Logs" also clarified — a security audit trail was built in Phase 1
+> as part of Identity, ahead of the original schedule. No other section
+> changed.
+
+---
+
+# Purpose
+
+This document defines the implementation roadmap of Marché.
+
+The objective is to clearly separate:
+
+- Features that are required for the MVP.
+- Features that are intentionally postponed.
+- Features that may be introduced as the platform grows.
+
+This prevents unnecessary complexity and ensures development remains focused on delivering a functional marketplace before introducing advanced capabilities.
+
+---
+
+# Guiding Principles
+
+- Build only what is required for the marketplace to function.
+- Avoid premature optimization.
+- Design for scalability without implementing unnecessary features.
+- Every phase should deliver a usable product.
+- Future phases should extend the existing architecture instead of replacing it.
+
+---
+
+# Phase 1 — Core Marketplace (MVP)
+
+## Goal
+
+Build a complete marketplace where clients can hire service providers from discovery to payment.
+
+The platform should be fully functional for day-to-day usage by individual clients and providers.
+
+---
+
+## Identity
+
+### Included
+
+- User Registration
+- Login
+- Logout
+- Password Reset
+- Email Verification
+- Session Management
+- JWT Authentication
+
+### Excluded
+
+- Social Login
+- MFA
+- Account Linking
+
+---
+
+## Profiles
+
+### Included
+
+- Profile — **[Updated]** one shared table/record per User (Client or Provider), not two separate "Provider Profile" / "Client Profile" concepts. See docs/modules/module2.md.
+- Skills — Provider-only.
+- Experience — Provider-only.
+- Portfolio — Provider-only.
+- Profile Image
+- Education — **[New]**, Provider-only.
+- Certifications — **[New]**, Provider-only.
+- Languages — **[New]**.
+- Availability — **[New]**, Provider-only.
+- Profile Statistics — **[New]** system-generated (completed projects, rating, response rate, etc.).
+- Verified badge — **[New]** lightweight, system-computed (e.g. email verified + completed jobs) — not identity/KYC verification, see Excluded below.
+
+### Excluded
+
+- Public Resume Builder
+- Identity Verification — **[Updated]** real document/ID verification (KYC), distinct from the lightweight Verified badge now Included above. Planned as a later module.
+- KYC
+
+---
+
+<!-- ============================================================ -->
+<!-- [Module 3 — Marketplace] SECTION UPDATED IN 1.2.0           -->
+<!-- Reconciled against docs/modules/module3.md.                  -->
+<!-- Changes start here and end at the "Jobs" heading.            -->
+<!-- ============================================================ -->
+
+## Marketplace
+
+### Included
+
+- Categories — **[Updated]** hierarchical (two levels: parent and child) via a self-referencing `parentId`, not a separate SubCategory table. Seeded, and managed by Administrators through admin-only endpoints.
+- Service Listings
+- Search
+- Filters — **[Updated]** by category (rolling up child categories), skill, location, price range, and provider availability.
+- Provider Discovery — **[New]** a deduplicated provider result set derived from matching services, so a client can search for "a photographer" rather than only for individual listings.
+- Sorting and Pagination — **[New]** deterministic sort with a stable tiebreaker, and a full pagination envelope (total, totalPages, hasNext, hasPrevious).
+
+### Excluded
+
+- AI Recommendations
+- Personalized Search
+- Sponsored Listings
+- Service Images — **[Updated]** moved here from Included. Still a genuine Phase 1 intention, but deliberately not built by Module 3: image handling platform-wide is pasted-URL-only, with no upload pipeline or file validation. Service and provider cards use the Profile avatar and portfolio previews owned by Module 2 instead. Recorded as a known gap in module3.md and to be revisited when object storage (R2) is wired up — this is a deferral, not a cancellation.
+- Service Packages — **[New]** tiered Basic/Standard/Premium pricing. Phase 1 uses a single starting price per service.
+- Relevance and Rating sorting — **[New]** both rejected with a 400 until the Reviews module exists, rather than aliased to an arbitrary order that would imply ranking the platform cannot yet perform.
+- Location Radius Search — **[New]** location matching is free-text substring against the Profile's stored location; geographic distance is deferred.
+
+<!-- [Module 3 — Marketplace] SECTION UPDATE ENDS HERE -->
+
+---
+
+<!-- ============================================================ -->
+<!-- [Module 4 — Jobs / Module 5 — Proposals]                     -->
+<!-- SECTIONS UPDATED IN 1.3.0                                    -->
+<!-- Jobs reconciled against what Module 04 shipped (it never got -->
+<!-- a version bump of its own); Proposals reconciled against     -->
+<!-- docs/modules/module5.md. Changes start here and end at the   -->
+<!-- "Contracts" heading.                                         -->
+<!-- ============================================================ -->
+
+## Jobs
+
+### Included
+
+- Create Job
+- Browse Jobs — **[Updated]** with keyword search, five filters (category
+  rolling up children, location, budget range, event date window), four
+  deterministic sorts, and the same pagination envelope Marketplace uses.
+- Edit Job
+- Close Job — **[Updated]** implemented as **Cancel**, and only for a
+  published requirement. A draft is deleted instead. Two words for one
+  outcome is how a screen ends up unable to say which button it is.
+- Job Attachments — **[New]** private files on a requirement (a brief, a
+  floor plan, a mood board), through the shared media pipeline. Served only
+  from an authenticated route as short-lived signed URLs, never from the
+  public requirement view.
+- Event schedule and deliverables — **[New]** event date, wall-clock start
+  and end times, a proposal deadline, and a list of what the client expects
+  delivered.
+
+### Excluded
+
+- Invite Providers
+- Private Jobs — **[Updated]** and with it the whole idea of a `visibility`
+  column separate from status. A published-but-private requirement has no
+  audience in Phase 1: no invite, no share link. `DRAFT` already means "only
+  the owner sees this".
+- Recurring Jobs
+- Job Expiry — **[New]** automatic closing once `proposalDeadline` passes
+  needs a scheduler this application does not have. The deadline is stored
+  and enforced at proposal time instead.
+- Pause / Resume — **[New]** reopens a lifecycle already built and tested.
+  Cancelling is how a client stops receiving proposals.
+
+---
+
+## Proposals
+
+### Included
+
+- Submit Proposal
+- Accept Proposal
+- Reject Proposal
+- Withdraw Proposal
+- Proposal Attachments — **[New]** private files on a proposal, through the
+  same media pipeline and the same signed-URL rule as job attachments.
+- Connection — **[New]** the hiring relationship created when a proposal is
+  accepted. Its own row, created only inside the acceptance transaction and
+  never through a route of its own, so nobody can manufacture a relationship
+  without an accepted proposal. This is what messaging, contracts and
+  payments will later hang off.
+
+### Excluded
+
+- Proposal Templates
+- AI Proposal Generation
+- Proposal Drafts — **[New]** a proposal is submitted complete, in one
+  operation. A draft state means storing incomplete records for a form the
+  frontend can hold in local state.
+- Proposal Editing and Versioning — **[New]** once submitted, a proposal is
+  immutable except for withdrawal. It is a snapshot of what was offered, and
+  a client decides against what they read.
+- Negotiation / Counter Offers — **[New]** no counter-offer state. A price is
+  offered and is accepted or not.
+- Re-proposing after Withdrawal — **[New]** the unique constraint on
+  (job, provider) is absolute, so withdrawal is permanent for that
+  requirement. Allowing a replacement needs a partial index Prisma cannot
+  express; Phase 2.
+- Rejection Reasons — **[New]** nothing would read one until Notifications
+  exists.
+- Proposal Ranking — **[New]** clients receive proposals unranked. Ranking
+  needs either reviews or behavioural data, and Phase 1 has neither.
+
+<!-- [Module 4 / Module 5] SECTIONS UPDATE ENDS HERE -->
+
+---
+
+## Contracts
+
+### Included
+
+- Create Contract
+- Contract Status
+- Basic Milestones
+
+### Excluded
+
+- Contract Amendments
+- Version History
+- Digital Signatures
+
+---
+
+## Messaging
+
+### Included
+
+- Conversations
+- Messages
+- Attachments
+
+### Excluded
+
+- Voice Calls
+- Video Calls
+- Screen Sharing
+
+---
+
+## Payments
+
+### Included
+
+- Payment Integration
+- Payment Records
+- Payment Status
+
+### Excluded
+
+- Escrow
+- Wallet
+- Refund Management
+- Payout Automation
+- Multi-Currency
+
+---
+
+## Reviews
+
+### Included
+
+- Ratings
+- Written Reviews
+
+### Excluded
+
+- Review Responses
+- Review Moderation
+- Reputation Analytics
+
+---
+
+## Notifications
+
+### Included
+
+- In-App Notifications
+
+### Excluded
+
+- Push Notifications
+- SMS Notifications
+- Email Preferences
+
+---
+
+## Administration
+
+### Included
+
+- Basic Admin Dashboard
+- User Management
+- Service Moderation
+
+### Excluded
+
+- Audit Logs — **[Updated]** a security audit trail (auth events: login, logout, registration, password reset, etc.) was built in Phase 1 as part of the Identity module, ahead of this original exclusion — see apps/api/src/audit. Broader admin-action/moderation audit logging (the scope this line originally meant) remains excluded; the same underlying table can be extended to cover it later without a redesign.
+- Moderation Queue
+- Admin Analytics
+
+---
+
+# Phase 2 — Marketplace Expansion
+
+## Goal
+
+Enhance usability and improve the experience for growing marketplaces.
+
+### Features
+
+- Organizations
+- Team Members
+- Saved Services
+- Saved Jobs
+- Wishlist
+- Recently Viewed
+- Better Search
+- Advanced Filters
+- Email Notifications
+- Push Notifications
+- Review Responses
+- Refunds
+- Payout Tracking
+- Payment History
+- AI Search
+- AI Recommendations
+
+---
+
+# Phase 3 — Professional Marketplace
+
+## Goal
+
+Support freelancers and businesses working on larger, long-running projects.
+
+### Features
+
+- Action-Based Permissions (RBAC)
+- Organization Workspaces
+- Team Hiring
+- Project Dashboard
+- Time Tracking
+- Activity Timeline
+- File Versioning
+- Advanced Contracts
+- Contract Amendments
+- Recurring Contracts
+- Advanced Reporting
+
+---
+
+# Phase 4 — Enterprise
+
+## Goal
+
+Prepare the platform for enterprise-scale customers.
+
+### Features
+
+- SSO
+- Multi-Factor Authentication
+- Audit Logs
+- Approval Workflows
+- Compliance
+- Organization Policies
+- Enterprise Reporting
+- Bulk User Management
+
+---
+
+# Phase 5 — Platform Evolution
+
+## Goal
+
+Transform Marché into a highly scalable marketplace platform.
+
+### Features
+
+- AI Marketplace Assistant
+- AI Proposal Generation
+- AI Matching
+- AI Search
+- AI Moderation
+- AI Analytics
+- AI Fraud Detection
+
+- Redis
+- Background Jobs
+- Socket.IO
+- OpenSearch
+- Elasticsearch
+- Event-Driven Architecture
+
+---
+
+# Future Considerations
+
+The following features are intentionally excluded until justified by business requirements.
+
+## White-Label Support
+
+Allows organizations to create branded marketplaces.
+
+Status
+
+Deferred
+
+---
+
+## Multi-Tenant Architecture
+
+Supports multiple independent marketplaces.
+
+Status
+
+Deferred
+
+---
+
+## Microservices
+
+Current architecture uses a modular monolith.
+
+Microservices will only be considered if operational complexity justifies the migration.
+
+Status
+
+Deferred
+
+---
+
+## Kubernetes
+
+Deployment orchestration for large-scale infrastructure.
+
+Status
+
+Deferred
+
+---
+
+# Definition of MVP
+
+The MVP is considered complete when the following workflow can be completed without manual intervention:
+
+1. Register an account.
+2. Verify email.
+3. Complete profile.
+4. Publish a service.
+5. Search for services.
+6. Create a job.
+7. Submit a proposal.
+8. Accept a proposal.
+9. Create a contract.
+10. Exchange messages.
+11. Complete payment.
+12. Leave a review.
+
+If all of the above workflows function correctly, Phase 1 is considered complete.
+
+---
+
+# Success Criteria
+
+Phase 1 is successful if:
+
+- Every core marketplace workflow is operational.
+- Authentication is secure.
+- Data integrity is maintained.
+- The backend follows the documented architecture.
+- Documentation is complete.
+- APIs are fully documented.
+- Frontend is fully integrated.
+- The system can support real users.
+
+---

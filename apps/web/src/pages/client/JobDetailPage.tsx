@@ -17,18 +17,21 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
 import { jobsApi, type JobStatus } from '../../lib/jobs-api';
+import { proposalsApi } from '../../lib/proposals-api';
 import { formatJobBudget, formatEventWhen, formatDeadline } from '../../lib/formatJob';
+import { formatOffer, formatTurnaround } from '../../lib/formatProposal';
+import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 
 // A client's own requirement, on the real Jobs API.
 //
 // Read through the owner route rather than the public one, so a draft or a
 // cancelled requirement is still visible to the person who wrote it.
 //
-// The proposals, contract and audit tabs are gone. They rendered mock
-// proposals, mock contracts and mock audit entries keyed by mock ids, none
-// of which can match a real requirement — and Modules 5 and 6 do not exist
-// yet. A placeholder that says so is more honest than three tabs of
-// invented activity, and it marks exactly where Module 5 plugs in.
+// Proposals are real as of Module 5 and render at the foot of the page, in
+// their own component with their own request — see ProposalsOnRequirement.
+//
+// The contract and audit tabs are still gone. They rendered mock contracts
+// and mock audit entries keyed by mock ids, and neither module exists.
 
 const STATUS_COPY: Record<JobStatus, { label: string; className: string; hint: string }> = {
   DRAFT: {
@@ -280,23 +283,98 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
         </div>
       </Card>
 
-      {/* Where Module 5 plugs in. Deliberately empty rather than filled
-          with mock proposals: a client seeing invented offers on their own
-          requirement is worse than seeing none. */}
-      <Card className="p-8">
+      <ProposalsOnRequirement jobId={requirement.id} status={requirement.status} />
+    </div>
+  );
+};
+
+/**
+ * The proposals on this requirement — Module 5's half of this screen.
+ *
+ * Its own component with its own request, so a slow or failing proposals
+ * call never blocks the requirement itself from rendering. The client can
+ * still read, edit, publish and cancel their own posting either way.
+ *
+ * Withdrawn proposals are shown rather than filtered: one the client has
+ * already read must not silently disappear from the list they are deciding
+ * from.
+ */
+function ProposalsOnRequirement({ jobId, status }: { jobId: string; status: JobStatus }) {
+  const { navigate, accessToken } = useApp();
+  const token = accessToken as string;
+
+  const proposals = useApiResource(() => proposalsApi.forJob(token, jobId), [jobId, token], {
+    enabled: Boolean(token),
+  });
+
+  const items = proposals.data?.items ?? [];
+
+  return (
+    <Card className="p-8 space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-ink">Proposals</h2>
+        {items.length > 0 && (
+          <span className="text-[11px] text-ink-muted font-mono">
+            {proposals.data?.total ?? items.length} received
+          </span>
+        )}
+      </div>
+
+      {proposals.loading && <p className="text-xs text-ink-muted">Loading proposals…</p>}
+
+      {proposals.error && <p className="text-xs text-destructive">{proposals.error}</p>}
+
+      {!proposals.loading && !proposals.error && items.length === 0 && (
         <EmptyState
           icon={Inbox}
           title="No proposals yet"
           description={
-            requirement.status === 'PUBLISHED'
+            status === 'PUBLISHED'
               ? 'Providers can see this requirement. Proposals will appear here once they start arriving.'
               : 'Publish this requirement for providers to find it and send proposals.'
           }
         />
-      </Card>
-    </div>
+      )}
+
+      {items.length > 0 && (
+        <ul className="space-y-3">
+          {items.map((proposal) => (
+            <li key={proposal.id}>
+              <button
+                type="button"
+                data-testid="proposal-row"
+                data-status={proposal.status}
+                onClick={() => navigate(`/client/proposals/${proposal.id}`)}
+                className="w-full p-4 bg-bg border border-border rounded-xl text-left hover:border-primary transition-colors cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate">
+                      {proposal.providerProfile.displayName}
+                    </p>
+                    {proposal.providerProfile.headline && (
+                      <p className="text-[11px] text-ink-muted truncate mt-0.5">
+                        {proposal.providerProfile.headline}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-ink-muted mt-1.5 line-clamp-2">
+                      {proposal.coverMessage}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right space-y-1.5">
+                    <ProposalStatusBadge status={proposal.status} />
+                    <p className="text-xs font-mono font-bold text-ink">{formatOffer(proposal)}</p>
+                    <p className="text-[11px] text-ink-muted">{formatTurnaround(proposal)}</p>
+                  </div>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
-};
+}
 
 function Spec({
   icon: Icon,

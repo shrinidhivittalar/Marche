@@ -1,6 +1,5 @@
 import { test, expect, signIn } from './fixtures';
-import type { Browser, Page } from '@playwright/test';
-import type { TestUser } from './test-users';
+import { uniqueTitle, pageAs, fillWizard, publishRequirement } from './journeys';
 
 // Module 4 (Jobs / Requirements) through the browser against the real API.
 //
@@ -23,66 +22,6 @@ import type { TestUser } from './test-users';
 // already handles a signed-out reader. That mismatch is recorded as a gap
 // in module4-e2e-results.md rather than fixed here — changing app-wide
 // routing is not Module 4's to decide.
-
-const uniqueTitle = (label: string) => `E2E ${label} ${Date.now()}`;
-
-/**
- * A page signed in as the given user, in its own browser context.
- *
- * Separate contexts rather than clearing cookies between roles: the app
- * keeps the last role in localStorage, so a shared context can carry a
- * stale role into the next sign-in and bounce a provider off their own
- * routes before the refresh settles.
- */
-async function pageAs(browser: Browser, user: TestUser): Promise<Page> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await signIn(page, user);
-  return page;
-}
-
-const DESCRIPTION =
-  'A requirement created by the end-to-end suite, long enough to pass the twenty character minimum.';
-
-/**
- * Walks the five-step wizard and stops on the review step without
- * publishing. Dates are left empty on purpose: they are optional on the API,
- * and driving the custom date and time widgets would test those components
- * rather than this flow.
- */
-async function fillWizard(page: Page, title: string) {
-  await page.goto('/client/jobs/new/manual');
-
-  // Step 1 — category, from the seeded taxonomy rather than a hardcoded list.
-  const firstCategory = page.locator('[data-testid^="category-"]').first();
-  await expect(firstCategory).toBeVisible({ timeout: 40_000 });
-  await firstCategory.click();
-  await page.getByTestId('wizard-next').click();
-
-  // Step 2 — title.
-  await page.getByTestId('job-title-input').fill(title);
-  await page.getByTestId('wizard-next').click();
-
-  // Step 3 — description.
-  await page.getByTestId('job-description-input').fill(DESCRIPTION);
-  await page.getByTestId('wizard-next').click();
-
-  // Step 4 — logistics. Everything here is optional.
-  await page.getByTestId('job-location-input').fill('Bandra, Mumbai');
-  await page.getByTestId('wizard-next').click();
-
-  // Step 5 — budget and review.
-  await page.getByTestId('job-budget-input').fill('25000');
-}
-
-async function publishRequirement(page: Page, title: string) {
-  await fillWizard(page, title);
-  await page.getByTestId('publish-job').click();
-
-  // Landing on the detail page with a real id is the success signal.
-  await expect(page.getByTestId('job-title')).toHaveText(title, { timeout: 40_000 });
-  await expect(page.getByTestId('job-status')).toHaveAttribute('data-status', 'PUBLISHED');
-}
 
 // ---------------------------------------------------------------------------
 // The core workflow

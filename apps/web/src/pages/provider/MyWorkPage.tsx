@@ -12,6 +12,10 @@ import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
+import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
+import { useApiResource } from '../../hooks/useApiResource';
+import { proposalsApi } from '../../lib/proposals-api';
+import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { TimeSlot } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
 import {
@@ -45,14 +49,21 @@ function getMonthCells(monthDate: Date): (Date | null)[] {
 }
 
 export const MyWorkPage: React.FC = () => {
-  const { currentUser, proposals, contracts, jobs, navigate } = useApp();
+  const { currentUser, contracts, navigate, accessToken } = useApp();
 
   const [activeTab, setActiveTab] = useState<'bids' | 'contracts' | 'calendar'>('bids');
 
-  // Vendor's proposals (includes drafts — the "My Proposals" tab intentionally lists those too)
-  const myProposals = proposals.filter((p) => p.vendorId === currentUser.id);
-  // A draft isn't actually submitted yet — the stat card specifically should not count it.
-  const submittedProposals = myProposals.filter((p) => p.status !== 'draft');
+  // The proposals tab is on the real API as of Module 5. The contracts and
+  // calendar tabs below are still mock — those modules do not exist.
+  //
+  // There is no longer a draft/submitted split: a proposal is submitted
+  // complete, in one operation, so every row here is a real submission.
+  const myProposals = useApiResource(
+    () => proposalsApi.mine(accessToken as string),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
+  const proposalItems = myProposals.data?.items ?? [];
 
   // Vendor's active or completed contracts
   const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
@@ -65,7 +76,9 @@ export const MyWorkPage: React.FC = () => {
   today.setHours(0, 0, 0, 0);
   const todayISO = toISODate(today);
 
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const [calendarMonth, setCalendarMonth] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(() =>
     getVendorAvailability(currentUser.id),
   );
@@ -117,9 +130,7 @@ export const MyWorkPage: React.FC = () => {
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header Banner */}
       <div className="pb-6 border-b border-border">
-        <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-          My Work
-        </h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">My Work</h1>
         <p className="text-xs text-ink-muted mt-1">
           Track your bids, manage active event deliveries, and manage your availability calendar.
         </p>
@@ -132,7 +143,7 @@ export const MyWorkPage: React.FC = () => {
             <span className="text-xs font-medium">Submitted Proposals</span>
             <FileCheck className="w-4 h-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-ink">{submittedProposals.length}</p>
+          <p className="text-2xl font-bold text-ink">{myProposals.data?.total ?? 0}</p>
           <p className="text-[11px] text-ink-muted mt-1">Active client bids</p>
         </Card>
 
@@ -150,9 +161,7 @@ export const MyWorkPage: React.FC = () => {
             <span className="text-xs font-medium">Total Revenue Won</span>
             <IndianRupee className="w-4 h-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-ink">
-            ₹{totalEarnings.toLocaleString('en-IN')}
-          </p>
+          <p className="text-2xl font-bold text-ink">₹{totalEarnings.toLocaleString('en-IN')}</p>
           <p className="text-[11px] text-ink-muted mt-1">0% vendor commission</p>
         </Card>
 
@@ -178,7 +187,7 @@ export const MyWorkPage: React.FC = () => {
                   : 'bg-white text-ink-muted hover:text-ink border border-border'
               }`}
             >
-              My Proposals ({myProposals.length})
+              My Proposals ({myProposals.data?.total ?? 0})
             </button>
 
             <button
@@ -205,66 +214,66 @@ export const MyWorkPage: React.FC = () => {
           </div>
         </div>
 
-        {/* TAB 1: My Submitted Bids */}
+        {/* TAB 1: My Submitted Proposals — real API */}
         {activeTab === 'bids' && (
           <div className="space-y-4">
-            {myProposals.length === 0 ? (
+            {myProposals.loading && <p className="text-xs text-ink-muted">Loading proposals…</p>}
+
+            {myProposals.error && <p className="text-xs text-destructive">{myProposals.error}</p>}
+
+            {!myProposals.loading && !myProposals.error && proposalItems.length === 0 && (
               <EmptyState
-                title="No active proposals"
-                description="Browse open event jobs and submit your first bid."
-                actionLabel="Explore Jobs"
-                onAction={() => navigate('/provider/dashboard')}
+                title="No proposals yet"
+                description="Browse open requirements and send your first proposal."
+                actionLabel="Browse requirements"
+                onAction={() => navigate('/provider/search')}
               />
-            ) : (
-              myProposals.map((proposal) => {
-                const req = jobs.find((r) => r.id === proposal.jobId);
-                const isDraft = proposal.status === 'draft';
-                return (
-                  <div
-                    key={proposal.id}
-                    onClick={() => {
-                      if (!req) return;
-                      navigate(isDraft ? `/provider/submit-proposal/${req.id}` : `/provider/jobs/${req.id}`);
-                    }}
-                    className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <StatusBadge status={proposal.status} />
-                          <span className="text-xs font-mono text-ink-muted">
-                            {isDraft ? 'Last saved' : 'Submitted'} {new Date(proposal.submittedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <h3 className="text-base font-bold text-ink">
-                          {req?.title || 'Event Job'}
-                        </h3>
-                      </div>
+            )}
 
-                      <div className="text-right">
-                        <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                          Your Proposed Quote
-                        </span>
-                        <span className="text-xl font-bold text-primary">
-                          ₹{proposal.bidAmount.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-ink-muted line-clamp-2 leading-relaxed mb-4">
-                      "{proposal.coverLetter}"
-                    </p>
-
-                    <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
-                      <span>Delivery: {proposal.estimatedDelivery}</span>
-                      <span className="text-primary font-bold hover:underline flex items-center gap-1">
-                        View Details <ChevronRight className="w-4 h-4" />
+            {proposalItems.map((proposal) => (
+              <div
+                key={proposal.id}
+                data-testid="my-proposal-row"
+                data-status={proposal.status}
+                // The proposal, not the requirement it targets: this is where
+                // its status, attachments and withdrawal live.
+                onClick={() => navigate(`/provider/proposals/${proposal.id}`)}
+                className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ProposalStatusBadge status={proposal.status} />
+                      <span className="text-xs font-mono text-ink-muted">
+                        {formatSubmitted(proposal)}
                       </span>
                     </div>
+                    <h3 className="text-base font-bold text-ink truncate">{proposal.job.title}</h3>
+                    <p className="text-xs text-ink-muted mt-0.5">
+                      For {proposal.job.clientProfile.displayName}
+                    </p>
                   </div>
-                );
-              })
-            )}
+
+                  <div className="text-right shrink-0">
+                    <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                      Your quote
+                    </span>
+                    <span className="text-xl font-bold text-primary">{formatOffer(proposal)}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-ink-muted line-clamp-2 leading-relaxed mb-4">
+                  {proposal.coverMessage}
+                </p>
+
+                <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
+                  <span>Turnaround: {formatTurnaround(proposal)}</span>
+                  <span className="text-primary font-bold hover:underline flex items-center gap-1">
+                    View proposal <ChevronRight className="w-4 h-4" />
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -290,12 +299,8 @@ export const MyWorkPage: React.FC = () => {
                       <div className="flex items-center gap-2 mb-1">
                         <StatusBadge status={ctr.bookingState} />
                       </div>
-                      <h3 className="text-base font-bold text-ink">
-                        {ctr.jobTitle}
-                      </h3>
-                      <p className="text-xs text-ink-muted mt-0.5">
-                        Client: {ctr.clientName}
-                      </p>
+                      <h3 className="text-base font-bold text-ink">{ctr.jobTitle}</h3>
+                      <p className="text-xs text-ink-muted mt-0.5">Client: {ctr.clientName}</p>
                     </div>
 
                     <div className="text-right">
@@ -309,7 +314,15 @@ export const MyWorkPage: React.FC = () => {
                   </div>
 
                   <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
-                    <span>Event Date: {formatEventSchedule(ctr.eventDate, ctr.timingMode, ctr.eventStartTime, ctr.eventEndTime)}</span>
+                    <span>
+                      Event Date:{' '}
+                      {formatEventSchedule(
+                        ctr.eventDate,
+                        ctr.timingMode,
+                        ctr.eventStartTime,
+                        ctr.eventEndTime,
+                      )}
+                    </span>
                     <span className="text-primary font-bold hover:underline flex items-center gap-1">
                       Open Contract Room <ChevronRight className="w-4 h-4" />
                     </span>
@@ -369,9 +382,7 @@ export const MyWorkPage: React.FC = () => {
                       disabled={isPast}
                       onClick={() => setSelectedDate(dateISO)}
                       className={`aspect-square rounded-lg text-xs font-medium flex flex-col items-center justify-center gap-1 transition-all ${
-                        isPast
-                          ? 'text-zinc-300 cursor-not-allowed'
-                          : 'cursor-pointer hover:bg-bg'
+                        isPast ? 'text-zinc-300 cursor-not-allowed' : 'cursor-pointer hover:bg-bg'
                       } ${isSelected ? 'ring-2 ring-primary' : ''}`}
                     >
                       <span className={isPast ? '' : 'text-ink'}>{date.getDate()}</span>
@@ -381,10 +392,10 @@ export const MyWorkPage: React.FC = () => {
                             status === 'booked'
                               ? 'bg-primary'
                               : status === 'open'
-                              ? 'bg-emerald-500'
-                              : status === 'partial'
-                              ? 'bg-amber-500'
-                              : 'bg-rose-400'
+                                ? 'bg-emerald-500'
+                                : status === 'partial'
+                                  ? 'bg-amber-500'
+                                  : 'bg-rose-400'
                           }`}
                         />
                       )}
@@ -404,7 +415,8 @@ export const MyWorkPage: React.FC = () => {
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Fully blocked
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Booked (contract confirmed)
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Booked (contract
+                  confirmed)
                 </span>
               </div>
             </Card>
@@ -433,8 +445,8 @@ export const MyWorkPage: React.FC = () => {
                         isBooked
                           ? 'bg-surface-subtle border-primary/30 text-primary cursor-not-allowed'
                           : isOpen
-                          ? 'bg-emerald-50 border-emerald-300 text-primary cursor-pointer'
-                          : 'bg-zinc-100 border-zinc-200 text-zinc-500 cursor-pointer'
+                            ? 'bg-emerald-50 border-emerald-300 text-primary cursor-pointer'
+                            : 'bg-zinc-100 border-zinc-200 text-zinc-500 cursor-pointer'
                       }`}
                     >
                       <span>
@@ -443,8 +455,8 @@ export const MyWorkPage: React.FC = () => {
                           {isBooked
                             ? 'BOOKED — CONTRACT CONFIRMED'
                             : isOpen
-                            ? 'AVAILABLE FOR BOOKING'
-                            : 'BLOCKED / UNAVAILABLE'}
+                              ? 'AVAILABLE FOR BOOKING'
+                              : 'BLOCKED / UNAVAILABLE'}
                         </span>
                       </span>
                       {isBooked && <Lock className="w-3.5 h-3.5 shrink-0" />}

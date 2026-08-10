@@ -225,4 +225,45 @@ describe('JobsRepository', () => {
       expect(job.findMany.mock.calls[0][0].orderBy).toEqual([{ createdAt: 'desc' }, { id: 'asc' }]);
     });
   });
+
+  describe('claimFilled', () => {
+    // The transaction client, not the repository's own. Acceptance has three
+    // more writes to make and all four must land together.
+    function buildTx() {
+      const job = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+      return { tx: { job } as never, job };
+    }
+
+    it('carries the status test inside the update, not before it', async () => {
+      const { repository } = build();
+      const { tx, job } = buildTx();
+
+      await repository.claimFilled(tx, 'job_1', ['PUBLISHED']);
+
+      // The whole mechanism: two racing callers are serialised by Postgres
+      // on this row, and the loser matches nothing. A findFirst followed by
+      // an update would let both through.
+      expect(job.updateMany.mock.calls[0][0]).toEqual({
+        where: { id: 'job_1', status: { in: ['PUBLISHED'] }, deletedAt: null },
+        data: { status: 'FILLED' },
+      });
+    });
+
+    it('writes through the transaction client, never the repository client', async () => {
+      const { repository, job: ownClient } = build();
+      const { tx } = buildTx();
+
+      await repository.claimFilled(tx, 'job_1', ['PUBLISHED']);
+
+      expect(ownClient.update).not.toHaveBeenCalled();
+    });
+
+    it('reports zero rows claimed so the caller can conflict', async () => {
+      const { repository } = build();
+      const { tx, job } = buildTx();
+      job.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(repository.claimFilled(tx, 'job_1', ['PUBLISHED'])).resolves.toBe(0);
+    });
+  });
 });

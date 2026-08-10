@@ -67,6 +67,19 @@ export function formatDeadline(job: Pick<ApiJob, 'proposalDeadline'>): string | 
   return dateFormat.format(new Date(job.proposalDeadline));
 }
 
+/**
+ * Whether the requirement has stopped accepting proposals.
+ *
+ * Lives here rather than in the component because it reads the clock, and a
+ * render must be pure — the same reason postedAgo below is a helper. The
+ * server decides this too, on every submission; this only lets a screen say
+ * so before the provider writes a cover message.
+ */
+export function isPastProposalDeadline(job: Pick<ApiJob, 'proposalDeadline'>): boolean {
+  if (!job.proposalDeadline) return false;
+  return new Date(job.proposalDeadline).getTime() < Date.now();
+}
+
 /** Whole days only — "3 hours ago" on a requirement board is false precision. */
 export function postedAgo(dateStr: string): string {
   const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
