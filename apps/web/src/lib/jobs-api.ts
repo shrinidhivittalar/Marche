@@ -56,6 +56,15 @@ export interface ApiJob {
   status: JobStatus;
   publishedAt: string | null;
   cancelledAt?: string | null;
+  /**
+   * How many proposals this requirement has received.
+   *
+   * Owner reads only — `/jobs/me` and `/jobs/me/:id`. Absent on the public
+   * routes, because it is the client's own count of who replied and no part
+   * of discovery needs it. Counted per request rather than stored, so it
+   * cannot drift the way a cached column would.
+   */
+  proposalCount?: number;
   createdAt: string;
   category: { id: string; name: string; slug: string };
   clientProfile: {
