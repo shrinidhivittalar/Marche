@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -14,7 +15,7 @@ import { paginate } from '../../marketplace/pagination';
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
-import type { Job, JobStatus } from '@marche/db';
+import type { Job, JobStatus, Prisma } from '@marche/db';
 
 // Which statuses a job may move to from where. The whole lifecycle is one
 // table rather than a scatter of `if (status === ...)` checks, so an
@@ -167,7 +168,8 @@ export class JobsService {
   }
 
   /**
-   * Marks a requirement as filled. Module 5 only.
+   * Claims a requirement as FILLED, inside the caller's transaction. Module
+   * 5 only.
    *
    * Deliberately not reachable from any route in this module: FILLED is
    * the consequence of accepting a proposal, so the transition belongs to
@@ -177,15 +179,33 @@ export class JobsService {
    * Called directly rather than through an event, because no event
    * infrastructure exists and inventing one for a single caller would be
    * the kind of abstraction CLAUDE.md rules out.
+   *
+   * Why this takes a transaction client rather than reading and then
+   * writing, as every other method here does: two clients accepting two
+   * different proposals on the same requirement must produce exactly one
+   * winner. A read-then-write cannot promise that — both requests read
+   * PUBLISHED, both pass the transition check, both write, and the
+   * requirement is filled twice by two different providers. The status test
+   * therefore travels inside the UPDATE (see JobsRepository.claimFilled),
+   * and the loser is told the requirement is already filled.
+   *
+   * The rule about which statuses may become FILLED stays here, derived from
+   * the same ALLOWED_TRANSITIONS table as every other transition, so the
+   * lifecycle has one definition rather than one here and a hard-coded
+   * `status: 'PUBLISHED'` in the Proposals module.
+   *
+   * Throws ConflictException, not BadRequest: the caller's request was
+   * well-formed and would have succeeded a moment earlier.
    */
-  async markFilled(jobId: string): Promise<Job> {
-    const job = await this.jobsRepository.findById(jobId);
-    if (!job) {
-      throw new NotFoundException('Requirement not found');
-    }
+  async claimFilled(tx: Prisma.TransactionClient, jobId: string): Promise<void> {
+    const claimableFrom = (Object.keys(ALLOWED_TRANSITIONS) as JobStatus[]).filter((from) =>
+      ALLOWED_TRANSITIONS[from].includes('FILLED'),
+    );
 
-    this.assertTransition(job.status, 'FILLED');
-    return this.jobsRepository.update(job.id, { status: 'FILLED' });
+    const claimed = await this.jobsRepository.claimFilled(tx, jobId, claimableFrom);
+    if (claimed === 0) {
+      throw new ConflictException('This requirement is no longer accepting proposals');
+    }
   }
 
   // ---------- client-owned reads ----------

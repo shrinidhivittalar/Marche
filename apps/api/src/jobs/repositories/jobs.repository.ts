@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { publicJobWhere } from '../job-visibility';
-import type { Job, Prisma } from '@marche/db';
+import type { Job, JobStatus, Prisma } from '@marche/db';
 
 export type JobSort = 'newest' | 'event_date' | 'budget_low' | 'budget_high';
 
@@ -137,6 +137,35 @@ export class JobsRepository {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  /**
+   * Claims a requirement as FILLED, but only if it is still in a status that
+   * may become FILLED.
+   *
+   * `updateMany` rather than `update`, and that is the entire point: the
+   * status test travels inside the UPDATE, so two callers racing to fill the
+   * same requirement are serialised by Postgres on the row itself. The loser
+   * matches zero rows — the status it required is no longer there — and is
+   * told so, instead of overwriting the winner's claim. A findById-then-update
+   * pair cannot do this: both reads see PUBLISHED before either write lands.
+   *
+   * Takes the transaction client, because the caller (accepting a proposal)
+   * has three more writes to make and all four must land together.
+   *
+   * Returns the number of rows claimed: 1 for the winner, 0 for everyone else.
+   */
+  claimFilled(
+    tx: Prisma.TransactionClient,
+    jobId: string,
+    claimableFrom: JobStatus[],
+  ): Promise<number> {
+    return tx.job
+      .updateMany({
+        where: { id: jobId, status: { in: claimableFrom }, deletedAt: null },
+        data: { status: 'FILLED' },
+      })
+      .then((result) => result.count);
   }
 
   // ---------- attachments ----------

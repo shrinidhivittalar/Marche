@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JobsService } from '../services/jobs.service';
 import { JobsRepository } from '../repositories/jobs.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
@@ -17,6 +22,7 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     create: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'job_1', ...data })),
     update: jest.fn().mockImplementation((id, data) => Promise.resolve({ id, ...data })),
     softDelete: jest.fn().mockResolvedValue({ id: 'job_1' }),
+    claimFilled: jest.fn().mockResolvedValue(1),
     findById: jest.fn().mockResolvedValue({
       id: 'job_1',
       clientProfileId: 'profile_1',
@@ -420,28 +426,41 @@ describe('JobsService', () => {
     });
   });
 
-  describe('markFilled', () => {
-    it('moves a published requirement to FILLED', async () => {
-      const { service, jobs } = build({ status: 'PUBLISHED' });
+  describe('claimFilled', () => {
+    // The status is not read from a mocked job here, unlike every other
+    // block in this file: claimFilled never reads one. Whether the claim
+    // succeeds is decided by the database, and the mock's return value is
+    // standing in for that answer.
+    const tx = {} as never;
 
-      await service.markFilled('job_1');
-
-      const [, data] = jobs.update.mock.calls[0];
-      expect(data.status).toBe('FILLED');
-    });
-
-    it('refuses to fill a draft — a proposal cannot exist for an unpublished requirement', async () => {
+    it('passes only the statuses that may become FILLED', async () => {
       const { service, jobs } = build();
 
-      await expect(service.markFilled('job_1')).rejects.toBeInstanceOf(BadRequestException);
-      expect(jobs.update).not.toHaveBeenCalled();
+      await service.claimFilled(tx, 'job_1');
+
+      const [, jobId, claimableFrom] = jobs.claimFilled.mock.calls[0];
+      expect(jobId).toBe('job_1');
+      // Derived from ALLOWED_TRANSITIONS rather than hard-coded, so this
+      // fails loudly if the lifecycle changes and the claim is not revisited.
+      expect(claimableFrom).toEqual(['PUBLISHED']);
     });
 
-    it('refuses to fill a cancelled requirement', async () => {
-      const { service, jobs } = build({ status: 'CANCELLED' });
+    it('hands the caller transaction straight through', async () => {
+      const { service, jobs } = build();
+      const ownTx = { marker: true } as never;
 
-      await expect(service.markFilled('job_1')).rejects.toBeInstanceOf(BadRequestException);
-      expect(jobs.update).not.toHaveBeenCalled();
+      await service.claimFilled(ownTx, 'job_1');
+
+      expect(jobs.claimFilled.mock.calls[0][0]).toBe(ownTx);
+    });
+
+    it('conflicts when the requirement was already claimed', async () => {
+      const { service, jobs } = build();
+      // What Postgres reports to the loser of a race: the row it wanted to
+      // update no longer matches, because the winner already filled it.
+      jobs.claimFilled.mockResolvedValue(0);
+
+      await expect(service.claimFilled(tx, 'job_1')).rejects.toBeInstanceOf(ConflictException);
     });
   });
 });
