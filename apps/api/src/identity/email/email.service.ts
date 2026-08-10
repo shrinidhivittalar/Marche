@@ -28,6 +28,22 @@ export class EmailService {
     );
   }
 
+  // Sent to the existing account holder when someone submits their address to
+  // /auth/register. Registration no longer tells the caller that an address is
+  // taken (auth.service.ts), so this is how the one person entitled to know
+  // finds out — and it doubles as a warning if they did not do it themselves.
+  // It deliberately contains no link and no token: it is a notification, not
+  // an action, and the account it concerns is unchanged.
+  async sendDuplicateRegistrationEmail(email: string): Promise<void> {
+    const signInLink = `${this.frontendOrigin}/auth/signin`;
+    await this.send(
+      email,
+      'Someone tried to sign up with your Marché email',
+      `<p>We received a sign-up request using this email address, but you already have a Marché account, so no new account was created and nothing has changed.</p><p>If this was you, just <a href="${signInLink}">sign in</a> instead — or use the "Forgot password" link if you cannot remember your password.</p><p>If it wasn't you, you can safely ignore this email.</p>`,
+      `[dev] Duplicate registration attempt for ${email}`,
+    );
+  }
+
   async sendPasswordResetEmail(email: string, rawToken: string): Promise<void> {
     const link = `${this.frontendOrigin}/auth/reset-password?token=${rawToken}`;
     await this.send(

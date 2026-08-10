@@ -90,10 +90,15 @@ export async function createUser(
   if (!res.ok) {
     throw new Error(`Failed to register ${label}: ${res.status} ${await res.text()}`);
   }
-  const body = (await res.json()) as { id: string };
-
-  await db.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } });
-  return { email, password: PASSWORD, name, role, id: body.id };
+  // /auth/register no longer returns the created user — its response is
+  // identical whether or not the address was already taken, so that it cannot
+  // be used to enumerate accounts. The id comes from the verify-email update
+  // this fixture already had to do.
+  const user = await db.user.update({
+    where: { email },
+    data: { emailVerifiedAt: new Date() },
+  });
+  return { email, password: PASSWORD, name, role, id: user.id };
 }
 
 // Deletes only rows whose email carries this run's tag. User -> Profile ->

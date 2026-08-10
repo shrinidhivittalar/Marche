@@ -46,13 +46,20 @@ export interface BackendUser {
   emailVerified: boolean;
 }
 
+// Resolves for an address that is already registered exactly as it does for a
+// new one — the API deliberately does not say which it was, so that the sign-up
+// form cannot be used to test whether an email has an account. There is no user
+// in the response for the same reason.
 export function registerRequest(data: {
   email: string;
   password: string;
   name: string;
   role: 'CLIENT' | 'PROVIDER';
 }) {
-  return apiFetch<BackendUser>('/auth/register', { method: 'POST', body: JSON.stringify(data) });
+  return apiFetch<{ status: string }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export function loginRequest(data: { email: string; password: string }) {
