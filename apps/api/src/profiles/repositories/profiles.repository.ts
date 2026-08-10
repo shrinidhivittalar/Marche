@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { readableProfileWhere } from '../profile-visibility';
 import type { Profile, Prisma } from '@marche/db';
 
 @Injectable()
@@ -54,9 +55,15 @@ export class ProfilesRepository {
     });
   }
 
-  findById(id: string) {
+  // Public reads. Both go through readableProfileWhere, so a suspended or
+  // soft-deleted account stops being publicly readable the moment it is
+  // suspended — matching what publicServiceWhere and publicJobWhere already
+  // do for that user's listings and requirements. viewerUserId is the
+  // owner's escape hatch: passing it lets a suspended user still open their
+  // own profile.
+  findById(id: string, viewerUserId?: string) {
     return this.prisma.client.profile.findFirst({
-      where: { id, deletedAt: null },
+      where: { AND: [{ id }, readableProfileWhere(viewerUserId)] },
       include: {
         user: { select: { role: true } },
         avatarMedia: { select: { objectKey: true, status: true } },
@@ -64,9 +71,9 @@ export class ProfilesRepository {
     });
   }
 
-  findByUsername(username: string) {
+  findByUsername(username: string, viewerUserId?: string) {
     return this.prisma.client.profile.findFirst({
-      where: { username, deletedAt: null },
+      where: { AND: [{ username }, readableProfileWhere(viewerUserId)] },
       include: {
         user: { select: { role: true } },
         avatarMedia: { select: { objectKey: true, status: true } },
@@ -74,6 +81,10 @@ export class ProfilesRepository {
     });
   }
 
+  // Deliberately not filtered by account state, unlike the reads above.
+  // This answers "is this username taken", and a suspended user still owns
+  // theirs — hiding them here would let someone claim it and then collide
+  // on the unique index the moment the account is reinstated.
   findByUsernameExcludingProfile(username: string, excludeProfileId: string) {
     return this.prisma.client.profile.findFirst({
       where: { username, deletedAt: null, NOT: { id: excludeProfileId } },

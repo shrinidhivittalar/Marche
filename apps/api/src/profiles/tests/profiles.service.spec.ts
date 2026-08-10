@@ -181,6 +181,25 @@ describe('ProfilesService', () => {
       );
     });
 
+    // The repository, not the service, drops profiles whose owner is
+    // suspended or soft-deleted — so what matters here is that the viewer's
+    // id reaches it. Without it a suspended owner would be locked out of
+    // their own profile page rather than merely hidden from the public.
+    it('passes the requesting user through to the repository', async () => {
+      profilesRepository.findById.mockResolvedValue(null);
+      profilesRepository.findByUsername.mockResolvedValue(null);
+
+      await expect(service.getPublicProfileById('profile_1', 'user_1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.getPublicProfileByUsername('jane', 'user_1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+
+      expect(profilesRepository.findById).toHaveBeenCalledWith('profile_1', 'user_1');
+      expect(profilesRepository.findByUsername).toHaveBeenCalledWith('jane', 'user_1');
+    });
+
     it('rejects a private profile viewed by someone else', async () => {
       profilesRepository.findById.mockResolvedValue(
         buildProfile({ visibility: 'PRIVATE' }) as never,

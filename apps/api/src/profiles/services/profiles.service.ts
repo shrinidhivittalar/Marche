@@ -145,8 +145,15 @@ export class ProfilesService {
     });
   }
 
+  // requestingUserId is handed to the repository as well as used below. It
+  // widens the read to include the caller's own profile, so suspension hides
+  // an account from everyone else without locking its owner out of it.
+  //
+  // A hidden profile answers 404, the same as one that never existed —
+  // matching JobsService.findPublicById. Saying "suspended" would confirm
+  // the account is there, which is what hiding it is meant to prevent.
   async getPublicProfileById(id: string, requestingUserId?: string): Promise<PublicProfileView> {
-    const profile = await this.profilesRepository.findById(id);
+    const profile = await this.profilesRepository.findById(id, requestingUserId);
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
@@ -157,7 +164,7 @@ export class ProfilesService {
     username: string,
     requestingUserId?: string,
   ): Promise<PublicProfileView> {
-    const profile = await this.profilesRepository.findByUsername(username);
+    const profile = await this.profilesRepository.findByUsername(username, requestingUserId);
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
