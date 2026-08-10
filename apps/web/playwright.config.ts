@@ -42,7 +42,12 @@ export default defineConfig({
     {
       // Built output, not ts-node-dev: the dev runner restarts on file
       // changes, which makes a test run non-deterministic.
-      command: 'npm run start -w @marche/api',
+      //
+      // Built here rather than assumed: `start` serves dist/, so without
+      // this the suite silently tests whatever was compiled last. That is
+      // the worst kind of green — an API change can look verified when the
+      // server never had it.
+      command: 'npm run build -w @marche/api && npm run start -w @marche/api',
       cwd: '../..',
       port: API_PORT,
       reuseExistingServer: false,
