@@ -61,6 +61,7 @@ import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
 import { ProviderOnboardingPage } from './pages/provider/ProviderOnboardingPage';
 import { SubmitProposalPage } from './pages/provider/SubmitProposalPage';
+import { ProposalDetailProviderView } from './pages/provider/ProposalDetailProviderView';
 import { EditProfilePage } from './pages/EditProfilePage';
 import { MobileMenuPage } from './pages/MobileMenuPage';
 
@@ -127,6 +128,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
   { prefix: '/client/proposals/', render: (id) => <ProposalDetailPage id={id} /> },
   { prefix: '/provider/jobs/', render: (id) => <JobDetailProviderView id={id} /> },
   { prefix: '/provider/submit-proposal/', render: (id) => <SubmitProposalPage jobId={id} /> },
+  { prefix: '/provider/proposals/', render: (id) => <ProposalDetailProviderView id={id} /> },
   // Real API-backed profile. The previous VendorProfilePage rendered five
   // separate mock fixtures, so every marketplace search led to fake data.
   { prefix: '/profile/', render: (id) => <PublicProfilePage id={id} /> },

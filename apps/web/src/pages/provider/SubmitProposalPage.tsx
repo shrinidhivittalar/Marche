@@ -2,210 +2,138 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   IndianRupee,
-  Lock,
   Send,
-  Trash2,
-  CheckCircle2,
   Calendar as CalendarIcon,
   MapPin,
-  ShieldCheck,
   Paperclip,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input, Textarea, TimePicker } from '@marche/ui';
+import { Button, Card, Input, Textarea } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
-import { formatEventSchedule } from '../../lib/formatTime';
-import { formatBudget, isBidWithinBudget } from '../../lib/formatBudget';
-import { INITIAL_PORTFOLIO_ITEMS } from '../../data/mockData';
+import { useApiResource } from '../../hooks/useApiResource';
+import { jobsApi } from '../../lib/jobs-api';
+import { proposalsApi } from '../../lib/proposals-api';
+import { ApiError } from '../../lib/api';
+import {
+  formatJobBudget,
+  formatEventWhen,
+  formatDeadline,
+  isPastProposalDeadline,
+} from '../../lib/formatJob';
+
+// Submitting a proposal, on the real Proposals API.
+//
+// Most of what this screen used to collect has no home in Phase 1 and was
+// removed rather than left collecting values nothing reads:
+//
+// - Drafts. A proposal is submitted complete, in one operation — there is no
+//   DRAFT status, so "Save as Draft" wrote to mock state and nothing else.
+// - Milestones and the service-fee breakdown. Both belong to Contracts and
+//   Payments, neither of which exists. The fee in particular was inventing a
+//   number the platform has never charged.
+// - Proposed event times. The client names the hours on the requirement;
+//   a provider countering them is negotiation, which Phase 1 does not have.
+// - Portfolio highlights. The provider's profile is already reachable from
+//   the proposal, so selecting images duplicated it against mock portfolio
+//   rows that no real proposal could reference.
+//
+// What is left is exactly what the API accepts: a price, a turnaround in
+// days, and a cover message.
 
 interface SubmitProposalPageProps {
   jobId: string;
 }
 
-const MARCHE_SERVICE_FEE_RATE = 0.1;
-const MAX_HIGHLIGHTS = 4;
-const DESCRIPTION_TRUNCATE_LENGTH = 180;
-const DEFAULT_BID_AMOUNT = 3200;
+// Matches the DTO. Enforced server-side too — this only saves a round trip
+// and gives the provider the message before they lose their typing.
+const MIN_COVER_MESSAGE = 20;
+const MAX_COVER_MESSAGE = 3000;
 
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId }) => {
-  const {
-    currentUser,
-    proposals,
-    getJobById,
-    submitProposal,
-    saveProposalDraft,
-    navigate,
-    goBack,
-  } = useApp();
+  const { navigate, goBack, accessToken } = useApp();
 
-  const job = getJobById(jobId);
-  const existingDraft = proposals.find(
-    (p) => p.jobId === jobId && p.vendorId === currentUser.id && p.status === 'draft',
-  );
+  const job = useApiResource(() => jobsApi.byId(jobId), [jobId]);
 
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(existingDraft?.id ?? null);
+  const [proposedPrice, setProposedPrice] = useState<string>('');
+  const [deliveryDays, setDeliveryDays] = useState<string>('7');
+  const [coverMessage, setCoverMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Form State — pre-filled from an existing draft proposal when resuming one
-  const [bidAmount, setBidAmount] = useState<number>(
-    existingDraft?.bidAmount ?? job?.budgetMin ?? DEFAULT_BID_AMOUNT,
-  );
-  const [proposedStartTime, setProposedStartTime] = useState<string>(
-    existingDraft?.proposedStartTime ?? job?.eventStartTime ?? '18:00',
-  );
-  const [proposedEndTime, setProposedEndTime] = useState<string>(
-    existingDraft?.proposedEndTime ?? job?.eventEndTime ?? '22:00',
-  );
-  const [estimatedDelivery, setEstimatedDelivery] = useState<string>(
-    existingDraft?.estimatedDelivery ?? '48 Hours',
-  );
-  const [coverLetter, setCoverLetter] = useState<string>(
-    existingDraft?.coverLetter ??
-      'Hello. I have extensive experience providing top-tier event services for similar high-profile gatherings. My team will ensure full coverage, rapid asset turnaround, and professional execution.',
-  );
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const [selectedHighlights, setSelectedHighlights] = useState<string[]>(
-    existingDraft?.portfolioLinks ?? [],
-  );
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  if (job.loading) {
+    return <p className="text-xs text-ink-muted py-12 text-center">Loading requirement…</p>;
+  }
 
-  const [milestones, setMilestones] = useState<
-    { title: string; amount: number; description: string }[]
-  >(
-    existingDraft?.milestones.map((m) => ({
-      title: m.title,
-      amount: m.amount,
-      description: m.description,
-    })) ?? [
-      {
-        title: 'Event On-Site Setup & Equipment Prep',
-        amount: Math.round(bidAmount * 0.3),
-        description: 'Arrival 2 hours prior to start, equipment calibration & survey.',
-      },
-      {
-        title: 'Live Event Execution & Primary Deliverable',
-        amount: Math.round(bidAmount * 0.5),
-        description: 'On-site execution during selected date and time slot.',
-      },
-      {
-        title: 'Post-Production & Final Master Delivery',
-        amount: Math.round(bidAmount * 0.2),
-        description: 'High-res color grading, editing, and commercial usage licensing.',
-      },
-    ],
-  );
-
-  const [msTitle, setMsTitle] = useState('');
-  const [msAmount, setMsAmount] = useState<number>(500);
-  const [msDesc, setMsDesc] = useState('');
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  if (!job) {
+  if (job.error || !job.data) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
-          title="Job Not Found"
-          description="The requested job is unavailable."
-          actionLabel="Browse Marketplace"
-          onAction={() => navigate('/provider/dashboard')}
+          title="Requirement not found"
+          description={
+            job.error ?? 'It may have been cancelled or filled, or it was never published.'
+          }
+          actionLabel="Browse requirements"
+          onAction={() => navigate('/provider/search')}
         />
       </div>
     );
   }
 
-  // Fixed-budget jobs only accept one bid amount — derive the effective value
-  // instead of syncing bidAmount state to it, so a stale draft or a later job
-  // edit can never leave the two out of sync.
-  const effectiveBidAmount = job.budgetMode === 'fixed' ? job.budgetMin : bidAmount;
+  const requirement = job.data;
 
-  const bidOutOfRange = !isBidWithinBudget(job, effectiveBidAmount);
-  const milestoneTotal = milestones.reduce((sum, m) => sum + m.amount, 0);
-  const milestonesMismatch = milestones.length > 0 && milestoneTotal !== effectiveBidAmount;
+  // The server decides this too, on every submission. Checked here so the
+  // provider is told before writing a cover message rather than after.
+  const deadlinePassed = isPastProposalDeadline(requirement);
+  const closed = requirement.status !== 'PUBLISHED' || deadlinePassed;
 
-  const portfolioItems = INITIAL_PORTFOLIO_ITEMS.filter((p) => p.vendorId === currentUser.id);
+  const price = Number(proposedPrice);
+  const days = Number(deliveryDays);
+  const message = coverMessage.trim();
 
-  const toggleHighlight = (image: string) => {
-    setSelectedHighlights((prev) => {
-      if (prev.includes(image)) return prev.filter((img) => img !== image);
-      if (prev.length >= MAX_HIGHLIGHTS) {
-        showToast(`You can only select up to ${MAX_HIGHLIGHTS} highlights.`);
-        return prev;
-      }
-      return [...prev, image];
-    });
-  };
+  const priceValid = proposedPrice !== '' && Number.isFinite(price) && price >= 0;
+  const daysValid = Number.isInteger(days) && days >= 1 && days <= 365;
+  const messageValid = message.length >= MIN_COVER_MESSAGE && message.length <= MAX_COVER_MESSAGE;
+  const canSubmit = !closed && priceValid && daysValid && messageValid && !submitting;
 
-  const handleAddMilestone = () => {
-    if (msTitle.trim()) {
-      setMilestones([
-        ...milestones,
-        { title: msTitle.trim(), amount: msAmount, description: msDesc.trim() },
-      ]);
-      setMsTitle('');
-      setMsDesc('');
-    }
-  };
+  // A hint, not a block. The client's range is guidance and the API accepts
+  // a bid outside it, so refusing to send one would make this screen stricter
+  // than the platform — and a provider who is genuinely worth more than the
+  // stated budget should be able to say so.
+  const outsideBudget =
+    priceValid &&
+    ((requirement.budgetMin !== null && price < Number(requirement.budgetMin)) ||
+      (requirement.budgetMax !== null && price > Number(requirement.budgetMax)));
 
-  const handleRemoveMilestone = (idx: number) => {
-    setMilestones(milestones.filter((_, i) => i !== idx));
-  };
-
-  const buildProposalData = () => ({
-    jobId: job.id,
-    bidAmount: effectiveBidAmount,
-    coverLetter,
-    estimatedDelivery,
-    proposedStartTime: job.timingMode === 'fixed' ? proposedStartTime : undefined,
-    proposedEndTime: job.timingMode === 'fixed' ? proposedEndTime : undefined,
-    milestones,
-    portfolioLinks: selectedHighlights.length > 0 ? selectedHighlights : undefined,
-  });
-
-  const handleSaveDraft = () => {
-    const saved = saveProposalDraft(currentDraftId, buildProposalData());
-    setCurrentDraftId(saved.id);
-    showToast('Draft saved. You can find it on your Dashboard.');
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!coverLetter || !effectiveBidAmount) return;
-    if (job.timingMode === 'fixed' && proposedEndTime <= proposedStartTime) return;
-    if (bidOutOfRange) return;
-    if (milestonesMismatch) return;
+    if (!canSubmit || !accessToken) return;
 
+    setSubmitting(true);
+    setError(null);
     try {
-      submitProposal({
-        ...buildProposalData(),
-        draftId: currentDraftId ?? undefined,
+      const proposal = await proposalsApi.submit(accessToken, {
+        jobId: requirement.id,
+        coverMessage: message,
+        proposedPrice: price,
+        deliveryDays: days,
       });
-      navigate('/provider/dashboard');
+      navigate(`/provider/proposals/${proposal.id}`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not submit this proposal.');
+      // The 409s carry a real explanation — already proposed, withdrawal was
+      // final, deadline passed, requirement filled while the form was open —
+      // so the server's message is shown rather than replaced with a generic
+      // failure.
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "We couldn't reach the server. Check your connection and try again.",
+      );
+      setSubmitting(false);
     }
   };
-
-  const serviceFee = Math.round(effectiveBidAmount * MARCHE_SERVICE_FEE_RATE * 100) / 100;
-  const youReceive = effectiveBidAmount - serviceFee;
-
-  const descriptionIsLong = job.description.length > DESCRIPTION_TRUNCATE_LENGTH;
-  const displayedDescription =
-    descriptionIsLong && !descriptionExpanded
-      ? `${job.description.slice(0, DESCRIPTION_TRUNCATE_LENGTH).trimEnd()}…`
-      : job.description;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      {toastMessage && (
-        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Top Navigation */}
       <button
         onClick={goBack}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
@@ -214,62 +142,58 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
         <span>Back</span>
       </button>
 
-      {/* Header */}
       <div>
-        <span className="text-xs font-mono uppercase font-semibold text-primary">
-          Service Provider Bid Proposal{currentDraftId ? ' · Editing Draft' : ''}
-        </span>
+        <span className="text-xs font-mono uppercase font-semibold text-primary">Proposal</span>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight mt-1">
-          Submit Proposal for "{job.title}"
+          Submit a proposal for “{requirement.title}”
         </h1>
-        <p className="text-xs text-amber-700 font-semibold mt-1">
-          Submit your proposal by {job.proposalDeadline}.
-        </p>
+        <p className="text-xs text-ink-muted mt-1">{formatDeadline(requirement)}</p>
       </div>
 
+      {closed && (
+        <Card className="p-5 border-amber-300 bg-amber-50">
+          <p className="text-xs font-semibold text-amber-900">
+            {deadlinePassed
+              ? 'The deadline for proposals on this requirement has passed.'
+              : 'This requirement is no longer accepting proposals.'}
+          </p>
+          <p className="text-[11px] text-amber-800 mt-1">
+            You can still read it, but nothing you send would reach the client.
+          </p>
+        </Card>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Job Details Recap */}
         <Card className="p-8 space-y-4">
-          <h2 className="text-lg font-bold text-ink">Job details</h2>
+          <h2 className="text-lg font-bold text-ink">The requirement</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-8">
             <div className="space-y-3">
               <div>
-                <h3 className="text-base font-bold text-ink">{job.title}</h3>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="px-2.5 py-1 rounded-lg bg-surface-subtle text-[11px] font-medium text-ink-muted border border-border">
-                    {job.category}
-                  </span>
-                  <span className="text-[11px] text-ink-muted">
-                    Posted{' '}
-                    {new Date(job.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </div>
+                <h3 className="text-base font-bold text-ink">{requirement.title}</h3>
+                <span className="inline-block mt-1.5 px-2.5 py-1 rounded-lg bg-surface-subtle text-[11px] font-medium text-ink-muted border border-border">
+                  {requirement.category.name}
+                </span>
               </div>
 
-              <p className="text-xs text-ink-muted leading-relaxed">
-                {displayedDescription}{' '}
-                {descriptionIsLong && (
-                  <button
-                    type="button"
-                    onClick={() => setDescriptionExpanded((v) => !v)}
-                    className="text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    {descriptionExpanded ? 'less' : 'more'}
-                  </button>
-                )}
+              <p className="text-xs text-ink-muted leading-relaxed whitespace-pre-line">
+                {requirement.description}
               </p>
+
+              {requirement.deliverables.length > 0 && (
+                <ul className="text-xs text-ink-muted list-disc pl-4 space-y-1">
+                  {requirement.deliverables.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
 
               <button
                 type="button"
-                onClick={() => navigate(`/provider/jobs/${job.id}`)}
+                onClick={() => navigate(`/provider/jobs/${requirement.id}`)}
                 className="text-xs text-primary font-semibold hover:underline cursor-pointer"
               >
-                View job posting
+                View the full posting
               </button>
             </div>
 
@@ -277,363 +201,134 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
               <div className="flex items-start gap-2.5">
                 <IndianRupee className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-bold text-ink">{formatBudget(job)}</p>
-                  <p className="text-[11px] text-ink-muted">
-                    {job.budgetMode === 'fixed' ? 'Fixed budget' : 'Budget range'}
-                  </p>
+                  <p className="text-xs font-bold text-ink">{formatJobBudget(requirement)}</p>
+                  <p className="text-[11px] text-ink-muted">Client’s budget</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
                 <CalendarIcon className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs font-bold text-ink">
-                    {formatEventSchedule(
-                      job.eventDate,
-                      job.timingMode,
-                      job.eventStartTime,
-                      job.eventEndTime,
-                    )}
-                  </p>
+                  <p className="text-xs font-bold text-ink">{formatEventWhen(requirement)}</p>
                   <p className="text-[11px] text-ink-muted">Event timing</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-bold text-ink">{job.location}</p>
-                  <p className="text-[11px] text-ink-muted">Location</p>
+              {requirement.location && (
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-ink">{requirement.location}</p>
+                    <p className="text-[11px] text-ink-muted">Location</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </Card>
 
-        {/* Terms: Bid & Fee Breakdown */}
         <Card className="p-8 space-y-6">
-          <h2 className="text-lg font-bold text-ink">Terms</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-8">
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1">
-                  What's your total bid for this job?
-                </label>
-                {job.budgetMode === 'fixed' ? (
-                  <>
-                    <div className="relative max-w-xs">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
-                        ₹
-                      </span>
-                      <Input
-                        type="number"
-                        value={effectiveBidAmount}
-                        disabled
-                        className="w-full bg-bg border border-border rounded-xl pl-7 pr-9 py-2.5 text-xs text-ink font-mono font-bold disabled:opacity-100 disabled:cursor-not-allowed"
-                      />
-                      <Lock className="w-3.5 h-3.5 text-ink-muted absolute right-4 top-1/2 -translate-y-1/2" />
-                    </div>
-                    <p className="text-[11px] text-ink-muted mt-1.5">
-                      This client set a fixed budget — bids are locked to this exact amount.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative max-w-xs">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
-                        ₹
-                      </span>
-                      <Input
-                        type="number"
-                        step={50}
-                        min={job.budgetMin}
-                        max={job.budgetMax}
-                        value={bidAmount}
-                        onChange={(e) => setBidAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-full bg-bg border border-border rounded-xl pl-7 pr-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
-                        aria-invalid={bidOutOfRange}
-                        required
-                      />
-                    </div>
-                    {bidOutOfRange ? (
-                      <p className="text-[11px] text-destructive mt-1.5 font-medium">
-                        Your bid must be within the client's budget range ({formatBudget(job)}).
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-ink-muted mt-1.5">
-                        Must fall within the client's budget range ({formatBudget(job)}).
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">
-                    Confirmed Event Time
-                  </label>
-                  {job.timingMode === 'fixed' ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <TimePicker
-                          value={proposedStartTime}
-                          onChange={setProposedStartTime}
-                          className="bg-bg h-auto py-2.5 text-xs"
-                        />
-                        <span className="text-ink-muted text-xs shrink-0">to</span>
-                        <TimePicker
-                          value={proposedEndTime}
-                          onChange={setProposedEndTime}
-                          className="bg-bg h-auto py-2.5 text-xs"
-                        />
-                      </div>
-                      {proposedEndTime <= proposedStartTime && (
-                        <p className="text-[11px] text-rose-600 mt-1">
-                          End time must be after start time.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-xs text-ink-muted">
-                      Flexible — deliver by {job.eventDate}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">
-                    Estimated Delivery Turnaround
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="e.g. 24 Hours / 48 Hours"
-                    value={estimatedDelivery}
-                    onChange={(e) => setEstimatedDelivery(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <div>
-                    <span className="text-ink">
-                      Marché Service Fee: {(MARCHE_SERVICE_FEE_RATE * 100).toFixed(0)}%
-                    </span>
-                    <p className="text-[10px] text-ink-muted">Fixed for the entire contract</p>
-                  </div>
-                  <span className="text-ink-muted shrink-0">
-                    -₹{serviceFee.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-border">
-                  <div>
-                    <span className="font-bold text-ink">You'll receive</span>
-                    <p className="text-[10px] text-ink-muted">After service fees</p>
-                  </div>
-                  <span className="font-mono font-bold text-primary shrink-0">
-                    ₹{youReceive.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-white border border-border rounded-xl flex items-start gap-2.5">
-                <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
-                <div className="text-[11px] text-ink-muted leading-relaxed">
-                  Includes Marché Booking Protection.{' '}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      showToast(
-                        "Booking protection details aren't wired up yet — Marché is still a frontend preview.",
-                      )
-                    }
-                    className="text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    Learn more
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Milestones Builder */}
-        <Card className="p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-ink">Milestone breakdown</h2>
-            <span
-              className={`text-xs font-mono font-bold ${milestonesMismatch ? 'text-destructive' : 'text-primary'}`}
-            >
-              Milestones Total: ₹{milestoneTotal.toLocaleString('en-IN')} / ₹
-              {effectiveBidAmount.toLocaleString('en-IN')}
-            </span>
-          </div>
-          {milestonesMismatch && (
-            <p className="text-[11px] text-destructive font-medium">
-              Milestone amounts must add up to your total bid before you can submit.
+          <div>
+            <h2 className="text-lg font-bold text-ink">Your offer</h2>
+            <p className="text-xs text-ink-muted mt-1">
+              This is a snapshot. Once submitted it cannot be edited — only withdrawn — so the
+              client decides on exactly what they read.
             </p>
-          )}
+          </div>
 
-          <div className="space-y-3">
-            {milestones.map((ms, idx) => (
-              <div
-                key={idx}
-                className="p-4 bg-bg border border-border rounded-xl flex items-center justify-between gap-4 text-xs"
-              >
-                <div>
-                  <span className="font-bold text-ink">
-                    Milestone {idx + 1}: {ms.title}
-                  </span>
-                  <p className="text-ink-muted text-[11px] mt-0.5">{ms.description}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-primary">
-                    ₹{ms.amount.toLocaleString('en-IN')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMilestone(idx)}
-                    className="text-zinc-400 hover:text-rose-600 p-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="proposedPrice" className="block text-xs font-semibold text-ink mb-1">
+                Your price
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
+                  ₹
+                </span>
+                <Input
+                  id="proposedPrice"
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={proposedPrice}
+                  onChange={(e) => setProposedPrice(e.target.value)}
+                  placeholder="25000"
+                  className="w-full bg-bg border border-border rounded-xl pl-7 pr-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
+                  required
+                />
               </div>
-            ))}
-          </div>
-
-          <div className="p-4 bg-white border border-border rounded-xl space-y-3">
-            <span className="text-xs font-semibold text-ink block">Add Milestone</span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Input
-                type="text"
-                placeholder="Milestone title..."
-                value={msTitle}
-                onChange={(e) => setMsTitle(e.target.value)}
-                className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
-              />
-              <Input
-                type="number"
-                min={0}
-                placeholder="Amount (₹)"
-                value={msAmount}
-                onChange={(e) => setMsAmount(Math.max(0, Number(e.target.value)))}
-                className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
-              />
-              <Input
-                type="text"
-                placeholder="Short description..."
-                value={msDesc}
-                onChange={(e) => setMsDesc(e.target.value)}
-                className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
-              />
+              <p className="text-[11px] mt-1.5 text-ink-muted">
+                {outsideBudget
+                  ? `Outside the client’s stated budget (${formatJobBudget(requirement)}). You can still send it.`
+                  : `The client’s budget is ${formatJobBudget(requirement)}.`}
+              </p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={handleAddMilestone}>
-              Add Milestone
-            </Button>
-          </div>
-        </Card>
 
-        {/* Additional Details */}
-        <Card className="p-8 space-y-6">
-          <h2 className="text-lg font-bold text-ink">Additional details</h2>
+            <div>
+              <label htmlFor="deliveryDays" className="block text-xs font-semibold text-ink mb-1">
+                Turnaround, in days
+              </label>
+              <Input
+                id="deliveryDays"
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                value={deliveryDays}
+                onChange={(e) => setDeliveryDays(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-xs text-ink font-mono font-bold focus:outline-none focus:border-primary"
+                required
+              />
+              <p className="text-[11px] text-ink-muted mt-1.5">
+                Working days from the event to final delivery.
+              </p>
+            </div>
+          </div>
 
           <div>
-            <label className="block text-xs font-semibold text-ink mb-1">Cover Letter</label>
+            <label htmlFor="coverMessage" className="block text-xs font-semibold text-ink mb-1">
+              Cover message
+            </label>
             <Textarea
-              rows={5}
-              placeholder="Explain why you are the best talent for this event, your equipment & approach, and past client successes..."
-              value={coverLetter}
-              onChange={(e) => setCoverLetter(e.target.value)}
+              id="coverMessage"
+              rows={6}
+              placeholder="Why you are right for this event, your approach and equipment, and comparable work you have done…"
+              value={coverMessage}
+              onChange={(e) => setCoverMessage(e.target.value)}
+              maxLength={MAX_COVER_MESSAGE}
               className="w-full bg-bg border border-border rounded-xl p-4 text-xs text-ink focus:outline-none focus:border-primary leading-relaxed"
               required
             />
+            <p className="text-[11px] text-ink-muted mt-1.5">
+              {message.length < MIN_COVER_MESSAGE
+                ? `${MIN_COVER_MESSAGE - message.length} more characters needed.`
+                : `${message.length} / ${MAX_COVER_MESSAGE} characters.`}
+            </p>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-ink mb-1">Attachments</label>
-            <button
-              type="button"
-              onClick={() =>
-                showToast("File uploads aren't wired up yet — Marché is still a frontend preview.")
-              }
-              className="w-full border border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 text-xs text-ink-muted hover:border-primary hover:text-primary transition-colors cursor-pointer"
-            >
-              <Paperclip className="w-4 h-4" />
-              <span>
-                Drag or <span className="underline font-semibold">upload</span> project files
-              </span>
-            </button>
-            <p className="text-[11px] text-ink-muted mt-2 leading-relaxed">
-              You may attach up to 10 files under 25 MB each. Include work samples or other
-              documents to support your proposal. Do not attach your resume — your Marché profile is
-              automatically forwarded to the client with your proposal.
+          {/* Files come after submission, not before: the API attaches them to
+              a proposal that already exists, so there is nothing to attach
+              them to until this form is sent. */}
+          <div className="p-4 bg-bg border border-border rounded-xl flex items-start gap-2.5">
+            <Paperclip className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              You can attach work samples or documents once the proposal is submitted. Your Marché
+              profile goes to the client with it, so there is no need to attach a résumé.
             </p>
           </div>
         </Card>
 
-        {/* Profile Highlights */}
-        <Card className="p-8 space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-ink">Profile highlights</h2>
-            <p className="text-xs text-ink-muted mt-1">
-              Highlight relevant work from your profile to include with this proposal. You can add
-              up to {MAX_HIGHLIGHTS} highlights.
-            </p>
-          </div>
+        {error && (
+          <Card className="p-5 border-destructive/40 bg-destructive/5">
+            <p className="text-xs font-semibold text-destructive">{error}</p>
+          </Card>
+        )}
 
-          {portfolioItems.length === 0 ? (
-            <div className="bg-bg border border-border rounded-2xl py-10 flex items-center justify-center text-center">
-              <p className="text-xs text-ink-muted">You don't have any portfolio projects.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {portfolioItems.map((item) => {
-                const isSelected = selectedHighlights.includes(item.image);
-                return (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => toggleHighlight(item.image)}
-                    className={`relative rounded-xl overflow-hidden border-2 text-left cursor-pointer transition-all ${
-                      isSelected ? 'border-primary' : 'border-transparent hover:border-border'
-                    }`}
-                  >
-                    <img src={item.image} alt={item.caption} className="w-full h-24 object-cover" />
-                    {isSelected && (
-                      <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                      </span>
-                    )}
-                    <span className="block px-2 py-1.5 text-[10px] font-medium text-ink bg-white truncate">
-                      {item.caption}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        {/* Submit Action */}
-        <div className="flex items-center gap-4 pt-4">
-          <Button
-            type="submit"
-            size="lg"
-            icon={Send}
-            disabled={bidOutOfRange || milestonesMismatch}
-          >
-            Submit proposal
-          </Button>
-          <Button type="button" variant="ghost" onClick={handleSaveDraft}>
-            Save as Draft
+        <div className="flex items-center gap-4 pt-2">
+          <Button type="submit" size="lg" icon={Send} disabled={!canSubmit}>
+            {submitting ? 'Submitting…' : 'Submit proposal'}
           </Button>
           <button
             type="button"
-            onClick={() => navigate(`/provider/jobs/${job.id}`)}
+            onClick={() => navigate(`/provider/jobs/${requirement.id}`)}
             className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
           >
             Cancel

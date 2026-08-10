@@ -2,37 +2,9 @@
 //
 // Kept separate from lib/api.ts, which is the Identity client: that one is
 // about tokens and sessions, this one is about domain data. They share the
-// same fetch helper and error type.
-import { ApiError } from './api';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-async function apiFetch<T>(
-  path: string,
-  token: string | null,
-  options: RequestInit = {},
-): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const raw = body?.message ?? `Request failed with status ${res.status}`;
-    // class-validator returns an array of messages; join them so a caller
-    // can render one string without having to know which shape it got.
-    throw new ApiError(res.status, Array.isArray(raw) ? raw.join(', ') : raw);
-  }
-
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
+// same error type, and the same fetch helper — now in api-fetch.ts, where
+// every domain client reads it from one definition.
+import { apiFetch } from './api-fetch';
 
 // ---------------------------------------------------------------------------
 // Pagination

@@ -6,35 +6,8 @@
 //
 // The vocabulary split is deliberate and matches the backend. Types and
 // paths say "job"; anything a person reads says "requirement".
-import { ApiError } from './api';
+import { apiFetch, toQuery } from './api-fetch';
 import type { Page } from './marketplace-api';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-async function apiFetch<T>(
-  path: string,
-  token: string | null,
-  options: RequestInit = {},
-): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const raw = body?.message ?? `Request failed with status ${res.status}`;
-    throw new ApiError(res.status, Array.isArray(raw) ? raw.join(', ') : raw);
-  }
-
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
 
 // The API returns the marketplace envelope; normalised to the same Page
 // shape every other screen already consumes.
@@ -117,18 +90,6 @@ export interface JobSearchParams {
   sort?: JobSort;
   page?: number;
   limit?: number;
-}
-
-// Empty values are dropped rather than sent as blank params: `?location=`
-// would otherwise reach the API as a filter on the empty string.
-function toQuery(params: Record<string, unknown>): string {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue;
-    query.set(key, String(value));
-  }
-  const serialised = query.toString();
-  return serialised ? `?${serialised}` : '';
 }
 
 export interface JobBody {

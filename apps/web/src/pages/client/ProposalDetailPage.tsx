@@ -1,331 +1,254 @@
 import React, { useState } from 'react';
-import {
-  ArrowLeft,
-  Star,
-  ShieldCheck,
-  CheckCircle2,
-  FileText,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Paperclip, ShieldCheck, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
-import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
-import { formatTimeRange } from '../../lib/formatTime';
+import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
+import { useApiResource } from '../../hooks/useApiResource';
+import { proposalsApi, type ApiProposal } from '../../lib/proposals-api';
+import { ApiError } from '../../lib/api';
+import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
+
+// One proposal, as the client who received it sees it, on the real API.
+//
+// The hire flow changed shape with the rewire. It used to create a mock
+// contract and route to a contract page; accepting now establishes a
+// Connection and nothing more, because Contracts is a later module. Saying
+// so is better than routing to a page that would invent one.
+//
+// Accepting also rejects every competing proposal and fills the requirement,
+// in one transaction — so the confirmation says that plainly rather than
+// letting the client discover it afterwards.
 
 interface ProposalDetailPageProps {
   id: string;
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { proposals, getJobById, hireVendor, navigate, goBack } = useApp();
+  const { navigate, goBack, accessToken } = useApp();
+  const token = accessToken as string;
 
-  const [hireModalOpen, setHireModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [confirmedContractId, setConfirmedContractId] = useState<string | null>(null);
-  const [hireError, setHireError] = useState<string | null>(null);
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const proposal = useApiResource(() => proposalsApi.byId<ApiProposal>(token, id), [id, token], {
+    enabled: Boolean(token),
+  });
+  const attachments = useApiResource(() => proposalsApi.attachments(token, id), [id, token], {
+    enabled: Boolean(token),
+  });
 
-  const proposal = proposals.find((p) => p.id === id);
-  const job = proposal ? getJobById(proposal.jobId) : undefined;
+  const [confirmingHire, setConfirmingHire] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hired, setHired] = useState(false);
 
-  if (!proposal || !job) {
+  if (proposal.loading) {
+    return <p className="text-xs text-ink-muted py-12 text-center">Loading proposal…</p>;
+  }
+
+  if (proposal.error || !proposal.data) {
     return (
       <div className="max-w-4xl mx-auto py-12">
         <EmptyState
-          title="Proposal Not Found"
-          description="The requested proposal is unavailable."
-          actionLabel="Go Back"
+          title="Proposal not found"
+          description={proposal.error ?? 'It may be on a requirement that is not yours.'}
+          actionLabel="Go back"
           onAction={goBack}
         />
       </div>
     );
   }
 
-  const handleConfirmHire = () => {
-    if (!agreementAccepted) {
-      setHireError('Accept the booking agreement before confirming this hire.');
-      return;
-    }
+  const offer = proposal.data;
+  const provider = offer.providerProfile;
+  const files = attachments.data ?? [];
+  const open = offer.status === 'SUBMITTED';
 
-    setIsProcessing(true);
-    setHireError(null);
+  const message = (err: unknown) =>
+    err instanceof ApiError
+      ? err.message
+      : "We couldn't reach the server. Check your connection and try again.";
+
+  const handleAccept = async () => {
+    setBusy(true);
+    setError(null);
     try {
-      const { contract } = hireVendor(job.id, proposal.id);
-      setConfirmedContractId(contract.id);
+      await proposalsApi.accept(token, offer.id);
+      setHired(true);
+      setConfirmingHire(false);
+      await proposal.refetch();
     } catch (err) {
-      setHireError(err instanceof Error ? err.message : 'Could not confirm this hire.');
+      // The 409 here is the one that matters: the requirement was filled by
+      // another acceptance, or this provider withdrew, between opening the
+      // page and confirming. The server's wording explains which.
+      setError(message(err));
+      setConfirmingHire(false);
     } finally {
-      setIsProcessing(false);
+      setBusy(false);
     }
   };
 
-  const closeHireModal = () => {
-    setHireModalOpen(false);
-    setConfirmedContractId(null);
-    setHireError(null);
-    setAgreementAccepted(false);
+  const handleReject = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await proposalsApi.reject(token, offer.id);
+      await proposal.refetch();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-8 @container">
-      {/* Top Back Navigation */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={goBack}
-          className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
-        </button>
-
-        <StatusBadge status={proposal.status} />
-      </div>
-
-      {/* Main Proposal Container */}
-      <div className="grid grid-cols-1 @2xl:grid-cols-3 gap-8">
-        {/* Left 2 Columns: Pitch & Milestones */}
-        <div className="@2xl:col-span-2 space-y-6">
-          <Card className="p-8 space-y-6">
-            <div className="flex items-start justify-between pb-6 border-b border-border">
-              <div className="flex items-center gap-4">
-                <img
-                  src={proposal.vendorAvatar}
-                  alt={proposal.vendorName}
-                  className="w-14 h-14 rounded-full object-cover ring-2 ring-border"
-                />
-                <div>
-                  <h1 className="text-xl font-bold text-ink">
-                    {proposal.vendorName}
-                  </h1>
-                  <p className="text-xs text-ink-muted mt-0.5">
-                    {proposal.vendorCategory} • {proposal.vendorLocation}
-                  </p>
-                  <div className="flex items-center gap-1 text-xs text-amber-600 font-semibold mt-1">
-                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                    <span>
-                      {proposal.vendorRating} ({proposal.vendorReviewCount} verified client reviews)
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => navigate(`/profile/${proposal.vendorId}`)}
-                className="text-xs text-primary font-semibold hover:underline cursor-pointer"
-              >
-                View Full Profile
-              </button>
-            </div>
-
-            {/* Cover Letter */}
-            <div>
-              <h3 className="text-xs font-mono uppercase font-bold text-primary mb-2">
-                Proposal Pitch & Strategy
-              </h3>
-              <p className="text-xs text-ink leading-relaxed whitespace-pre-line bg-bg p-4 border border-border rounded-xl">
-                {proposal.coverLetter}
-              </p>
-            </div>
-
-            {/* Milestones Breakdown */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-mono uppercase font-bold text-primary">
-                Proposed Milestones ({proposal.milestones.length})
-              </h3>
-
-              <div className="space-y-3">
-                {proposal.milestones.map((ms, idx) => (
-                  <div
-                    key={ms.id}
-                    className="p-4 bg-white border border-border rounded-xl flex items-center justify-between gap-4 text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-ink">
-                        Milestone {idx + 1}: {ms.title}
-                      </span>
-                      <p className="text-ink-muted text-[11px] mt-0.5">{ms.description}</p>
-                    </div>
-                    <span className="font-mono font-bold text-primary">
-                      ₹{ms.amount.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Portfolio Links */}
-            {proposal.portfolioLinks && proposal.portfolioLinks.length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-border">
-                <h3 className="text-xs font-mono uppercase font-bold text-primary">
-                  Portfolio Highlights
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {proposal.portfolioLinks.map((img, idx) => (
-                    <img
-                      key={idx}
-                      src={img}
-                      alt="Portfolio sample"
-                      className="w-full h-32 object-cover rounded-xl border border-border"
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Right Column: Pricing & Hire Action */}
-        <div className="space-y-6">
-          <Card className="p-6 space-y-6 sticky top-24">
-            <div>
-              <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                Fixed Proposed Quote
-              </span>
-              <p className="text-3xl font-extrabold text-primary">
-                ₹{proposal.bidAmount.toLocaleString('en-IN')}
-              </p>
-              <p className="text-[11px] text-ink-muted mt-1">
-                Guaranteed price locked in. No hidden fees.
-              </p>
-            </div>
-
-            <div className="space-y-2 text-xs border-t border-b border-border py-4">
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Job:</span>
-                <span className="font-medium text-ink truncate max-w-[140px]">
-                  {job.title}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Event Date:</span>
-                <span className="font-medium text-ink">{job.eventDate}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Confirmed Time:</span>
-                <span className="font-medium text-ink">
-                  {proposal.proposedStartTime && proposal.proposedEndTime
-                    ? formatTimeRange(proposal.proposedStartTime, proposal.proposedEndTime)
-                    : 'Flexible timing'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Estimated Delivery:</span>
-                <span className="font-medium text-ink">{proposal.estimatedDelivery}</span>
-              </div>
-            </div>
-
-            {proposal.status === 'submitted' ? (
-              <Button
-                size="lg"
-                className="w-full"
-                icon={ShieldCheck}
-                onClick={() => setHireModalOpen(true)}
-              >
-                Hire Talent
-              </Button>
-            ) : proposal.status === 'accepted' ? (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold text-center">
-                Vendor Hired & Booking Confirmed
-              </div>
-            ) : (
-              <div className="p-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs text-center">
-                Proposal {proposal.status}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
-
-      {/* Hire Confirmation Modal */}
-      <Modal
-        isOpen={hireModalOpen}
-        onClose={closeHireModal}
-        title={confirmedContractId ? 'Booking Confirmed' : 'Confirm Hire'}
-        description={confirmedContractId ? undefined : 'Review the details below before confirming.'}
+    <div className="max-w-4xl mx-auto space-y-8">
+      <button
+        onClick={goBack}
+        className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
       >
-        {confirmedContractId ? (
-          <div className="space-y-6 pt-2 text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-7 h-7 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-ink">You've hired {proposal.vendorName}!</p>
-              <p className="text-xs text-ink-muted mt-1.5 leading-relaxed">
-                Your booking for "{job.title}" is confirmed for {job.eventDate}. {proposal.vendorName} has been notified.
-              </p>
-            </div>
-            <Button
-              className="w-full"
-              onClick={() => {
-                closeHireModal();
-                navigate(`/contracts/${confirmedContractId}`);
-              }}
-            >
-              View Booking Details
+        <ArrowLeft className="w-4 h-4" />
+        <span>Back</span>
+      </button>
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <span className="text-xs font-mono uppercase font-semibold text-primary">Proposal</span>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight mt-1">
+            {provider.displayName}
+          </h1>
+          <p className="text-xs text-ink-muted mt-1">
+            {provider.headline ? `${provider.headline} · ` : ''}
+            {formatSubmitted(offer)}
+          </p>
+        </div>
+        <ProposalStatusBadge status={offer.status} />
+      </div>
+
+      {(hired || offer.status === 'ACCEPTED') && (
+        <Card className="p-5 border-emerald-300 bg-emerald-50 space-y-1">
+          <p className="text-xs font-semibold text-emerald-900 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            You hired {provider.displayName}.
+          </p>
+          <p className="text-[11px] text-emerald-800">
+            The requirement is now filled, every other proposal on it has been declined, and you are
+            connected to this provider.
+          </p>
+        </Card>
+      )}
+
+      <Card className="p-8 space-y-6">
+        <h2 className="text-lg font-bold text-ink">The offer</h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+          <div>
+            <p className="text-ink-muted">Price</p>
+            <p className="font-mono font-bold text-ink text-base mt-0.5">{formatOffer(offer)}</p>
+          </div>
+          <div>
+            <p className="text-ink-muted">Turnaround</p>
+            <p className="font-bold text-ink text-base mt-0.5">{formatTurnaround(offer)}</p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs text-ink-muted mb-1">Cover message</p>
+          <p className="text-xs text-ink leading-relaxed whitespace-pre-line">
+            {offer.coverMessage}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/profile/${provider.username ?? provider.id}`)}
+          className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+        >
+          View {provider.displayName}’s profile
+        </button>
+      </Card>
+
+      {files.length > 0 && (
+        <Card className="p-8 space-y-4">
+          <h2 className="text-lg font-bold text-ink">Attachments</h2>
+          <ul className="space-y-2">
+            {files.map((file) => (
+              <li
+                key={file.id}
+                className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2 text-xs"
+              >
+                <Paperclip className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+                {file.url ? (
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary font-semibold hover:underline truncate"
+                  >
+                    {file.fileName ?? 'Attachment'}
+                  </a>
+                ) : (
+                  <span className="text-ink-muted truncate">
+                    {file.fileName ?? 'Attachment'} (unavailable)
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {error && (
+        <Card className="p-5 border-destructive/40 bg-destructive/5">
+          <p className="text-xs font-semibold text-destructive">{error}</p>
+        </Card>
+      )}
+
+      {open && (
+        <div className="flex items-center gap-4">
+          <Button size="lg" icon={CheckCircle2} onClick={() => setConfirmingHire(true)}>
+            Hire {provider.displayName}
+          </Button>
+          <Button variant="outline" icon={XCircle} onClick={handleReject} disabled={busy}>
+            Decline
+          </Button>
+        </div>
+      )}
+
+      <Modal
+        isOpen={confirmingHire}
+        onClose={() => setConfirmingHire(false)}
+        title={`Hire ${provider.displayName}?`}
+      >
+        <div className="space-y-4 text-xs text-ink-muted">
+          <p>
+            You are accepting {formatOffer(offer)} for a {formatTurnaround(offer)} turnaround.
+          </p>
+          {/* Spelled out because it is irreversible and affects other people:
+              accepting one proposal declines the rest, in the same
+              transaction. A client should not learn that afterwards. */}
+          <p>
+            This fills the requirement and declines every other proposal on it. It cannot be undone.
+          </p>
+          <div className="p-3.5 bg-bg border border-border rounded-xl flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              Payments and contracts are not part of Marché yet — hiring connects you to the
+              provider so you can agree the details directly.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <Button onClick={handleAccept} disabled={busy}>
+              {busy ? 'Confirming…' : 'Confirm hire'}
             </Button>
+            <button
+              type="button"
+              onClick={() => setConfirmingHire(false)}
+              className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
-        ) : (
-          <div className="space-y-6 pt-2">
-            <div className="p-4 bg-bg border border-border rounded-xl space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Vendor:</span>
-                <span className="font-bold text-ink">{proposal.vendorName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Job:</span>
-                <span className="font-medium text-ink truncate max-w-[200px]">
-                  {job.title}
-                </span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-border font-bold text-sm">
-                <span>Total:</span>
-                <span className="text-primary font-mono">
-                  ₹{proposal.bidAmount.toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-3 text-xs">
-              <div className="flex items-start gap-2">
-                <FileText className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-bold text-ink">Booking agreement snapshot</p>
-                  <p className="text-ink-muted mt-1 leading-relaxed">
-                    This confirmation records the selected proposal, agreed amount, event schedule, location, and the current Marché terms version against the new contract.
-                  </p>
-                </div>
-              </div>
-              <label className="flex items-start gap-2 text-ink-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agreementAccepted}
-                  onChange={(event) => {
-                    setAgreementAccepted(event.target.checked);
-                    setHireError(null);
-                  }}
-                  className="mt-0.5 rounded border-border text-primary focus:ring-primary"
-                />
-                <span className="leading-relaxed">
-                  I accept the booking terms for {job.title} with {proposal.vendorName} at ₹{proposal.bidAmount.toLocaleString('en-IN')}.
-                </span>
-              </label>
-            </div>
-
-            {hireError && (
-              <p className="text-xs text-destructive font-medium">{hireError}</p>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-border">
-              <Button variant="outline" onClick={closeHireModal}>
-                Cancel
-              </Button>
-              <Button loading={isProcessing} disabled={!agreementAccepted} onClick={handleConfirmHire} icon={ShieldCheck}>
-                Confirm & Hire
-              </Button>
-            </div>
-          </div>
-        )}
+        </div>
       </Modal>
     </div>
   );
