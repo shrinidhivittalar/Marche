@@ -21,7 +21,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
   if (service.loading) {
     return (
       <Card className="p-10 text-center" data-testid="service-detail-loading">
-        <p className="text-muted">Loading service…</p>
+        <p className="text-ink-muted">Loading service…</p>
       </Card>
     );
   }
@@ -33,7 +33,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
             for one that never existed, so nobody can probe for drafts. The
             wording here has to hold both cases without hinting otherwise. */}
         <p className="text-ink font-medium">This service isn&apos;t available.</p>
-        <p className="text-muted text-sm">
+        <p className="text-ink-muted text-sm">
           It may have been removed, or it isn&apos;t published right now.
         </p>
         <Button variant="secondary" onClick={goBack} data-testid="service-detail-back-error">
@@ -50,7 +50,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
       <button
         type="button"
         onClick={goBack}
-        className="flex items-center gap-2 text-sm text-muted hover:text-ink"
+        className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink"
         data-testid="service-detail-back"
       >
         <ArrowLeft className="w-4 h-4" /> Back
@@ -58,7 +58,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
 
       <Card className="p-8 space-y-4">
         <div>
-          <p className="text-xs text-muted" data-testid="service-category">
+          <p className="text-xs text-ink-muted" data-testid="service-category">
             {s.category.name}
           </p>
           <h1 className="text-2xl font-bold text-ink" data-testid="service-title">
@@ -70,7 +70,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
           <p className="text-xl font-semibold text-ink" data-testid="service-price">
             ₹{s.startingPrice}
           </p>
-          <p className="text-sm text-muted" data-testid="service-delivery">
+          <p className="text-sm text-ink-muted" data-testid="service-delivery">
             Delivered in {s.deliveryDays} {s.deliveryDays === 1 ? 'day' : 'days'}
           </p>
         </div>
@@ -83,7 +83,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
 
         {s.skills.length > 0 && (
           <div className="space-y-2" data-testid="service-skills">
-            <p className="text-xs font-medium text-muted uppercase">Skills</p>
+            <p className="text-xs font-medium text-ink-muted uppercase">Skills</p>
             <div className="flex flex-wrap gap-2">
               {s.skills.map((entry) => (
                 <span
@@ -99,12 +99,12 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
 
         {s.tags.length > 0 && (
           <div className="space-y-2" data-testid="service-tag-list">
-            <p className="text-xs font-medium text-muted uppercase">Tags</p>
+            <p className="text-xs font-medium text-ink-muted uppercase">Tags</p>
             <div className="flex flex-wrap gap-1">
               {s.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted"
+                  className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-muted"
                 >
                   {tag}
                 </span>
@@ -125,7 +125,7 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
               className="w-14 h-14 rounded-xl object-cover ring-2 ring-border"
             />
           ) : (
-            <div className="w-14 h-14 rounded-xl bg-surface-subtle border border-border flex items-center justify-center text-lg font-semibold text-muted">
+            <div className="w-14 h-14 rounded-xl bg-surface-subtle border border-border flex items-center justify-center text-lg font-semibold text-ink-muted">
               {s.profile.displayName.charAt(0).toUpperCase()}
             </div>
           )}
@@ -141,8 +141,8 @@ export const ServiceDetailPage: React.FC<{ id: string }> = ({ id }) => {
                 </span>
               )}
             </div>
-            {s.profile.headline && <p className="text-sm text-muted">{s.profile.headline}</p>}
-            <p className="text-xs text-muted flex items-center gap-3 flex-wrap">
+            {s.profile.headline && <p className="text-sm text-ink-muted">{s.profile.headline}</p>}
+            <p className="text-xs text-ink-muted flex items-center gap-3 flex-wrap">
               {s.profile.location && (
                 <span className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5" />

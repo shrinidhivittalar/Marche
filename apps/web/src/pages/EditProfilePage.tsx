@@ -170,7 +170,7 @@ export const EditProfilePage: React.FC = () => {
       <div className="max-w-3xl mx-auto space-y-8" data-testid="profile-page">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Your profile</h1>
-          <p className="text-muted text-sm mt-1">
+          <p className="text-ink-muted text-sm mt-1">
             This is what clients see when they find you in the marketplace.
           </p>
         </div>
