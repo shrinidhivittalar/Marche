@@ -16,5 +16,8 @@
     "resolveJsonModule": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+  // `.integration-spec.ts` is excluded alongside `.spec.ts` — it is a test
+  // file too. The suffix differs only so the default `jest` run cannot pick
+  // it up, since those tests write to the hosted database.
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.integration-spec.ts"]
 }
