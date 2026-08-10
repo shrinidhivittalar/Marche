@@ -233,6 +233,8 @@ export const MyWorkPage: React.FC = () => {
             {proposalItems.map((proposal) => (
               <div
                 key={proposal.id}
+                data-testid="my-proposal-row"
+                data-status={proposal.status}
                 // The proposal, not the requirement it targets: this is where
                 // its status, attachments and withdrawal live.
                 onClick={() => navigate(`/provider/proposals/${proposal.id}`)}

@@ -205,10 +205,21 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
 
       {open && (
         <div className="flex items-center gap-4">
-          <Button size="lg" icon={CheckCircle2} onClick={() => setConfirmingHire(true)}>
+          <Button
+            size="lg"
+            icon={CheckCircle2}
+            data-testid="hire-provider"
+            onClick={() => setConfirmingHire(true)}
+          >
             Hire {provider.displayName}
           </Button>
-          <Button variant="outline" icon={XCircle} onClick={handleReject} disabled={busy}>
+          <Button
+            variant="outline"
+            icon={XCircle}
+            data-testid="decline-proposal"
+            onClick={handleReject}
+            disabled={busy}
+          >
             Decline
           </Button>
         </div>
@@ -237,7 +248,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
             </p>
           </div>
           <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleAccept} disabled={busy}>
+            <Button onClick={handleAccept} data-testid="confirm-hire" disabled={busy}>
               {busy ? 'Confirming…' : 'Confirm hire'}
             </Button>
             <button

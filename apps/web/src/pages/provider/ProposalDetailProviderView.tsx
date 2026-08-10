@@ -281,7 +281,12 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
 
           {confirmingWithdraw ? (
             <div className="flex items-center gap-3">
-              <Button variant="danger" onClick={handleWithdraw} disabled={busy}>
+              <Button
+                variant="danger"
+                data-testid="confirm-withdraw"
+                onClick={handleWithdraw}
+                disabled={busy}
+              >
                 {busy ? 'Withdrawing…' : 'Yes, withdraw permanently'}
               </Button>
               <button
@@ -293,7 +298,12 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
               </button>
             </div>
           ) : (
-            <Button variant="outline" icon={XCircle} onClick={() => setConfirmingWithdraw(true)}>
+            <Button
+              variant="outline"
+              icon={XCircle}
+              data-testid="withdraw-proposal"
+              onClick={() => setConfirmingWithdraw(true)}
+            >
               Withdraw proposal
             </Button>
           )}

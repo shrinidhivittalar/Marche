@@ -8,6 +8,11 @@ export const ProposalStatusBadge: React.FC<{ status: ProposalStatus }> = ({ stat
   const { label, className } = PROPOSAL_STATUS_STYLE[status];
   return (
     <span
+      // The raw status as well as the label: a test asserting on wording
+      // would fail the next time the copy is softened, which is not the
+      // thing worth guarding.
+      data-testid="proposal-status"
+      data-status={status}
       className={`shrink-0 px-2.5 py-1 rounded-lg border text-[11px] font-semibold ${className}`}
     >
       {label}

@@ -81,10 +81,13 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
 
   const requirement = job.data;
 
-  // The server decides this too, on every submission. Checked here so the
-  // provider is told before writing a cover message rather than after.
-  const deadlinePassed = isPastProposalDeadline(requirement);
-  const closed = requirement.status !== 'PUBLISHED' || deadlinePassed;
+  // Only the deadline is checked here, and only as a courtesy — the server
+  // decides on every submission anyway. There is deliberately no check for
+  // cancelled or filled: this page reads the *public* requirement route, so
+  // a requirement in either state is already a 404 above, indistinguishable
+  // from one that never existed. That is the API's rule, not an oversight,
+  // and a status branch here would be code that can never run.
+  const closed = isPastProposalDeadline(requirement);
 
   const price = Number(proposedPrice);
   const days = Number(deliveryDays);
@@ -151,11 +154,9 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
       </div>
 
       {closed && (
-        <Card className="p-5 border-amber-300 bg-amber-50">
+        <Card className="p-5 border-amber-300 bg-amber-50" data-testid="proposals-closed">
           <p className="text-xs font-semibold text-amber-900">
-            {deadlinePassed
-              ? 'The deadline for proposals on this requirement has passed.'
-              : 'This requirement is no longer accepting proposals.'}
+            The deadline for proposals on this requirement has passed.
           </p>
           <p className="text-[11px] text-amber-800 mt-1">
             You can still read it, but nothing you send would reach the client.
@@ -245,6 +246,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
                 </span>
                 <Input
                   id="proposedPrice"
+                  data-testid="proposal-price-input"
                   type="number"
                   min={0}
                   step={50}
@@ -268,6 +270,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
               </label>
               <Input
                 id="deliveryDays"
+                data-testid="proposal-days-input"
                 type="number"
                 min={1}
                 max={365}
@@ -289,6 +292,7 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
             </label>
             <Textarea
               id="coverMessage"
+              data-testid="proposal-message-input"
               rows={6}
               placeholder="Why you are right for this event, your approach and equipment, and comparable work you have done…"
               value={coverMessage}
@@ -317,13 +321,19 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
         </Card>
 
         {error && (
-          <Card className="p-5 border-destructive/40 bg-destructive/5">
+          <Card className="p-5 border-destructive/40 bg-destructive/5" data-testid="proposal-error">
             <p className="text-xs font-semibold text-destructive">{error}</p>
           </Card>
         )}
 
         <div className="flex items-center gap-4 pt-2">
-          <Button type="submit" size="lg" icon={Send} disabled={!canSubmit}>
+          <Button
+            type="submit"
+            size="lg"
+            icon={Send}
+            data-testid="submit-proposal"
+            disabled={!canSubmit}
+          >
             {submitting ? 'Submitting…' : 'Submit proposal'}
           </Button>
           <button

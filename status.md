@@ -4,15 +4,15 @@ Where each module actually stands, as opposed to what has been designed. A
 module is "done" only when its acceptance criteria are met and verified, not
 when the code exists.
 
-| #   | Module              | Status                             | Verified by                                            |
-| --- | ------------------- | ---------------------------------- | ------------------------------------------------------ |
-| 01  | Identity            | Done                               | Unit tests, Playwright                                 |
-| 02  | Profiles            | Done                               | Unit tests, Playwright                                 |
-| 03  | Marketplace         | Done                               | Unit tests, Playwright                                 |
-| —   | Media pipeline      | Done, **uploads unverified**       | Unit tests only — no storage configured                |
-| 04  | Jobs / Requirements | Done, with two recorded gaps       | Unit, HTTP and browser tests against the real database |
-| 05  | Proposals           | Backend done, frontend not started | Unit, HTTP and real-database concurrency tests         |
-| —   | Connection          | Built, as its own row              | Covered by the Module 05 tests                         |
+| #   | Module              | Status                       | Verified by                                             |
+| --- | ------------------- | ---------------------------- | ------------------------------------------------------- |
+| 01  | Identity            | Done                         | Unit tests, Playwright                                  |
+| 02  | Profiles            | Done                         | Unit tests, Playwright                                  |
+| 03  | Marketplace         | Done                         | Unit tests, Playwright                                  |
+| —   | Media pipeline      | Done, **uploads unverified** | Unit tests only — no storage configured                 |
+| 04  | Jobs / Requirements | Done, with two recorded gaps | Unit, HTTP and browser tests against the real database  |
+| 05  | Proposals           | Done, with recorded gaps     | Unit, HTTP, browser and real-database concurrency tests |
+| —   | Connection          | Built, as its own row        | Covered by the Module 05 tests                          |
 
 Everything after Connection — messaging, contracts, payments, reviews,
 notifications — is deliberately outside the core workflow and unstarted.
@@ -91,7 +91,8 @@ database write that was needed to create them, and the rows left behind.
 Spec: `docs/modules/module5.md`, with `docs/modules/module5-edge-cases.md`
 alongside it. Both written 2026-08-10, reviewed before any code was cut.
 
-**The backend is complete and verified. The frontend is not started.**
+**Complete and verified, end to end.** See `module5-e2e-results.md` for the
+run, what the first attempt found, and the rows it left behind (none).
 
 ### Delivered
 
@@ -104,7 +105,12 @@ alongside it. Both written 2026-08-10, reviewed before any code was cut.
 - Private attachments through the shared media pipeline
 - Ownership and RBAC enforced server-side on every route; nothing is public
 - 13 endpoints, all documented in Swagger with bearer auth
-- 123 unit tests, 52 HTTP behaviours, 5 real-database concurrency tests
+- Provider screens: the proposal form, their own proposal list, and a
+  proposal detail view with attachments and withdrawal
+- Client screens: the proposals on their requirement, and the accept/decline
+  decision
+- 123 unit tests, 52 HTTP behaviours, 5 real-database concurrency tests,
+  9 browser journeys
 
 ### The concurrency guarantee, and how it is verified
 
@@ -151,10 +157,12 @@ cross-module dependency Jobs itself has on Profiles and Marketplace.
 
 ### Not built
 
-- **The frontend.** `SubmitProposalPage`, `ProposalDetailPage` and `MyWorkPage`
-  exist in `apps/web` as mockups on `mockData`, exactly as the jobs screens did
-  before Module 04 wired them. Nothing on the proposal path is on the real API
-  yet, which is also why there are no Playwright journeys for this module.
+- **Proposal drafts, milestones, the service fee, proposed event times and
+  portfolio highlights.** All were on the mock submit form and none has
+  anywhere to go in Phase 1 — drafts because a proposal is submitted
+  complete, milestones and the fee because Contracts and Payments do not
+  exist, proposed times because that is negotiation. The fee in particular
+  was displaying a number the platform has never charged.
 - **Administrator moderation endpoints** — no admin module exists. Same call
   Module 04 made.
 - **`Connection.status`** — a one-member enum. The row existing is what
@@ -169,13 +177,21 @@ cross-module dependency Jobs itself has on Profiles and Marketplace.
 1. **Attachment uploads remain unverified**, inherited from the media pipeline:
    `STORAGE_*` is unset, so no file has ever been uploaded. The authorisation
    around proposal attachments is tested; the upload path itself has only run
-   against mocks.
+   against mocks, and the attach UI on the proposal detail screen is therefore
+   the one part of this module with no browser coverage.
 2. **Rate limiting is in-memory.** Inherited, not introduced here.
    `POST /proposals` is a real abuse surface — one provider can spam every open
    requirement — and the throttler works on one instance and silently stops
    working on two.
 3. **No business-level cap** on proposals per provider per period. A product
    decision, deliberately not introduced silently.
+
+### Test accounts and residue
+
+Unlike Module 04, this run left nothing behind: every account is created and
+deleted by the Playwright fixtures, and the concurrency suite cleans up in
+`afterAll` even on failure. Both verified afterwards — 0 test users, 0
+proposals, 0 connections. See `module5-e2e-results.md`.
 
 ### Open questions settled during the spec review
 

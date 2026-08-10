@@ -342,6 +342,8 @@ function ProposalsOnRequirement({ jobId, status }: { jobId: string; status: JobS
             <li key={proposal.id}>
               <button
                 type="button"
+                data-testid="proposal-row"
+                data-status={proposal.status}
                 onClick={() => navigate(`/client/proposals/${proposal.id}`)}
                 className="w-full p-4 bg-bg border border-border rounded-xl text-left hover:border-primary transition-colors cursor-pointer"
               >
