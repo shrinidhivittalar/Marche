@@ -16,60 +16,51 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card, DatePicker, Input, TimePicker, Textarea } from '@marche/ui';
-import { EventCategory, EventTimingMode, JobAttachment } from '../../types';
+import { EventTimingMode } from '../../types';
 import { formatEventSchedule, todayISODate } from '../../lib/formatTime';
-import { formatFileSize } from '../../lib/formatFile';
-import { formatBudget } from '../../lib/formatBudget';
-import { CATEGORIES as ALL_CATEGORIES } from '../../data/categoryOptions';
+import { formatJobBudget } from '../../lib/formatJob';
+import { useApiResource } from '../../hooks/useApiResource';
+import { ApiError } from '../../lib/api';
+import { marketplaceApi } from '../../lib/marketplace-api';
+import { mediaApi } from '../../lib/media-api';
+import { jobsApi, type JobBody } from '../../lib/jobs-api';
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB — kept modest since files are stored as base64 in localStorage
-const MAX_ATTACHMENTS = 5;
+// Post a requirement, on the real Jobs API.
+//
+// The five-step shape survives the rewire intact. Two of the toggles turned
+// out to be input modes rather than data:
+//
+// - timingMode. "I know the exact hours" sends eventStartTime/eventEndTime;
+//   "done by a date" omits them. The API has no timingMode column because
+//   the presence of the times already says which one it was.
+// - budgetMode. "Fixed" sends the same number as budgetMin and budgetMax,
+//   which is exactly what fixed means. A mode column would store that fact
+//   a second time and let the two disagree.
+//
+// What genuinely changed:
+//
+// - Categories come from the API. The mock picked from a hardcoded list of
+//   display names; the server matches on a seeded category id.
+// - Attachments go through the media pipeline instead of being read into
+//   base64 and kept in localStorage. Files upload as they are chosen, and
+//   are attached to the requirement once it exists — a requirement has to
+//   have an id before anything can hang off it.
+// - The form starts empty. The mock pre-filled a venue, a date and three
+//   deliverables to make the screen look alive, which on a real API means a
+//   distracted client publishes a requirement for an event in Bandra they
+//   never typed.
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
+// The media pipeline accepts these and nothing else; an executable renamed
+// to .jpg is rejected server-side after upload by its magic bytes.
+const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
 
-const CATEGORIES = ALL_CATEGORIES.filter((c) => c !== 'All') as EventCategory[];
+// Matches JobsService.MAX_ATTACHMENTS. Stated here so the button disables
+// before a request is refused.
+const MAX_ATTACHMENTS = 10;
 
-const TITLE_EXAMPLES: Partial<Record<EventCategory, string[]>> = {
-  Photography: [
-    'Lead Editorial Photographer for NYC Luxury Brand Launch',
-    'Wedding Photographer for 200-Guest Rooftop Ceremony',
-  ],
-  Catering: [
-    'Full-Service Catering for 150-Guest Rooftop Wedding',
-    'Plated Dinner Service for Corporate Gala, 80 Covers',
-  ],
-  'DJ & Sound': [
-    'High-Energy DJ & Sound Setup for Product Launch Party',
-    'Wedding Reception DJ with MC Experience, 5-Hour Set',
-  ],
-  'Floral & Decor': [
-    'Full Floral Design for Garden-Themed Wedding, 12 Tables',
-    'Minimalist Stage & Backdrop Decor for Brand Activation',
-  ],
-  Venue: [
-    'Loft Venue for 100-Guest Product Launch, Bandra, Mumbai',
-    'Outdoor Garden Venue for 150-Guest Summer Wedding',
-  ],
-  'Event Planning': [
-    'Full-Service Planner for Two-Day Destination Wedding',
-    'Day-Of Coordinator for 120-Guest Corporate Offsite',
-  ],
-  'Lighting & FX': [
-    'Architectural Lighting Design for Rooftop Gala',
-    'Dance Floor Lighting & Haze FX for Nightclub Launch',
-  ],
-  Entertainment: [
-    'Live Jazz Trio for Cocktail Hour, 3-Hour Booking',
-    'Interactive Photo Booth & Entertainment for Brand Event',
-  ],
-};
+// Mirrors the DTO, so a client is told before submitting rather than after.
+const MIN_TITLE = 3;
+const MIN_DESCRIPTION = 20;
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
 
@@ -86,6 +77,31 @@ const PHASES: { label: string; steps: WizardStep[] }[] = [
   { label: 'Set logistics', steps: [4] },
   { label: 'Budget & publish', steps: [5] },
 ];
+
+// Kept as guidance rather than generated, and keyed by the category name the
+// API returns so a renamed or new category simply shows none.
+const TITLE_EXAMPLES: Record<string, string[]> = {
+  Photography: [
+    'Lead Editorial Photographer for Luxury Brand Launch',
+    'Wedding Photographer for 200-Guest Rooftop Ceremony',
+  ],
+  Catering: [
+    'Full-Service Catering for 150-Guest Rooftop Wedding',
+    'Plated Dinner Service for Corporate Gala, 80 Covers',
+  ],
+  Venue: [
+    'Loft Venue for 100-Guest Product Launch, Bandra, Mumbai',
+    'Outdoor Garden Venue for 150-Guest Summer Wedding',
+  ],
+};
+
+/** A file that has finished uploading, and its attachment row once one exists. */
+interface PendingAttachment {
+  mediaId: string;
+  fileName: string;
+  /** Set once attached to a saved requirement; what a detach targets. */
+  attachmentId?: string;
+}
 
 function RephraseWithAiButton({ show, onClick }: { show: boolean; onClick: () => void }) {
   if (!show) return null;
@@ -108,79 +124,121 @@ interface CreateJobPageProps {
 }
 
 export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
-  const { createJob, saveJobDraft, publishJobDraft, getJobById, navigate, goBack } = useApp();
+  const { navigate, goBack, accessToken } = useApp();
+  const token = accessToken as string;
 
-  const existingDraft = draftId ? getJobById(draftId) : undefined;
+  const categories = useApiResource(() => marketplaceApi.categories(), []);
 
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId ?? null);
+  // A draft being resumed. Loaded through the owner route, so it works
+  // whatever state the requirement is in.
+  const draft = useApiResource(() => jobsApi.mineById(token, draftId as string), [draftId, token], {
+    enabled: Boolean(draftId && token),
+  });
+
+  const [currentJobId, setCurrentJobId] = useState<string | null>(draftId ?? null);
   const [step, setStep] = useState<WizardStep>(1);
   const [attemptedNext, setAttemptedNext] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Form State — pre-filled from an existing draft when resuming one
-  const [title, setTitle] = useState(existingDraft?.title ?? '');
-  const [category, setCategory] = useState<EventCategory>(existingDraft?.category ?? 'Photography');
-  const [description, setDescription] = useState(existingDraft?.description ?? '');
-  const [location, setLocation] = useState(existingDraft?.location ?? 'Bandra, Mumbai, Maharashtra');
-  const [eventDate, setEventDate] = useState(existingDraft?.eventDate ?? '2026-09-25');
-  const [timingMode, setTimingMode] = useState<EventTimingMode>(existingDraft?.timingMode ?? 'fixed');
-  const [eventStartTime, setEventStartTime] = useState(existingDraft?.eventStartTime ?? '18:00');
-  const [eventEndTime, setEventEndTime] = useState(existingDraft?.eventEndTime ?? '22:00');
-  const [proposalDeadline, setProposalDeadline] = useState(existingDraft?.proposalDeadline ?? '2026-09-10');
-  const [budgetMode, setBudgetMode] = useState<'fixed' | 'range'>(existingDraft?.budgetMode ?? 'range');
-  const [budgetMin, setBudgetMin] = useState<number>(existingDraft?.budgetMin ?? 2500);
-  const [budgetMax, setBudgetMax] = useState<number>(existingDraft?.budgetMax ?? 4000);
-  const [deliverables, setDeliverables] = useState<string[]>(
-    existingDraft?.deliverables ?? [
-      'High-resolution edited digital assets within 48h',
-      'On-site production crew & equipment included',
-      'Full commercial licensing for social & press',
-    ]
-  );
+  // Empty defaults on purpose — see the note at the top of the file.
+  const [title, setTitle] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [timingMode, setTimingMode] = useState<EventTimingMode>('fixed');
+  const [eventStartTime, setEventStartTime] = useState('18:00');
+  const [eventEndTime, setEventEndTime] = useState('22:00');
+  const [proposalDeadline, setProposalDeadline] = useState('');
+  const [budgetMode, setBudgetMode] = useState<'fixed' | 'range'>('range');
+  const [budgetMin, setBudgetMin] = useState<number>(0);
+  const [budgetMax, setBudgetMax] = useState<number>(0);
+  const [deliverables, setDeliverables] = useState<string[]>([]);
   const [newDeliverableInput, setNewDeliverableInput] = useState('');
-  const [attachments, setAttachments] = useState<JobAttachment[]>(
-    existingDraft?.attachments ?? []
-  );
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Seeding a resumed draft. Keyed off the loaded id so it runs once per
+  // draft rather than on every render, and never overwrites typing.
+  const [seededFrom, setSeededFrom] = useState<string | null>(null);
+  if (draft.data && seededFrom !== draft.data.id) {
+    const loaded = draft.data;
+    setSeededFrom(loaded.id);
+    setTitle(loaded.title);
+    setCategoryId(loaded.category.id);
+    setDescription(loaded.description);
+    setLocation(loaded.location ?? '');
+    setEventDate(loaded.eventDate ? loaded.eventDate.slice(0, 10) : '');
+    // No stored timingMode: the presence of times is what it meant.
+    setTimingMode(loaded.eventStartTime ? 'fixed' : 'flexible');
+    if (loaded.eventStartTime) setEventStartTime(loaded.eventStartTime);
+    if (loaded.eventEndTime) setEventEndTime(loaded.eventEndTime);
+    setProposalDeadline(loaded.proposalDeadline ? loaded.proposalDeadline.slice(0, 10) : '');
+    // Likewise: equal bounds is what "fixed" means.
+    setBudgetMode(loaded.budgetMin && loaded.budgetMin === loaded.budgetMax ? 'fixed' : 'range');
+    setBudgetMin(Number(loaded.budgetMin ?? 0));
+    setBudgetMax(Number(loaded.budgetMax ?? 0));
+    setDeliverables(loaded.deliverables);
+  }
+
+  const selectedCategory = (categories.data ?? []).find((c) => c.id === categoryId);
+
   const handleFilesSelected = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
+    if (!fileList?.length) return;
     setAttachmentError(null);
 
-    const files = Array.from(fileList);
-    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+    const room = MAX_ATTACHMENTS - attachments.length;
+    const files = Array.from(fileList).slice(0, room);
+    if (fileList.length > room) {
       setAttachmentError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
-      return;
     }
 
-    const oversized = files.find((f) => f.size > MAX_ATTACHMENT_SIZE);
-    if (oversized) {
-      setAttachmentError(`"${oversized.name}" exceeds the ${formatFileSize(MAX_ATTACHMENT_SIZE)} limit.`);
-      return;
+    setUploading(true);
+    try {
+      // Uploaded as they are chosen rather than held until submit: the file
+      // goes straight to storage, and by the time the requirement is saved
+      // there is a verified media id ready to attach.
+      for (const file of files) {
+        const uploaded = await mediaApi.upload(token, file);
+        setAttachments((prev) => [...prev, { mediaId: uploaded.mediaId, fileName: file.name }]);
+      }
+    } catch (err) {
+      // The API's messages name the actual limit or type, which is more
+      // use than a generic failure.
+      setAttachmentError(
+        err instanceof ApiError
+          ? err.message
+          : "That file couldn't be uploaded. Check your connection and try again.",
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-
-    const newAttachments = await Promise.all(
-      files.map(async (file) => ({
-        id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        dataUrl: await readFileAsDataUrl(file),
-      }))
-    );
-
-    setAttachments((prev) => [...prev, ...newAttachments]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  const handleRemoveAttachment = async (mediaId: string) => {
+    const attachment = attachments.find((a) => a.mediaId === mediaId);
+    setAttachments((prev) => prev.filter((a) => a.mediaId !== mediaId));
+
+    // Only needs a call if it reached the requirement. An upload that was
+    // never attached is just a file the user owns.
+    if (attachment?.attachmentId && currentJobId) {
+      try {
+        await jobsApi.removeAttachment(token, currentJobId, attachment.attachmentId);
+      } catch {
+        // Already gone from the list either way; a failure here would
+        // otherwise strand the row back on screen with no way to retry.
+      }
+    }
   };
 
   const handleAddDeliverable = () => {
@@ -197,20 +255,25 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   const isStepValid = (s: WizardStep): boolean => {
     switch (s) {
       case 1:
-        return !!category;
+        return !!categoryId;
       case 2:
-        return title.trim().length > 0;
+        return title.trim().length >= MIN_TITLE;
       case 3:
-        return description.trim().length > 0;
+        return description.trim().length >= MIN_DESCRIPTION;
       case 4:
+        // Only the timing relationship is enforced. A date, a deadline and
+        // a venue are all optional on the API, and inventing extra required
+        // fields here would refuse requirements the server would accept.
         return (
-          !!eventDate &&
-          !!proposalDeadline &&
-          (timingMode !== 'fixed' ||
-            (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime))
+          timingMode !== 'fixed' ||
+          !eventDate ||
+          (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime)
         );
       case 5:
-        return budgetMin > 0 && (budgetMode === 'fixed' || budgetMax >= budgetMin);
+        // A maximum of zero means "no upper bound", not "zero rupees" — the
+        // API stores no maximum and the card reads "From ₹25,000". Only a
+        // maximum that was actually entered has to clear the minimum.
+        return budgetMode === 'fixed' || budgetMax === 0 || budgetMax >= budgetMin;
     }
   };
 
@@ -225,7 +288,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
       return;
     }
     if (step === 5) {
-      handleSubmit();
+      void handleSubmit();
       return;
     }
     goToStep((step + 1) as WizardStep);
@@ -239,48 +302,107 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     goToStep((step - 1) as WizardStep);
   };
 
-  const buildJobData = () => ({
-    title,
-    category,
-    description,
-    location,
-    eventDate,
-    timingMode,
-    eventStartTime: timingMode === 'fixed' ? eventStartTime : undefined,
-    eventEndTime: timingMode === 'fixed' ? eventEndTime : undefined,
-    proposalDeadline,
-    budgetMode,
-    budgetMin,
-    // AppContext normalizes budgetMax to budgetMin for fixed-budget jobs — no need to do it here too.
-    budgetMax,
+  const buildBody = (): JobBody => ({
+    title: title.trim(),
+    description: description.trim(),
+    categoryId,
+    // Zero means "not stated" rather than free, so it is sent as absent.
+    budgetMin: budgetMin > 0 ? budgetMin : undefined,
+    budgetMax:
+      budgetMode === 'fixed'
+        ? budgetMin > 0
+          ? budgetMin
+          : undefined
+        : budgetMax > 0
+          ? budgetMax
+          : undefined,
+    location: location.trim() || undefined,
+    eventDate: eventDate ? new Date(eventDate).toISOString() : undefined,
+    // Times only exist in fixed mode, and only alongside a date — which is
+    // what the API enforces too.
+    eventStartTime: timingMode === 'fixed' && eventDate ? eventStartTime : undefined,
+    eventEndTime: timingMode === 'fixed' && eventDate ? eventEndTime : undefined,
+    proposalDeadline: proposalDeadline ? new Date(proposalDeadline).toISOString() : undefined,
     deliverables,
-    attachments,
   });
 
+  /**
+   * Saves the form and returns the requirement's id, creating it the first
+   * time and updating it after. Attachments are synced here because they
+   * need an id to hang off.
+   */
+  const saveJob = async (): Promise<string> => {
+    const body = buildBody();
+    const job = currentJobId
+      ? await jobsApi.update(token, currentJobId, body)
+      : await jobsApi.create(token, body);
+
+    setCurrentJobId(job.id);
+
+    const unattached = attachments.filter((a) => !a.attachmentId);
+    for (const pending of unattached) {
+      const created = await jobsApi.addAttachment(token, job.id, pending.mediaId);
+      setAttachments((prev) =>
+        prev.map((a) => (a.mediaId === pending.mediaId ? { ...a, attachmentId: created.id } : a)),
+      );
+    }
+
+    return job.id;
+  };
+
+  const runSave = async (action: (jobId: string) => Promise<void> | void) => {
+    setSubmitError(null);
+    setSaving(true);
+    try {
+      const jobId = await saveJob();
+      await action(jobId);
+    } catch (err) {
+      setSubmitError(
+        err instanceof ApiError
+          ? err.message
+          : "That couldn't be saved. Check your connection and try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveDraft = () => {
-    const saved = saveJobDraft(currentDraftId, buildJobData());
-    setCurrentDraftId(saved.id);
-    showToast('Draft saved. You can find it on your Client Dashboard.');
+    if (!isStepValid(1) || !isStepValid(2) || !isStepValid(3)) {
+      setSubmitError(
+        'A draft still needs a category, a title and a description before it can be saved.',
+      );
+      return;
+    }
+    void runSave(() => showToast('Draft saved. You can find it on your dashboard.'));
+  };
+
+  const handleSubmit = async () => {
+    if (!isStepValid(5)) {
+      setAttemptedNext(true);
+      return;
+    }
+    // Saved first, then published: publish takes no body, so anything typed
+    // on the last step would otherwise be left behind.
+    await runSave(async (jobId) => {
+      await jobsApi.publish(token, jobId);
+      navigate(`/client/jobs/${jobId}`);
+    });
   };
 
   const handleAiRephraseClick = () => {
     showToast('AI rephrasing will be available soon.');
   };
-  const handleSubmit = () => {
-    if (!isStepValid(5)) {
-      setAttemptedNext(true);
-      return;
-    }
-
-    const data = buildJobData();
-    const createdReq = currentDraftId ? publishJobDraft(currentDraftId, data) : createJob(data);
-
-    navigate(`/client/jobs/${createdReq.id}`);
-  };
 
   const currentPhaseIndex = PHASES.findIndex((p) => p.steps.includes(step));
   const showTitleError = attemptedNext && !isStepValid(2);
   const showDescriptionError = attemptedNext && !isStepValid(3);
+
+  if (!token) {
+    return (
+      <p className="text-xs text-ink-muted py-12 text-center">Sign in to post a requirement.</p>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-4">
@@ -290,7 +412,6 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         </div>
       )}
 
-      {/* Header Back Link */}
       <button
         onClick={goBack}
         className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink cursor-pointer"
@@ -299,10 +420,10 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         <span>Back</span>
       </button>
 
-      {/* Phase Stepper */}
       <div className="flex items-center justify-center gap-3 sm:gap-6 py-2">
         {PHASES.map((phase, idx) => {
-          const state = idx < currentPhaseIndex ? 'done' : idx === currentPhaseIndex ? 'current' : 'upcoming';
+          const state =
+            idx < currentPhaseIndex ? 'done' : idx === currentPhaseIndex ? 'current' : 'upcoming';
           return (
             <React.Fragment key={phase.label}>
               <div className="flex flex-col items-center gap-2 shrink-0">
@@ -330,7 +451,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 </span>
               </div>
               {idx < PHASES.length - 1 && (
-                <div className={`h-px flex-1 mt-[-1.25rem] ${idx < currentPhaseIndex ? 'bg-primary' : 'bg-border'}`} />
+                <div
+                  className={`h-px flex-1 mt-[-1.25rem] ${idx < currentPhaseIndex ? 'bg-primary' : 'bg-border'}`}
+                />
               )}
             </React.Fragment>
           );
@@ -339,7 +462,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
 
       <div className="text-center">
         <span className="text-xs font-mono uppercase font-semibold text-ink-muted">
-          {step}/5 · Event Job{currentDraftId ? ' · Editing Draft' : ''}
+          {step}/5 · Requirement{currentJobId ? ' · Editing Draft' : ''}
         </span>
       </div>
 
@@ -352,24 +475,33 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 What kind of service do you need?
               </h2>
               <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-sm">
-                Pick the category that best fits your event. This routes your job to the right
-                verified talent and shapes the questions we ask next.
+                Pick the category that best fits your event. This routes your requirement to the
+                right verified talent.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              {CATEGORIES.map((cat) => (
+              {categories.loading && (
+                <p className="text-xs text-ink-muted col-span-2">Loading categories…</p>
+              )}
+              {categories.error && (
+                <p className="text-xs text-destructive col-span-2" data-testid="categories-error">
+                  Categories could not be loaded. {categories.error}
+                </p>
+              )}
+              {(categories.data ?? []).map((cat) => (
                 <button
                   type="button"
-                  key={cat}
-                  onClick={() => setCategory(cat)}
+                  key={cat.id}
+                  data-testid={`category-${cat.slug}`}
+                  onClick={() => setCategoryId(cat.id)}
                   className={`p-3.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                    category === cat
+                    categoryId === cat.id
                       ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
                       : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
                   }`}
                 >
-                  {cat}
+                  {cat.name}
                 </button>
               ))}
             </div>
@@ -383,49 +515,54 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
             <div>
               <h2 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight leading-snug">
-                Let's start with a strong title.
+                Let&apos;s start with a strong title.
               </h2>
               <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-sm">
-                This is the first thing talent sees, so make it count. Be specific about the role and the
-                occasion.
+                This is the first thing talent sees, so make it count. Be specific about the role
+                and the occasion.
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-ink mb-1">
-                Write a title for your job
+                Write a title for your requirement
               </label>
               <div className="relative">
                 <Input
                   type="text"
-                  placeholder="e.g. Lead Editorial Photographer for NYC Luxury Brand Launch"
+                  placeholder="e.g. Lead Editorial Photographer for Luxury Brand Launch"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   aria-invalid={showTitleError}
+                  data-testid="job-title-input"
                   className={title.trim() ? 'pr-12' : undefined}
                 />
                 <RephraseWithAiButton show={!!title.trim()} onClick={handleAiRephraseClick} />
               </div>
               {showTitleError && (
-                <p className="text-[11px] text-destructive mt-1.5 font-medium">Title is required</p>
+                <p className="text-[11px] text-destructive mt-1.5 font-medium">
+                  A title of at least {MIN_TITLE} characters is required.
+                </p>
               )}
 
-              <div className="mt-6 space-y-2">
-                <p className="text-xs font-semibold text-ink">Example titles</p>
-                <ul className="space-y-1.5">
-                  {(TITLE_EXAMPLES[category] ?? []).map((example) => (
-                    <li key={example}>
-                      <button
-                        type="button"
-                        onClick={() => setTitle(example)}
-                        className="text-left text-xs text-ink-muted hover:text-primary transition-colors cursor-pointer leading-relaxed"
-                      >
-                        {example}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {(TITLE_EXAMPLES[selectedCategory?.name ?? ''] ?? []).length > 0 && (
+                <div className="mt-6 space-y-2">
+                  <p className="text-xs font-semibold text-ink">Example titles</p>
+                  <ul className="space-y-1.5">
+                    {(TITLE_EXAMPLES[selectedCategory?.name ?? ''] ?? []).map((example) => (
+                      <li key={example}>
+                        <button
+                          type="button"
+                          onClick={() => setTitle(example)}
+                          className="text-left text-xs text-ink-muted hover:text-primary transition-colors cursor-pointer leading-relaxed"
+                        >
+                          {example}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -440,44 +577,51 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 Describe the scope in detail.
               </h2>
               <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-sm">
-                Cover the atmosphere, guest count, and any technical or equipment expectations. The more
-                context you give, the more accurate the proposals you'll receive.
+                Cover the atmosphere, guest count, and any technical or equipment expectations. The
+                more context you give, the more accurate the proposals you&apos;ll receive.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Scope & specifications</label>
+              <label className="block text-xs font-semibold text-ink mb-1">
+                Scope &amp; specifications
+              </label>
               <div className="relative">
                 <Textarea
                   rows={7}
-                  placeholder="Describe the atmosphere, attendee expectations, guest count, special technical jobs, and equipment expectations..."
+                  placeholder="Describe the atmosphere, attendee expectations, guest count, and equipment expectations..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   aria-invalid={showDescriptionError}
+                  data-testid="job-description-input"
                   className={description.trim() ? 'pr-12' : undefined}
                 />
                 <RephraseWithAiButton show={!!description.trim()} onClick={handleAiRephraseClick} />
               </div>
               {showDescriptionError && (
-                <p className="text-[11px] text-destructive mt-1.5 font-medium">Description is required</p>
+                <p className="text-[11px] text-destructive mt-1.5 font-medium">
+                  A description of at least {MIN_DESCRIPTION} characters is required.
+                </p>
               )}
 
-              {/* Reference Attachments */}
               <div className="mt-6 space-y-2.5">
                 <label className="block text-xs font-semibold text-ink">
                   Reference documents <span className="font-normal text-ink-muted">(optional)</span>
                 </label>
                 <p className="text-[11px] text-ink-muted leading-relaxed">
-                  Attach briefs, mood boards, floor plans, or spec sheets so providers have full context.
-                  Up to {MAX_ATTACHMENTS} files, {formatFileSize(MAX_ATTACHMENT_SIZE)} each.
+                  Attach briefs, mood boards or floor plans so providers have full context. JPEG,
+                  PNG, WebP or PDF, up to {MAX_ATTACHMENTS} files. Only providers signed in and
+                  viewing your published requirement can open them.
                 </p>
 
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
+                  accept={ACCEPT}
                   className="hidden"
-                  onChange={(e) => handleFilesSelected(e.target.files)}
+                  data-testid="job-file-input"
+                  onChange={(e) => void handleFilesSelected(e.target.files)}
                 />
                 <Button
                   type="button"
@@ -485,30 +629,32 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                   size="sm"
                   icon={Paperclip}
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={attachments.length >= MAX_ATTACHMENTS}
+                  disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
                 >
-                  Attach Files
+                  {uploading ? 'Uploading…' : 'Attach Files'}
                 </Button>
 
                 {attachmentError && (
-                  <p className="text-[11px] text-destructive font-medium">{attachmentError}</p>
+                  <p className="text-[11px] text-destructive font-medium" role="alert">
+                    {attachmentError}
+                  </p>
                 )}
 
                 {attachments.length > 0 && (
-                  <div className="space-y-2 pt-1">
+                  <div className="space-y-2 pt-1" data-testid="job-attachments">
                     {attachments.map((att) => (
                       <div
-                        key={att.id}
+                        key={att.mediaId}
                         className="flex items-center justify-between p-2.5 bg-bg border border-border rounded-xl text-xs text-ink"
                       >
                         <span className="flex items-center gap-2 min-w-0">
                           <FileText className="w-4 h-4 text-primary shrink-0" />
-                          <span className="truncate">{att.name}</span>
-                          <span className="text-ink-muted shrink-0">({formatFileSize(att.size)})</span>
+                          <span className="truncate">{att.fileName}</span>
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleRemoveAttachment(att.id)}
+                          aria-label={`Remove ${att.fileName}`}
+                          onClick={() => void handleRemoveAttachment(att.mediaId)}
                           className="text-zinc-400 hover:text-rose-600 p-1 transition-colors cursor-pointer shrink-0"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -531,11 +677,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               When and where is this happening?
             </h2>
             <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-lg">
-              Set the date slot, proposal deadline, and venue, then list what you expect talent to deliver.
+              Set the date slot, proposal deadline and venue, then list what you expect talent to
+              deliver. All of these are optional — a requirement can be published without them.
             </p>
           </div>
 
-          {/* Timing Mode Toggle */}
           <div>
             <label className="block text-xs font-semibold text-ink mb-2">
               How do you want to specify timing?
@@ -574,11 +720,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 <CalendarIcon className="w-3.5 h-3.5 text-ink-muted" />
                 {timingMode === 'fixed' ? 'Event Date' : 'Complete By Date'}
               </label>
-              <DatePicker
-                value={eventDate}
-                onChange={setEventDate}
-                min={todayISODate()}
-              />
+              <DatePicker value={eventDate} onChange={setEventDate} min={todayISODate()} />
             </div>
 
             {timingMode === 'fixed' && (
@@ -588,10 +730,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     <Clock className="w-3.5 h-3.5 text-ink-muted" />
                     Start Time
                   </label>
-                  <TimePicker
-                    value={eventStartTime}
-                    onChange={setEventStartTime}
-                  />
+                  <TimePicker value={eventStartTime} onChange={setEventStartTime} />
                 </div>
 
                 <div>
@@ -614,16 +753,25 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             )}
           </div>
 
+          {timingMode === 'fixed' && !eventDate && (
+            // Times need a date to belong to, which the API enforces too.
+            <p className="text-[11px] text-ink-muted">
+              Set an event date to save the hours with it.
+            </p>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-ink mb-1">Proposal Deadline</label>
             <DatePicker
               value={proposalDeadline}
               onChange={setProposalDeadline}
               min={todayISODate()}
-              max={eventDate}
+              max={eventDate || undefined}
               className="w-full md:w-1/3"
             />
-            <p className="text-[11px] text-ink-muted mt-1">Vendors must submit their proposals by this date.</p>
+            <p className="text-[11px] text-ink-muted mt-1">
+              Providers must submit their proposals by this date.
+            </p>
           </div>
 
           <div>
@@ -633,15 +781,17 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             </label>
             <Input
               type="text"
-              placeholder="e.g. The Oberoi, Nariman Point, Mumbai, Maharashtra"
+              placeholder="e.g. The Oberoi, Nariman Point, Mumbai"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
+              data-testid="job-location-input"
             />
           </div>
 
-          {/* Deliverables Builder */}
           <div className="space-y-3">
-            <label className="block text-xs font-semibold text-ink">Required Deliverables Checklist</label>
+            <label className="block text-xs font-semibold text-ink">
+              Required Deliverables Checklist
+            </label>
 
             <div className="flex gap-2">
               <Input
@@ -660,7 +810,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             <div className="space-y-2 pt-2">
               {deliverables.map((item, idx) => (
                 <div
-                  key={idx}
+                  key={`${item}-${idx}`}
                   className="flex items-center justify-between p-2.5 bg-bg border border-border rounded-xl text-xs text-ink"
                 >
                   <span className="flex items-center gap-2">
@@ -690,8 +840,8 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 Set your target budget.
               </h2>
               <p className="text-sm text-ink-muted mt-3 leading-relaxed max-w-sm">
-                Set a fixed amount or a realistic range — this is what talent sees when deciding whether to propose,
-                and it determines what they're allowed to bid.
+                Set a fixed amount or a realistic range — this is what talent sees when deciding
+                whether to propose. Leave it at zero to invite quotes instead.
               </p>
             </div>
 
@@ -711,7 +861,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     }`}
                   >
                     Fixed budget
-                    <span className="block font-normal mt-0.5">Providers must bid this exact amount</span>
+                    <span className="block font-normal mt-0.5">A single figure</span>
                   </button>
                   <button
                     type="button"
@@ -723,7 +873,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     }`}
                   >
                     Budget range
-                    <span className="block font-normal mt-0.5">Providers may bid anywhere within range</span>
+                    <span className="block font-normal mt-0.5">A minimum and a maximum</span>
                   </button>
                 </div>
               </div>
@@ -740,6 +890,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                     min={0}
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(Math.max(0, Number(e.target.value)))}
+                    data-testid="job-budget-input"
                     className="font-mono"
                   />
                 </div>
@@ -756,6 +907,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                       min={0}
                       value={budgetMin}
                       onChange={(e) => setBudgetMin(Math.max(0, Number(e.target.value)))}
+                      data-testid="job-budget-input"
                       className="font-mono"
                     />
                   </div>
@@ -772,11 +924,15 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                       value={budgetMax}
                       onChange={(e) => setBudgetMax(Math.max(0, Number(e.target.value)))}
                       className="font-mono"
-                      aria-invalid={attemptedNext && budgetMax < budgetMin}
+                      aria-invalid={attemptedNext && budgetMax > 0 && budgetMax < budgetMin}
                     />
-                    {attemptedNext && budgetMax < budgetMin && (
+                    {attemptedNext && budgetMax > 0 && budgetMax < budgetMin ? (
                       <p className="text-[11px] text-destructive mt-1 font-medium">
                         Maximum must be at least the minimum.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-ink-muted mt-1">
+                        Leave at zero for no upper limit.
                       </p>
                     )}
                   </div>
@@ -785,10 +941,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             </div>
           </div>
 
-          {/* Summary Box */}
           <div className="p-6 bg-bg border border-border rounded-2xl space-y-4">
             <h3 className="text-xs font-mono uppercase font-bold text-primary tracking-wider">
-              Job Summary
+              Requirement Summary
             </h3>
 
             <div className="space-y-2 text-xs">
@@ -798,22 +953,37 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               </div>
               <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Category:</span>
-                <span className="font-medium text-ink">{category}</span>
+                <span className="font-medium text-ink">{selectedCategory?.name ?? '—'}</span>
               </div>
               <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Logistics:</span>
-                <span className="font-medium text-ink">
-                  {formatEventSchedule(eventDate, timingMode, eventStartTime, eventEndTime)} — {location}
+                <span className="font-medium text-ink text-right">
+                  {eventDate
+                    ? formatEventSchedule(eventDate, timingMode, eventStartTime, eventEndTime)
+                    : 'No date set'}
+                  {location ? ` — ${location}` : ''}
                 </span>
               </div>
               <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Proposal Deadline:</span>
-                <span className="font-medium text-ink">{proposalDeadline}</span>
+                <span className="font-medium text-ink">{proposalDeadline || 'None'}</span>
               </div>
               <div className="flex justify-between border-b border-border pb-2">
                 <span className="text-ink-muted">Budget:</span>
-                <span className="font-bold text-primary">
-                  {formatBudget({ budgetMode, budgetMin, budgetMax })}
+                {/* Formatted from the same values buildBody sends, so the
+                    summary cannot claim a budget the API will not store. */}
+                <span className="font-bold text-primary" data-testid="summary-budget">
+                  {formatJobBudget({
+                    budgetMin: budgetMin > 0 ? String(budgetMin) : null,
+                    budgetMax:
+                      budgetMode === 'fixed'
+                        ? budgetMin > 0
+                          ? String(budgetMin)
+                          : null
+                        : budgetMax > 0
+                          ? String(budgetMax)
+                          : null,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -827,26 +997,40 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         </Card>
       )}
 
-      {/* Footer Navigation */}
+      {submitError && (
+        <p
+          className="text-xs text-destructive font-medium"
+          role="alert"
+          data-testid="job-submit-error"
+        >
+          {submitError}
+        </p>
+      )}
+
       <div className="flex items-center justify-between pt-2">
-        <Button variant="outline" onClick={handleBack}>
+        <Button variant="outline" onClick={handleBack} disabled={saving}>
           Back
         </Button>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={handleSaveDraft}>
+          <Button variant="ghost" onClick={handleSaveDraft} disabled={saving || uploading}>
             Save as Draft
           </Button>
           <Button
             onClick={handleNext}
+            disabled={saving || uploading}
+            data-testid={step === 5 ? 'publish-job' : 'wizard-next'}
             icon={step === 5 ? Sparkles : ArrowRight}
             iconPosition={step === 5 ? 'left' : 'right'}
           >
-            {step === 5 ? 'Publish Job to Marketplace' : `Next: ${STEP_LABELS[(step + 1) as WizardStep]}`}
+            {saving
+              ? 'Saving…'
+              : step === 5
+                ? 'Publish Requirement'
+                : `Next: ${STEP_LABELS[(step + 1) as WizardStep]}`}
           </Button>
         </div>
       </div>
 
-      {/* Progress Bar */}
       <div className="h-1 w-full bg-border rounded-full overflow-hidden">
         <div
           className="h-full bg-primary transition-all duration-300"
@@ -856,4 +1040,3 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     </div>
   );
 };
-

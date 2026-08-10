@@ -10,6 +10,7 @@ import { IdentityModule } from './identity/identity.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { MediaModule } from './media/media.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { MediaModule } from './media/media.module';
     ProfilesModule,
     MarketplaceModule,
     MediaModule,
+    JobsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

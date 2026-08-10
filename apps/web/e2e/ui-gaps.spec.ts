@@ -114,22 +114,31 @@ test.describe('username and avatar', () => {
     await expect(page.getByTestId('profile-success')).toHaveCount(0);
   });
 
-  test('a non-https avatar is rejected', async ({ page }) => {
-    await page.getByTestId('input-avatar').fill('http://example.com/insecure.png');
-    await page.getByTestId('save-profile').click();
-
-    await expect(page.getByTestId('profile-error')).toBeVisible({ timeout: 30_000 });
+  // The two avatar tests that lived here checked a pasted https URL and the
+  // API rejecting a non-https one. Both fields are gone: the media pipeline
+  // replaced the URL box with an uploader, and the profile now stores a
+  // media id rather than a link. There is nothing left to paste.
+  //
+  // What replaced them cannot be driven here either. Uploading needs object
+  // storage, and STORAGE_* is unset in this environment, so a file chosen in
+  // the picker fails at the API with "storage is not configured" — a real
+  // response to a real gap, not something a test should assert around.
+  //
+  // So this covers what is true without storage: the uploader is present and
+  // starts empty. The upload path itself is verified in
+  // module4-e2e-results.md's "not tested" section, deliberately and visibly.
+  test('the profile offers an uploader rather than a pasted avatar link', async ({ page }) => {
+    await expect(page.getByTestId('image-uploader').first()).toBeVisible();
+    await expect(page.getByTestId('input-avatar')).toHaveCount(0);
   });
 
-  test('a valid avatar saves and previews', async ({ page }) => {
-    await page.getByTestId('input-avatar').fill('https://example.com/avatar.png');
-    await expect(page.getByTestId('avatar-preview')).toBeAttached();
+  test('a profile with no picture is a valid state that saves', async ({ page }) => {
+    // A profile without an avatar is deliberately allowed — SetNull on the
+    // relation exists for exactly this.
+    await expect(page.getByTestId('uploaded-image')).toHaveCount(0);
 
     await page.getByTestId('save-profile').click();
     await expect(page.getByTestId('profile-success')).toBeVisible({ timeout: 30_000 });
-
-    await page.reload();
-    await expect(page.getByTestId('input-avatar')).toHaveValue('https://example.com/avatar.png');
   });
 });
 

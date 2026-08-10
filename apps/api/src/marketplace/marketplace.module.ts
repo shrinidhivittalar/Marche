@@ -17,6 +17,10 @@ import { ServicesService } from './services/services.service';
   imports: [ProfilesModule, MediaModule],
   controllers: [CategoriesController, ServicesController, MarketplaceController],
   providers: [CategoriesRepository, ServicesRepository, CategoriesService, ServicesService],
-  exports: [CategoriesService, ServicesService],
+  // CategoriesRepository is exported for the same reason ProfilesModule
+  // exports its own: Jobs needs to check that a category exists before
+  // accepting one, and re-registering the repository there would give the
+  // two modules separate instances of the same thing.
+  exports: [CategoriesService, ServicesService, CategoriesRepository],
 })
 export class MarketplaceModule {}
