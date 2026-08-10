@@ -68,6 +68,10 @@ export interface ApiOwnProposal extends ProposalCore {
     title: string;
     status: JobStatus;
     eventDate: string | null;
+    /** Wall-clock "HH:MM" at the venue — display as given, never re-zone. */
+    eventStartTime: string | null;
+    eventEndTime: string | null;
+    location: string | null;
     proposalDeadline: string | null;
     clientProfile: { id: string; username: string | null; displayName: string };
   };

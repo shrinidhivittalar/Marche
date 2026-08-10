@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
+  CalendarDays,
   ChevronRight,
   ChevronLeft,
+  MapPin,
   FileCheck,
   ShieldCheck,
   IndianRupee,
@@ -16,6 +18,7 @@ import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBa
 import { useApiResource } from '../../hooks/useApiResource';
 import { proposalsApi } from '../../lib/proposals-api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
+import { formatEventWhen } from '../../lib/formatJob';
 import { TimeSlot } from '../../types';
 import { formatEventSchedule } from '../../lib/formatTime';
 import {
@@ -252,6 +255,21 @@ export const MyWorkPage: React.FC = () => {
                     <p className="text-xs text-ink-muted mt-0.5">
                       For {proposal.job.clientProfile.displayName}
                     </p>
+                    {/* When and where. A provider scanning this list is
+                        deciding whether they are free and can get there —
+                        the title and the price do not answer either. */}
+                    <div className="flex items-center gap-3 flex-wrap text-[11px] text-ink-muted mt-1.5">
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                        {formatEventWhen(proposal.job) ?? 'No date set'}
+                      </span>
+                      {proposal.job.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 shrink-0" />
+                          {proposal.job.location}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="text-right shrink-0">
