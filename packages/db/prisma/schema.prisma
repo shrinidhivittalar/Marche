@@ -162,18 +162,18 @@ model Profile {
 
   // Nullable until set — see module2-edge-cases.md's "Open questions"
   // section (username shape was an unresolved gap in module2.md itself).
-  username    String? @unique
-  displayName String
-  headline    String?
-  bio         String?
+  username      String? @unique
+  displayName   String
+  headline      String?
+  bio           String?
   // Uploaded file rather than a pasted URL. SetNull so deleting the image
   // leaves the profile intact and simply avatar-less, which is a real state
   // — unlike a portfolio piece, a profile without a picture still works.
   avatarMediaId String?
   avatarMedia   Media?  @relation(fields: [avatarMediaId], references: [id], onDelete: SetNull)
-  location    String?
-  timezone    String?
-  socialLinks Json?
+  location      String?
+  timezone      String?
+  socialLinks   Json?
 
   visibility         ProfileVisibility  @default(PUBLIC)
   availabilityStatus AvailabilityStatus @default(AVAILABLE)
@@ -195,6 +195,13 @@ model Profile {
   languages      UserLanguage[]
   services       Service[]
   jobs           Job[]
+
+  // Module 5. `proposals` needs no relation name (it is the only Proposal
+  // relation to Profile); the two Connection sides do, because a Profile can
+  // sit on either end of the same table.
+  proposals           Proposal[]
+  clientConnections   Connection[] @relation("ClientConnections")
+  providerConnections Connection[] @relation("ProviderConnections")
 
   @@index([username])
   @@map("profiles")
@@ -583,6 +590,12 @@ model Job {
 
   attachments JobAttachment[]
 
+  // Module 5. The connection is singular because only one proposal can ever
+  // be accepted — enforced by a unique constraint on Connection.jobId, not
+  // merely by this field's shape.
+  proposals  Proposal[]
+  connection Connection?
+
   @@index([clientProfileId])
   @@index([categoryId])
   // Serves the provider discovery query: published jobs, newest first.
@@ -625,6 +638,174 @@ model JobAttachment {
   @@unique([jobId, mediaId])
   @@index([jobId])
   @@map("job_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Module 5 — Proposals
+// ---------------------------------------------------------------------------
+//
+// A Proposal is the provider side of the marketplace: "here is what I will do
+// and what it costs", offered against one client's requirement. Accepting one
+// is the moment a hire actually happens, which makes this the first genuinely
+// transactional corner of the schema.
+//
+// Deliberate omissions, each argued in module5.md and recorded here so the
+// reasoning sits next to the thing it shaped:
+//
+// - No DRAFT status. A proposal is submitted complete, in one operation. A
+//   draft state means storing half-written offers to support a form the
+//   frontend can hold in local state until it is ready.
+//
+// - No `deletedAt`. Nothing deletes a proposal: all three end states are
+//   retained on purpose, because a proposal is the record of what was
+//   offered. A soft-delete column nothing ever writes is one that will
+//   eventually be misread as meaning something.
+//
+// - No rejection reason. Nothing would read it until Notifications exists,
+//   and a write-only column is a field that quietly drifts out of date.
+//
+// - No `providerUserId` alongside `providerProfileId`. That is the same fact
+//   twice and two columns that can disagree. Job made the same call with
+//   `clientProfileId`; role is read through `profile.user.role`, since role
+//   is a user-level fact.
+enum ProposalStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model Proposal {
+  id String @id @default(uuid())
+
+  // Cascade: a requirement that is genuinely deleted takes its proposals
+  // with it. Reachable only through a deleted client profile — Module 4
+  // permits hard-deleting nothing else, and a DRAFT job (the one thing it
+  // does delete) can never have proposals, since drafts are not discoverable.
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  providerProfileId String
+  providerProfile   Profile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  // A snapshot of what was offered, not a live join to the provider's
+  // Service or Profile. If the provider later raises their prices, this
+  // proposal must still say what the client read when they shortlisted it.
+  coverMessage  String
+  proposedPrice Decimal @db.Decimal(10, 2)
+
+  // Days, and named so. "deliveryTime" leaves the unit to be guessed at by
+  // whoever reads it next.
+  deliveryDays Int
+
+  status ProposalStatus @default(SUBMITTED)
+
+  // submittedAt is separate from createdAt even though Phase 1 writes both
+  // at once: createdAt is a row fact, submittedAt is a business fact, and
+  // the two stop being the same instant the moment drafts ever exist.
+  submittedAt DateTime  @default(now())
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  withdrawnAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments ProposalAttachment[]
+  connection  Connection?
+
+  // The rule the whole module turns on: one proposal per provider per
+  // requirement. Absolute, not partial — so withdrawal is final for that
+  // requirement. A partial index (WHERE status = 'SUBMITTED') would allow
+  // re-proposing, but Prisma cannot express one, and a constraint that does
+  // not appear in this file is a constraint someone will later violate in a
+  // query they believed was safe.
+  //
+  // This is also the enforcement, not the service-layer pre-check: two
+  // simultaneous submissions both pass that check before either writes.
+  @@unique([jobId, providerProfileId])
+  // Serves the client's review list — the proposals on one requirement,
+  // optionally filtered by status. Leading on jobId, so it serves the
+  // unfiltered list too and a separate jobId index would be redundant.
+  @@index([jobId, status])
+  // The mirror: a provider's own proposals, optionally filtered.
+  @@index([providerProfileId, status])
+  @@map("proposals")
+}
+
+// A file the provider attached to their offer — a quote, a sample, a shot
+// list.
+//
+// Private, exactly like JobAttachment and for the same reason: this is
+// working material between two parties, not advertising. Nothing is served
+// from a public route because of it.
+model ProposalAttachment {
+  id         String   @id @default(uuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  // Restrict, matching every other media join: deleting a file still
+  // attached to a live proposal must fail loudly rather than silently blank
+  // it. The owner detaches it first.
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([proposalId, mediaId])
+  @@index([proposalId])
+  @@map("proposal_attachments")
+}
+
+// The hiring relationship, created when a client accepts a proposal.
+//
+// Its own row rather than "a proposal in the accepted state", because
+// everything downstream — messaging, contracts, payments — belongs to *two
+// parties for one job*, and a Proposal row is a historical record of what was
+// offered, not a live thing two parties act through.
+//
+// Created only inside the acceptance transaction. There is no POST route, so
+// nobody can manufacture a relationship without an accepted proposal.
+//
+// No status column. Phase 1 only ever writes one value, so the row existing
+// is what "active" means; a one-member enum is a column whose value is
+// already implied by the primary key. Closing arrives with the module that
+// needs a second state, and brings its own migration either way.
+model Connection {
+  id String @id @default(uuid())
+
+  // Unique, and this is load-bearing: it is the backstop that makes "exactly
+  // one winner" true even if the acceptance transaction is ever reordered or
+  // retried after a lost response. The conditional claim on Job.status is the
+  // primary mechanism (see ADR-006); this is what catches it if that breaks.
+  jobId String @unique
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Also unique: one accepted proposal produces one relationship.
+  proposalId String   @unique
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  // Both parties are denormalised onto the row rather than being read through
+  // job.clientProfile and proposal.providerProfile. This is the one place in
+  // the schema where that is worth it: "my connections" is a query from
+  // either side, and without these columns it needs two joins in one
+  // direction and three in the other. Neither value can drift — a connection
+  // is immutable once created.
+  clientProfileId String
+  clientProfile   Profile @relation("ClientConnections", fields: [clientProfileId], references: [id], onDelete: Cascade)
+
+  providerProfileId String
+  providerProfile   Profile @relation("ProviderConnections", fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Serve "my connections" from either side.
+  @@index([clientProfileId])
+  @@index([providerProfileId])
+  @@map("connections")
 }
 
 // Media / upload pipeline (shared infrastructure, not a business module).
@@ -688,10 +869,11 @@ model Media {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  portfolioImages PortfolioImage[]
-  serviceImages   ServiceImage[]
-  jobAttachments  JobAttachment[]
-  avatarForProfiles Profile[]
+  portfolioImages     PortfolioImage[]
+  serviceImages       ServiceImage[]
+  jobAttachments      JobAttachment[]
+  proposalAttachments ProposalAttachment[]
+  avatarForProfiles   Profile[]
 
   @@index([ownerUserId])
   // Serves the orphan sweep: stale PENDING rows, oldest first.
