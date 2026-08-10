@@ -28,7 +28,12 @@ import {
 import { EmptyState } from '../../components/common/EmptyState';
 import { formatEventSchedule } from '../../lib/formatTime';
 import { formatBudget } from '../../lib/formatBudget';
-import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
+import {
+  isProfileComplete as computeIsProfileComplete,
+  isApiProfileComplete,
+} from '../../lib/profileCompleteness';
+import { useApiResource } from '../../hooks/useApiResource';
+import { profilesApi } from '../../lib/marketplace-api';
 import { useJobFacets } from '../../hooks/useJobFacets';
 
 type FeedTab = 'best' | 'recent' | 'saved' | 'invites';
@@ -42,9 +47,21 @@ export const ProviderHomePage: React.FC = () => {
     setSearchQuery,
     selectedCategoryFilter,
     setSelectedCategoryFilter,
+    accessToken,
   } = useApp();
 
-  const isProfileComplete = computeIsProfileComplete(currentUser);
+  // The real profile, not the demo user — the editor writes to /profiles/me
+  // once signed in, so completeness measured against the mock fields could
+  // never become true and these notices never went away.
+  //
+  // Treated as complete while loading, so a provider who finished long ago
+  // does not see the banner flash on every visit.
+  const myProfile = useApiResource(() => profilesApi.me(accessToken as string), [accessToken], {
+    enabled: Boolean(accessToken),
+  });
+  const isProfileComplete = accessToken
+    ? myProfile.loading || isApiProfileComplete(myProfile.data)
+    : computeIsProfileComplete(currentUser);
 
   // ---- Upwork-inspired home feed state ----
   const [noticeDismissed, setNoticeDismissed] = useState(false);
@@ -56,9 +73,7 @@ export const ProviderHomePage: React.FC = () => {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const selectedJob = selectedJobId
-    ? jobs.find((r) => r.id === selectedJobId)
-    : undefined;
+  const selectedJob = selectedJobId ? jobs.find((r) => r.id === selectedJobId) : undefined;
 
   const toggleSaved = (id: string) => {
     setSavedIds((prev) => {
@@ -94,8 +109,10 @@ export const ProviderHomePage: React.FC = () => {
     feedTab === 'saved'
       ? filteredFeed.filter((r) => savedIds.has(r.id))
       : feedTab === 'recent'
-      ? [...filteredFeed].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      : filteredFeed; // 'best' — default relevance order; 'invites' handled separately below
+        ? [...filteredFeed].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )
+        : filteredFeed; // 'best' — default relevance order; 'invites' handled separately below
 
   const openFiltersModal = () => {
     setPendingCategory(selectedCategoryFilter);
@@ -254,12 +271,17 @@ export const ProviderHomePage: React.FC = () => {
                       title="Save"
                       className={`cursor-pointer ${savedIds.has(req.id) ? 'text-rose-500' : 'text-zinc-400 hover:text-rose-500'}`}
                     >
-                      <Heart className="w-4 h-4" fill={savedIds.has(req.id) ? 'currentColor' : 'none'} />
+                      <Heart
+                        className="w-4 h-4"
+                        fill={savedIds.has(req.id) ? 'currentColor' : 'none'}
+                      />
                     </button>
                   </div>
                 </div>
 
-                <h3 className="text-sm font-bold text-ink line-clamp-2 leading-snug">{req.title}</h3>
+                <h3 className="text-sm font-bold text-ink line-clamp-2 leading-snug">
+                  {req.title}
+                </h3>
 
                 <p className="text-xs text-ink-muted line-clamp-3 leading-relaxed flex-1">
                   {req.description}
@@ -267,9 +289,7 @@ export const ProviderHomePage: React.FC = () => {
 
                 <div className="space-y-1.5 text-xs text-ink-muted pt-2 border-t border-border">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-primary">
-                      {formatBudget(req)}
-                    </span>
+                    <span className="font-semibold text-primary">{formatBudget(req)}</span>
                     <span className="shrink-0">{req.proposalsCount} proposals</span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -290,10 +310,7 @@ export const ProviderHomePage: React.FC = () => {
       </div>
 
       {/* Job Overview Dialog */}
-      <Dialog
-        open={!!selectedJobId}
-        onOpenChange={(open) => !open && setSelectedJobId(null)}
-      >
+      <Dialog open={!!selectedJobId} onOpenChange={(open) => !open && setSelectedJobId(null)}>
         <DialogContent className="max-w-lg">
           {selectedJob && (
             <>
@@ -315,10 +332,10 @@ export const ProviderHomePage: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 bg-bg border border-border rounded-xl">
-                    <span className="block text-[10px] text-ink-muted uppercase font-mono">Budget</span>
-                    <span className="font-bold text-primary">
-                      {formatBudget(selectedJob)}
+                    <span className="block text-[10px] text-ink-muted uppercase font-mono">
+                      Budget
                     </span>
+                    <span className="font-bold text-primary">{formatBudget(selectedJob)}</span>
                   </div>
                   <div className="p-3 bg-bg border border-border rounded-xl">
                     <span className="flex items-center gap-1 text-[10px] text-ink-muted uppercase font-mono">
@@ -394,7 +411,10 @@ export const ProviderHomePage: React.FC = () => {
               <h3 className="text-xs font-bold text-ink uppercase tracking-wide">Category</h3>
               <div className="space-y-2.5">
                 {categoryCounts.map(({ value, count }) => (
-                  <label key={value} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                  <label
+                    key={value}
+                    className="flex items-center gap-2.5 text-xs text-ink cursor-pointer"
+                  >
                     <Checkbox
                       checked={pendingCategory === value}
                       onCheckedChange={(checked) => setPendingCategory(checked ? value : 'All')}
@@ -410,7 +430,10 @@ export const ProviderHomePage: React.FC = () => {
               <h3 className="text-xs font-bold text-ink uppercase tracking-wide">Location</h3>
               <div className="space-y-2.5">
                 {locationCounts.map(({ value, label, count }) => (
-                  <label key={value} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                  <label
+                    key={value}
+                    className="flex items-center gap-2.5 text-xs text-ink cursor-pointer"
+                  >
                     <Checkbox
                       checked={pendingLocation === value}
                       onCheckedChange={(checked) => setPendingLocation(checked ? value : 'All')}

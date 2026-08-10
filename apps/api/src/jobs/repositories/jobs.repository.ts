@@ -62,6 +62,19 @@ const JOB_FIELDS = {
   },
 } satisfies Prisma.JobSelect;
 
+// What the owner sees on top of the shared fields.
+//
+// The proposal count is counted, never stored — the schema comment above
+// JobStatus says why: a PROPOSAL_ACTIVITY column would have to be flipped on
+// every submission and unflipped on every withdrawal, and would be wrong the
+// first time either was missed. Owner reads only: it is the client's own
+// count of who has replied, and no part of discovery needs it.
+const OWNER_JOB_FIELDS = {
+  ...JOB_FIELDS,
+  cancelledAt: true,
+  _count: { select: { proposals: true } },
+} satisfies Prisma.JobSelect;
+
 @Injectable()
 export class JobsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -76,7 +89,7 @@ export class JobsRepository {
   findByIdForOwner(id: string) {
     return this.prisma.client.job.findFirst({
       where: { id, deletedAt: null },
-      select: { ...JOB_FIELDS, cancelledAt: true, updatedAt: true },
+      select: { ...OWNER_JOB_FIELDS, updatedAt: true },
     });
   }
 
@@ -89,7 +102,7 @@ export class JobsRepository {
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip,
       take,
-      select: { ...JOB_FIELDS, cancelledAt: true },
+      select: OWNER_JOB_FIELDS,
     });
   }
 

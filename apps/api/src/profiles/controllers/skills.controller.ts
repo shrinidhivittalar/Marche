@@ -24,17 +24,23 @@ export class SkillsController {
   constructor(private readonly skillsService: SkillsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List the predefined platform skills available to add' })
+  @ApiOperation({ summary: 'List the platform skills available to add' })
   list(@Query() pagination: PaginationQueryDto) {
     return this.skillsService.listAvailableSkills(pagination);
   }
 
   @Post()
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Add a predefined skill to the caller's profile (Provider-only)" })
+  @ApiOperation({
+    summary: "Add a skill to the caller's profile (Provider-only)",
+    description:
+      'Send skillId to pick one from the platform list, or name to add your own. A typed ' +
+      'name is matched against the list case-insensitively first, so it attaches the ' +
+      'existing skill rather than creating a near-duplicate.',
+  })
   @UseGuards(JwtAuthGuard)
   add(@CurrentUser() user: AuthenticatedUser, @Body() dto: AddSkillDto) {
-    return this.skillsService.addSkill(user.id, dto.skillId);
+    return this.skillsService.addSkill(user.id, dto);
   }
 
   @Delete(':id')

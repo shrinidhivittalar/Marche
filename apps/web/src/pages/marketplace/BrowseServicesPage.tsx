@@ -90,7 +90,9 @@ export const BrowseServicesPage: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-6" data-testid="browse-page">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Find providers</h1>
-        <p className="text-muted text-sm mt-1">Search published services across the marketplace.</p>
+        <p className="text-ink-muted text-sm mt-1">
+          Search published services across the marketplace.
+        </p>
       </div>
 
       <Card className="p-6 space-y-4">
@@ -217,7 +219,7 @@ export const BrowseServicesPage: React.FC = () => {
 
       {active.loading && (
         <Card className="p-8" data-testid="results-loading">
-          <p className="text-muted">Searching…</p>
+          <p className="text-ink-muted">Searching…</p>
         </Card>
       )}
 
@@ -232,14 +234,14 @@ export const BrowseServicesPage: React.FC = () => {
 
       {!active.loading && !active.error && active.data && (
         <>
-          <p className="text-sm text-muted" data-testid="results-count">
+          <p className="text-sm text-ink-muted" data-testid="results-count">
             {active.data.total} {active.data.total === 1 ? 'result' : 'results'}
           </p>
 
           {active.data.items.length === 0 ? (
             <Card className="p-10 text-center space-y-2" data-testid="results-empty">
               <p className="text-ink font-medium">No results found.</p>
-              <p className="text-muted text-sm">
+              <p className="text-ink-muted text-sm">
                 Try changing your filters or searching for another service.
               </p>
             </Card>
@@ -255,12 +257,12 @@ export const BrowseServicesPage: React.FC = () => {
                     >
                       <div>
                         <h3 className="font-semibold text-ink">{s.title}</h3>
-                        <p className="text-xs text-muted">{s.category.name}</p>
+                        <p className="text-xs text-ink-muted">{s.category.name}</p>
                       </div>
                       <p className="text-sm text-ink">
                         From ₹{s.startingPrice} · {s.deliveryDays} days
                       </p>
-                      <p className="text-xs text-muted">
+                      <p className="text-xs text-ink-muted">
                         {s.profile.displayName}
                         {s.profile.location ? ` · ${s.profile.location}` : ''}
                       </p>
@@ -294,10 +296,10 @@ export const BrowseServicesPage: React.FC = () => {
                     >
                       <div>
                         <h3 className="font-semibold text-ink">{p.displayName}</h3>
-                        <p className="text-xs text-muted">{p.headline ?? 'Service provider'}</p>
+                        <p className="text-xs text-ink-muted">{p.headline ?? 'Service provider'}</p>
                       </div>
                       {p.startingFrom && <p className="text-sm text-ink">From ₹{p.startingFrom}</p>}
-                      <p className="text-xs text-muted">
+                      <p className="text-xs text-ink-muted">
                         {p.location ?? 'Location not set'} · {p.availabilityStatus}
                       </p>
                       <Button
@@ -322,7 +324,7 @@ export const BrowseServicesPage: React.FC = () => {
               >
                 Previous
               </Button>
-              <span className="text-sm text-muted" data-testid="page-indicator">
+              <span className="text-sm text-ink-muted" data-testid="page-indicator">
                 Page {active.data.page} of {active.data.totalPages}
               </span>
               <Button

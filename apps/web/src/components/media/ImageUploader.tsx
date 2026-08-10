@@ -71,7 +71,7 @@ export const ImageUploader: React.FC<{
     <div className="space-y-3" data-testid="image-uploader">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-ink">{label}</span>
-        <span className="text-xs text-muted" data-testid="uploader-count">
+        <span className="text-xs text-ink-muted" data-testid="uploader-count">
           {images.length} of {max}
         </span>
       </div>
@@ -88,7 +88,7 @@ export const ImageUploader: React.FC<{
               {image.url ? (
                 <img src={image.url} alt={image.fileName} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-surface-subtle flex items-center justify-center text-[10px] text-muted px-1 text-center">
+                <div className="w-full h-full bg-surface-subtle flex items-center justify-center text-[10px] text-ink-muted px-1 text-center">
                   {image.fileName}
                 </div>
               )}
@@ -98,7 +98,7 @@ export const ImageUploader: React.FC<{
                 data-testid={`remove-image-${image.mediaId}`}
                 disabled={disabled || busy}
                 onClick={() => onChange(images.filter((i) => i.mediaId !== image.mediaId))}
-                className="absolute top-1 right-1 rounded-full bg-surface/90 p-1 text-muted hover:text-danger"
+                className="absolute top-1 right-1 rounded-full bg-surface/90 p-1 text-ink-muted hover:text-danger"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -130,12 +130,12 @@ export const ImageUploader: React.FC<{
         </Button>
 
         {progress && (
-          <span className="text-xs text-muted" data-testid="upload-progress">
+          <span className="text-xs text-ink-muted" data-testid="upload-progress">
             {progress}
           </span>
         )}
         {atCapacity && !busy && (
-          <span className="text-xs text-muted" data-testid="uploader-full">
+          <span className="text-xs text-ink-muted" data-testid="uploader-full">
             Maximum reached.
           </span>
         )}
@@ -147,7 +147,7 @@ export const ImageUploader: React.FC<{
         </p>
       )}
 
-      <p className="text-xs text-muted">JPEG, PNG or WebP, up to 10MB each.</p>
+      <p className="text-xs text-ink-muted">JPEG, PNG or WebP, up to 10MB each.</p>
     </div>
   );
 };

@@ -38,6 +38,14 @@ const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
 // agreed to.
 const EDITABLE_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED'];
 
+// Prisma returns an aggregate as `_count: { proposals: n }`. Flattened to a
+// plain number before it leaves the service: `_count` is an ORM detail, and
+// a client should not have to know which ORM produced its JSON.
+function withProposalCount<T extends { _count?: { proposals: number } }>(job: T) {
+  const { _count, ...rest } = job;
+  return { ...rest, proposalCount: _count?.proposals ?? 0 };
+}
+
 @Injectable()
 export class JobsService {
   constructor(
@@ -219,7 +227,7 @@ export class JobsService {
       this.jobsRepository.countByProfile(profile.id),
     ]);
 
-    return paginate(data, total, page, limit);
+    return paginate(data.map(withProposalCount), total, page, limit);
   }
 
   async findMineById(userId: string, jobId: string) {
@@ -232,7 +240,7 @@ export class JobsService {
     if (!job) {
       throw new NotFoundException('Requirement not found');
     }
-    return job;
+    return withProposalCount(job);
   }
 
   // ---------- attachments ----------

@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
+import {
+  Button,
+  Card,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  TextField,
+  Textarea,
+} from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
@@ -64,7 +75,7 @@ export const MyServicesPage: React.FC = () => {
   if (authLoading) {
     return (
       <Card className="p-10 text-center" data-testid="services-auth-loading">
-        <p className="text-muted">Loading…</p>
+        <p className="text-ink-muted">Loading…</p>
       </Card>
     );
   }
@@ -121,7 +132,7 @@ export const MyServicesPage: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-6" data-testid="my-services-page">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Your services</h1>
-        <p className="text-muted text-sm mt-1">
+        <p className="text-ink-muted text-sm mt-1">
           New listings start as drafts. Publish one to make it discoverable.
         </p>
       </div>
@@ -150,20 +161,22 @@ export const MyServicesPage: React.FC = () => {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            data-testid="service-category"
-            aria-label="Category"
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-          >
-            <option value="">Choose a category…</option>
-            {leafCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.parentName} › {c.name}
-              </option>
-            ))}
-          </select>
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger
+              data-testid="service-category"
+              aria-label="Category"
+              className="h-auto py-2 text-sm"
+            >
+              <SelectValue placeholder="Choose a category…" />
+            </SelectTrigger>
+            <SelectContent>
+              {leafCategories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.parentName} › {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Input
             type="number"
@@ -191,23 +204,25 @@ export const MyServicesPage: React.FC = () => {
             data-testid="service-tags"
             aria-label="Tags"
           />
-          <select
-            value={skillId}
-            onChange={(e) => setSkillId(e.target.value)}
-            data-testid="service-skill"
-            aria-label="Skill"
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-          >
-            <option value="">Add a skill (optional)…</option>
-            {(skills.data?.items ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <Select value={skillId} onValueChange={setSkillId}>
+            <SelectTrigger
+              data-testid="service-skill"
+              aria-label="Skill"
+              className="h-auto py-2 text-sm"
+            >
+              <SelectValue placeholder="Add a skill (optional)…" />
+            </SelectTrigger>
+            <SelectContent>
+              {(skills.data?.items ?? []).map((skill) => (
+                <SelectItem key={skill.id} value={skill.id}>
+                  {skill.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <p className="text-xs text-muted">
+        <p className="text-xs text-ink-muted">
           Tags are free text and help people find you by keyword. Skills come from the platform list
           and are what the marketplace filters on.
         </p>
@@ -231,7 +246,7 @@ export const MyServicesPage: React.FC = () => {
 
       {services.loading && (
         <Card className="p-8" data-testid="services-loading">
-          <p className="text-muted">Loading your services…</p>
+          <p className="text-ink-muted">Loading your services…</p>
         </Card>
       )}
 
@@ -249,7 +264,7 @@ export const MyServicesPage: React.FC = () => {
           {services.data.items.length === 0 && (
             <Card className="p-10 text-center" data-testid="services-empty">
               <p className="text-ink font-medium">You have no services yet.</p>
-              <p className="text-muted text-sm">Create one above to start getting found.</p>
+              <p className="text-ink-muted text-sm">Create one above to start getting found.</p>
             </Card>
           )}
 
@@ -293,12 +308,12 @@ export const MyServicesPage: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <h3 className="font-semibold text-ink">{s.title}</h3>
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-ink-muted">
                       {s.category.name} · ₹{s.startingPrice} · {s.deliveryDays} days
                     </p>
                     <span
                       data-testid={`status-${s.id}`}
-                      className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-muted"
+                      className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-muted"
                     >
                       {s.status ?? 'DRAFT'}
                     </span>
@@ -362,7 +377,7 @@ export const MyServicesPage: React.FC = () => {
                           'Service deleted.',
                         )
                       }
-                      className="text-muted hover:text-danger"
+                      className="text-ink-muted hover:text-danger"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

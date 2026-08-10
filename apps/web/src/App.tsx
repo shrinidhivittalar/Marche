@@ -196,7 +196,7 @@ function AppContent() {
         className="h-screen bg-bg text-ink flex items-center justify-center font-sans"
         data-testid="app-auth-loading"
       >
-        <p className="text-muted text-sm">Loading…</p>
+        <p className="text-ink-muted text-sm">Loading…</p>
       </div>
     );
   }

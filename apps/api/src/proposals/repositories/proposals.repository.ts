@@ -52,12 +52,19 @@ const OWN_PROPOSAL_FIELDS = {
   acceptedAt: true,
   rejectedAt: true,
   withdrawnAt: true,
+  // When and where, not just what. A provider looking at their own
+  // proposals is deciding whether they can be somewhere on a date — a title
+  // and a price do not answer that, and making them open each requirement
+  // to find out is a round trip for the one fact they came for.
   job: {
     select: {
       id: true,
       title: true,
       status: true,
       eventDate: true,
+      eventStartTime: true,
+      eventEndTime: true,
+      location: true,
       proposalDeadline: true,
       clientProfile: { select: { id: true, username: true, displayName: true } },
     },

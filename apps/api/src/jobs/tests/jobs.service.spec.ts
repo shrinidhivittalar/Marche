@@ -30,7 +30,9 @@ function build(jobOverrides: Record<string, unknown> = {}) {
       publishedAt: null,
       ...jobOverrides,
     }),
-    findByIdForOwner: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
+    findByIdForOwner: jest
+      .fn()
+      .mockResolvedValue({ id: 'job_1', title: 'A requirement', _count: { proposals: 3 } }),
     listByProfile: jest.fn().mockResolvedValue([]),
     countByProfile: jest.fn().mockResolvedValue(0),
     findPublicById: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
@@ -423,6 +425,28 @@ describe('JobsService', () => {
       expect(attachment.fileName).toBe('floor-plan.pdf');
       expect(attachment).not.toHaveProperty('media');
       expect(JSON.stringify(attachment)).not.toContain('secret-path');
+    });
+  });
+
+  describe('proposal counts', () => {
+    it('flattens the Prisma aggregate into a plain number', async () => {
+      const { service } = build();
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      // `_count` is an ORM detail; a client should not have to know which
+      // ORM produced its JSON.
+      expect(job).toMatchObject({ proposalCount: 3 });
+      expect(job).not.toHaveProperty('_count');
+    });
+
+    it('reports zero rather than undefined when nothing has been proposed', async () => {
+      const { service, jobs } = build();
+      jobs.findByIdForOwner.mockResolvedValue({ id: 'job_1', title: 'A requirement' });
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      expect(job).toMatchObject({ proposalCount: 0 });
     });
   });
 
