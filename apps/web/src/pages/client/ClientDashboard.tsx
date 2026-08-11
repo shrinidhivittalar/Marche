@@ -133,8 +133,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       return contractSortDir === 'asc' ? diff : -diff;
     });
 
-  // Handlers
-
   // Shared by every view below — previously copy-pasted once per view and had drifted
   // (different button styles) between the copies.
 

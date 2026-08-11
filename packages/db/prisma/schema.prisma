@@ -43,7 +43,6 @@ model User {
   profile            Profile?
   media              Media[]
 
-  @@index([email])
   @@map("users")
 }
 
@@ -203,7 +202,6 @@ model Profile {
   clientConnections   Connection[] @relation("ClientConnections")
   providerConnections Connection[] @relation("ProviderConnections")
 
-  @@index([username])
   @@map("profiles")
 }
 

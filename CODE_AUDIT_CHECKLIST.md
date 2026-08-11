@@ -75,15 +75,15 @@ correctly during the security audit.
 
 ## Should be removed — genuinely dead code
 
-- [ ] `apps/web/src/hooks/useJobFacets.ts` — **found during batch 2**: its only consumer was the provider home feed, which no longer uses it.
+- [x] `apps/web/src/hooks/useJobFacets.ts` — **found during batch 2**: its only consumer was the provider home feed, which no longer uses it. ✅ **Fixed** — file deleted. Verified: no remaining references, `npm run typecheck`/`lint` clean.
 
-- [ ] `apps/web/src/lib/formatFile.ts:1` — `formatFileSize` has zero references anywhere.
-- [ ] `apps/web/src/pages/client/ClientDashboard.tsx:136` — a `// Handlers` comment block describing handlers deleted earlier today; nothing follows it.
-- [ ] `apps/api/src/marketplace/services/services.service.ts:81` — `void profile;` suppressing an unused binding no caller wants.
-- [ ] `apps/api/src/media/media.config.ts:8` — `IMAGE_MIME_TYPES`, `DOCUMENT_MIME_TYPES`, `isImage` are exported but referenced nowhere outside the file.
-- [ ] `packages/db/prisma/schema.prisma:46` — `@@index([email])` duplicates the unique index Postgres creates for `email @unique`.
-- [ ] `packages/db/prisma/schema.prisma:206` — `@@index([username])` duplicates the unique index for `username @unique`.
-- [ ] `packages/ui/src/components/` — `Avatar`, `Container`, `IconTile`, `RatingStars`, `SectionHeading`, `Separator`, `Sheet` have no importers anywhere.
+- [x] `apps/web/src/lib/formatFile.ts:1` — `formatFileSize` has zero references anywhere. ✅ **Fixed** — file deleted. Verified: no remaining references, `npm run typecheck`/`lint` clean.
+- [x] `apps/web/src/pages/client/ClientDashboard.tsx:136` — a `// Handlers` comment block describing handlers deleted earlier today; nothing follows it. ✅ **Fixed** — stray comment line removed. Verified: comment-only change, `npm run typecheck`/`lint` clean.
+- [x] `apps/api/src/marketplace/services/services.service.ts:81` — `void profile;` suppressing an unused binding no caller wants. ✅ **Fixed** — `update()` now destructures only `{ service }` from `getOwnService`, and the `void profile;` line is gone. Verified: `npm run typecheck` clean, full API test suite (510 tests) passes.
+- [x] `apps/api/src/media/media.config.ts:8` — `IMAGE_MIME_TYPES`, `DOCUMENT_MIME_TYPES`, `isImage` are exported but referenced nowhere outside the file. ✅ **Fixed** — `export` dropped from all three; still used internally by `ALLOWED_MIME_TYPES`/`maxBytesFor`. Verified: `npm run typecheck`/`lint` clean, `media.service.spec.ts` passes.
+- [x] `packages/db/prisma/schema.prisma:46` — `@@index([email])` duplicates the unique index Postgres creates for `email @unique`. ✅ **Fixed** — index removed from the schema, with a hand-written migration (`20260811110000_drop_redundant_unique_indexes`) dropping `users_email_idx` (`users_email_key`, from `@unique`, is untouched and keeps serving every lookup). Applied to the hosted database via `migrate deploy`.
+- [x] `packages/db/prisma/schema.prisma:206` — `@@index([username])` duplicates the unique index for `username @unique`. ✅ **Fixed** — same migration as above, drops `profiles_username_idx` (`profiles_username_key` untouched). Applied to the hosted database via `migrate deploy`.
+- [x] `packages/ui/src/components/` — `Avatar`, `Container`, `IconTile`, `RatingStars`, `SectionHeading`, `Separator`, `Sheet` have no importers anywhere. ✅ **Fixed** — all seven component files deleted along with their `packages/ui/src/index.ts` export lines. Verified: no remaining references anywhere in `apps/` or `packages/`, `npm run typecheck`/`lint` clean across the whole workspace.
 
 ---
 
@@ -105,6 +105,6 @@ These came out of the audit but are redesigns or product calls, not fixes:
 | Wrongly wired | 7 — 7 fixed |
 | Misplaced | 2 — 2 fixed |
 | Could be better | 19 — 18 fixed, 1 flagged (ClientDashboard.tsx:109, same root cause as Contracts-is-mock) |
-| Should be removed | 7 |
+| Should be removed | 7 — 7 fixed |
 | **Total scheduled** | **46** |
 | Flagged, not scheduled | 3 (+ 1 above) |

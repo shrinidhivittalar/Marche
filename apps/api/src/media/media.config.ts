@@ -5,15 +5,15 @@
 
 const mb = (n: number) => n * 1024 * 1024;
 
-export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-export const DOCUMENT_MIME_TYPES = ['application/pdf'] as const;
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+const DOCUMENT_MIME_TYPES = ['application/pdf'] as const;
 
 export const ALLOWED_MIME_TYPES: readonly string[] = [...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_TYPES];
 
 // Deliberately narrow. Archives and anything executable are excluded: they
 // are the formats that turn a file store into a malware host, and nothing
 // in Phase 1 needs them.
-export function isImage(mimeType: string): boolean {
+function isImage(mimeType: string): boolean {
   return (IMAGE_MIME_TYPES as readonly string[]).includes(mimeType);
 }
 
