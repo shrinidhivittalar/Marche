@@ -15,16 +15,21 @@ export const ClientOnboardingPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleContinue = async () => {
-    // Website and organisation size have no home on /profiles/me, so they stay
-    // on the local demo user. The company name is what a client is identified
-    // by, so it goes to the real profile's headline — the dashboard's
-    // "complete your profile" check reads the API, not localStorage, so
-    // anything saved only here is work the app can never see.
+    // Company name is what a client is identified by, so it goes to the real
+    // profile's headline — the dashboard's "complete your profile" check
+    // reads the API, not localStorage, so anything saved only here is work
+    // the app can never see. Website and org size now have a column too
+    // (schema.prisma); nothing reads them back yet, but they're saved
+    // rather than discarded.
     setError(null);
     setSaving(true);
     try {
       if (accessToken) {
-        await profilesApi.updateMe(accessToken, { headline: companyName.trim() || null });
+        await profilesApi.updateMe(accessToken, {
+          headline: companyName.trim() || null,
+          website: website.trim() || undefined,
+          orgSize: orgSize ?? undefined,
+        });
       }
       updateCurrentUser({ companyOrTitle: companyName, website, orgSize: orgSize ?? undefined });
       navigate('/client/dashboard');
