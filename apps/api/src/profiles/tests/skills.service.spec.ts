@@ -1,7 +1,16 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { SkillsService } from '../services/skills.service';
+import { AddSkillDto } from '../dto/add-skill.dto';
+import { SkillsRepository } from '../repositories/skills.repository';
 import type { ProfilesRepository } from '../repositories/profiles.repository';
-import type { SkillsRepository } from '../repositories/skills.repository';
+import type { PrismaService } from '../../prisma/prisma.service';
 
 function buildProfile(overrides: Record<string, unknown> = {}) {
   return { id: 'profile_1', userId: 'user_1', user: { role: 'PROVIDER' }, ...overrides };
@@ -45,7 +54,9 @@ describe('SkillsService', () => {
       profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
       skillsRepository.findSkillById.mockResolvedValue(null);
 
-      await expect(service.addSkill('user_1', 'bad-id')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.addSkill('user_1', { skillId: 'bad-id' } as never),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('rejects a duplicate skill on the same profile', async () => {
@@ -158,6 +169,29 @@ describe('SkillsService', () => {
     });
   });
 
+  describe('addSkill with neither field', () => {
+    it('refuses rather than looking up an absent name', async () => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+
+      await expect(service.addSkill('user_1', {} as never)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      // The bug this replaces: an absent name reached findSkillByName, which
+      // matched an arbitrary row and attached an unrelated skill.
+      expect(skillsRepository.findSkillByName).not.toHaveBeenCalled();
+      expect(skillsRepository.addSkill).not.toHaveBeenCalled();
+    });
+
+    it.each(['', '   '])('refuses %p as a typed name', async (name) => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+
+      await expect(service.addSkill('user_1', { name } as never)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(skillsRepository.createSkill).not.toHaveBeenCalled();
+    });
+  });
+
   describe('removeSkill', () => {
     it('rejects removing a skill association that belongs to a different profile', async () => {
       profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
@@ -171,5 +205,55 @@ describe('SkillsService', () => {
       );
       expect(skillsRepository.removeSkill).not.toHaveBeenCalled();
     });
+  });
+});
+
+// The DTO is where "exactly one of skillId or name" has to hold, because the
+// service only ever runs after validation has passed. Tested here directly
+// for that reason.
+describe('AddSkillDto', () => {
+  function errorsFor(body: Record<string, unknown>): string[] {
+    const dto = plainToInstance(AddSkillDto, body);
+    return validateSync(dto).flatMap((error) => Object.values(error.constraints ?? {}));
+  }
+
+  const SKILL_ID = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  it('accepts a skillId on its own', () => {
+    expect(errorsFor({ skillId: SKILL_ID })).toEqual([]);
+  });
+
+  it('accepts a typed name on its own', () => {
+    expect(errorsFor({ name: 'Drone piloting' })).toEqual([]);
+  });
+
+  it('rejects an empty body, which says nothing at all', () => {
+    // The regression: both properties are optional, so a rule attached to
+    // either was skipped entirely and {} validated clean.
+    expect(errorsFor({}).join(' ')).toMatch(/either skillId .* or name/);
+  });
+
+  it('rejects both fields together, which is ambiguous', () => {
+    expect(errorsFor({ skillId: SKILL_ID, name: 'Drone piloting' }).join(' ')).toMatch(/not both/);
+  });
+
+  it('rejects a whitespace-only name as no name at all', () => {
+    // Collapsed to '' by the transform, so it must not count as "one field
+    // was sent" and slip past the pair rule.
+    expect(errorsFor({ name: '   ' }).join(' ')).toMatch(/either skillId .* or name/);
+  });
+});
+
+describe('SkillsRepository.findSkillByName', () => {
+  it('never issues a match-anything query for a blank name', async () => {
+    const findFirst = jest.fn();
+    const repository = new SkillsRepository({
+      client: { skill: { findFirst } },
+    } as unknown as PrismaService);
+
+    await expect(repository.findSkillByName(undefined)).resolves.toBeNull();
+    await expect(repository.findSkillByName('   ')).resolves.toBeNull();
+    // Prisma would drop an undefined condition and return an arbitrary row.
+    expect(findFirst).not.toHaveBeenCalled();
   });
 });

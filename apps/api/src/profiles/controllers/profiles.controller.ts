@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../identity/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { ProfilesService } from '../services/profiles.service';
@@ -44,9 +45,16 @@ export class ProfilesController {
     return this.profilesService.getPublicProfileById(id, user.id);
   }
 
+  // Optional auth, not none: the page stays readable anonymously, but a
+  // signed-in caller is identified so the owner escape hatch in
+  // readableProfileWhere can fire. Without a viewer id a suspended owner —
+  // or one whose profile is PRIVATE — got a 404 on their own public page
+  // while logged in, and had no way to see what the public could not.
   @Get('u/:username')
-  @ApiOperation({ summary: 'Public profile page by username — no authentication required' })
-  getByUsername(@Param('username') username: string) {
-    return this.profilesService.getPublicProfileByUsername(username);
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Public profile page by username — authentication optional' })
+  @UseGuards(OptionalJwtAuthGuard)
+  getByUsername(@Param('username') username: string, @CurrentUser() user?: AuthenticatedUser) {
+    return this.profilesService.getPublicProfileByUsername(username, user?.id);
   }
 }

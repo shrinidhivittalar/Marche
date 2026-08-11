@@ -32,6 +32,8 @@ import {
 } from '@marche/ui';
 import { EventCategory, EnglishLevel } from '../../types';
 import { todayISODate } from '../../lib/formatTime';
+import { ApiError } from '../../lib/api';
+import { profilesApi } from '../../lib/marketplace-api';
 
 type Step =
   | 'welcome'
@@ -140,7 +142,6 @@ const PROFICIENCY_LEVELS: EnglishLevel[] = [
   'Native or bilingual',
 ];
 const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l, label: l }));
-const MARCHE_FEE_RATE = 0.1;
 
 function Stepper({ step, total }: { step: number; total: number }) {
   return (
@@ -255,7 +256,7 @@ function BrandHeader() {
 }
 
 export const ProviderOnboardingPage: React.FC = () => {
-  const { currentUser, updateCurrentUser, navigate } = useApp();
+  const { currentUser, updateCurrentUser, navigate, accessToken } = useApp();
   const [step, setStep] = useState<Step>('welcome');
   const [q1, setQ1] = useState<string | null>(null);
   const [q2, setQ2] = useState<string | null>(null);
@@ -290,6 +291,8 @@ export const ProviderOnboardingPage: React.FC = () => {
   const [hourlyRate, setHourlyRate] = useState<number>(currentUser.hourlyRate ?? 0);
   const [phone, setPhone] = useState(currentUser.phone ?? '');
   const [dateOfBirth, setDateOfBirth] = useState(currentUser.dateOfBirth ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -359,23 +362,50 @@ export const ProviderOnboardingPage: React.FC = () => {
     setLangName('');
   };
 
-  const handleFinish = () => {
-    updateCurrentUser({
-      categories,
-      skills,
-      companyOrTitle: title,
-      workExperience: experience.map(({ key: _key, ...e }) => e),
-      education: education.map(({ key: _key, ...e }) => e),
-      languages: languages.map(({ key: _key, ...l }) => l),
-      bio,
-      hourlyRate,
-      phone,
-      dateOfBirth,
-    });
-    navigate('/provider/dashboard');
+  const handleFinish = async () => {
+    // Title and bio are the two fields this wizard collects that also live on
+    // /profiles/me and that the dashboard's completeness check reads, so they
+    // go to the real API. Everything else this wizard collects — categories,
+    // free-text skills, work history, education, languages, rate, phone, date
+    // of birth — either has no column on the profile or has its own endpoint
+    // per row; those stay on the local demo user, editable in profile
+    // settings, rather than firing a dozen writes that can half-succeed
+    // behind one button.
+    setSaveError(null);
+    setSaving(true);
+    try {
+      if (accessToken) {
+        await profilesApi.updateMe(accessToken, {
+          headline: title.trim() || null,
+          bio: bio.trim() || null,
+        });
+      }
+      updateCurrentUser({
+        categories,
+        skills,
+        companyOrTitle: title,
+        workExperience: experience.map(({ key: _key, ...e }) => e),
+        education: education.map(({ key: _key, ...e }) => e),
+        languages: languages.map(({ key: _key, ...l }) => l),
+        bio,
+        hourlyRate,
+        phone,
+        dateOfBirth,
+      });
+      navigate('/provider/dashboard');
+    } catch (err) {
+      // Stay put and say so. Landing on a dashboard that still reads
+      // "your profile is incomplete" gives the user no idea what went wrong.
+      setSaveError(
+        err instanceof ApiError
+          ? err.message
+          : 'We could not save your profile. Please check your connection and try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const serviceFee = Math.round(hourlyRate * MARCHE_FEE_RATE * 100) / 100;
   const stepMeta = STEP_META[step];
 
   return (
@@ -958,7 +988,13 @@ export const ProviderOnboardingPage: React.FC = () => {
                 Clients will see this rate on your profile. You can adjust it any time.
               </p>
             </div>
-            <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
+            {/* The service-fee and "you'll get" rows are gone with the invented
+                10% commission behind them. Marché has never charged one — there
+                is no payments module — and the rest of the app says so
+                ("0% vendor commission"). SubmitProposalPage dropped the same
+                breakdown for the same reason. What is left is the rate itself,
+                which is the only number this step was ever entitled to state. */}
+            <div className="border border-border rounded-xl overflow-hidden">
               <div className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-sm font-semibold text-ink">Hourly rate</p>
@@ -976,21 +1012,6 @@ export const ProviderOnboardingPage: React.FC = () => {
                   />
                   <span className="text-xs text-ink-muted">/hr</span>
                 </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-bg">
-                <div>
-                  <p className="text-sm font-semibold text-ink">Service fee (10%)</p>
-                  <p className="text-xs text-ink-muted">Covers payment protection & support.</p>
-                </div>
-                <span className="text-sm text-ink-muted">
-                  -₹{serviceFee.toLocaleString('en-IN')}/hr
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-4">
-                <p className="text-sm font-semibold text-ink">You'll get</p>
-                <span className="text-sm font-bold text-primary">
-                  ₹{(hourlyRate - serviceFee).toLocaleString('en-IN')}/hr
-                </span>
               </div>
             </div>
             <StepFooter
@@ -1027,11 +1048,18 @@ export const ProviderOnboardingPage: React.FC = () => {
                 <PhoneInput value={phone} onChange={setPhone} />
               </div>
             </div>
+            {saveError && (
+              <p role="alert" data-testid="onboarding-error" className="text-sm text-danger">
+                {saveError}
+              </p>
+            )}
             <div className="flex items-center justify-between pt-2">
               <Button variant="outline" onClick={() => setStep('rate')}>
                 Back
               </Button>
-              <Button onClick={handleFinish}>Save & finish</Button>
+              <Button onClick={() => void handleFinish()} disabled={saving}>
+                {saving ? 'Saving…' : 'Save & finish'}
+              </Button>
             </div>
           </div>
         )}

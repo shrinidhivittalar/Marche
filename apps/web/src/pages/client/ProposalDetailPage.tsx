@@ -160,7 +160,12 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
 
         <button
           type="button"
-          onClick={() => navigate(`/profile/${provider.username ?? provider.id}`)}
+          // Always the profile id: /profile/:id renders PublicProfilePage, which
+          // resolves its param through GET /profiles/:id. Usernames are served by
+          // a different endpoint (GET /u/:username) on a route that does not exist
+          // here, so passing one only produced "Profile not found" for every
+          // provider who had set one. Every other link to this route uses the id.
+          onClick={() => navigate(`/profile/${provider.id}`)}
           className="text-xs text-primary font-semibold hover:underline cursor-pointer"
         >
           View {provider.displayName}’s profile

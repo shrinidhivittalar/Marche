@@ -99,13 +99,25 @@ export class ProfilesRepository {
   // owner adding their own entries, so unbounded growth only happens via
   // abuse, not normal use — a hard cap is enough to stop a single response
   // from returning thousands of rows.
-  withDetails(profileId: string) {
+  //
+  // viewerIsOwner is required rather than defaulted: this is the collection
+  // read behind every public profile page, and a forgotten argument here is
+  // the difference between honouring a PRIVATE portfolio piece and
+  // publishing it. Making the caller state which view it is building means
+  // the mistake is a type error rather than a leak. The owner's own reads
+  // (findByUserIdWithDetails, and this method with true) stay unfiltered —
+  // hiding a provider's private work from their own editor would leave them
+  // unable to see or undo the setting.
+  withDetails(profileId: string, viewerIsOwner: boolean) {
     const MAX_NESTED_ITEMS = 100;
     return this.prisma.client.profile.findUnique({
       where: { id: profileId },
       include: {
         portfolioItems: {
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            ...(viewerIsOwner ? {} : { visibility: 'PUBLIC' as const }),
+          },
           include: {
             images: { include: { media: { select: { objectKey: true, status: true } } } },
           },

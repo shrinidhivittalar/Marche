@@ -210,6 +210,24 @@ export class JobsRepository {
     return this.prisma.client.jobAttachment.deleteMany({ where: { id: attachmentId, jobId } });
   }
 
+  /**
+   * The provider profile hired on this requirement, or null if none is.
+   *
+   * Reads the Connection row rather than importing anything from Proposals:
+   * the dependency runs Proposals -> Jobs and must not be reversed. What is
+   * shared is the schema, not the module — Job has a `connection` relation,
+   * jobId is unique on it, so "who was hired for this job" is a fact the Job
+   * row can reach on its own.
+   *
+   * Only the id is selected: the caller is an access check, and everything
+   * else on a connection belongs to the module that owns it.
+   */
+  findHiredProviderProfileId(jobId: string): Promise<string | null> {
+    return this.prisma.client.connection
+      .findUnique({ where: { jobId }, select: { providerProfileId: true } })
+      .then((connection) => connection?.providerProfileId ?? null);
+  }
+
   countAttachments(jobId: string) {
     return this.prisma.client.jobAttachment.count({ where: { jobId } });
   }

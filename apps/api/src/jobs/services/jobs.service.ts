@@ -294,9 +294,25 @@ export class JobsService {
    *
    * Authenticated callers only, and never on the public requirement route:
    * a guest can read what a client is asking for, but not download their
-   * floor plan. The owner sees their own in any state; everyone else sees
-   * them only while the requirement is actually published, so cancelling
-   * withdraws the files along with the ask.
+   * floor plan.
+   *
+   * Three parties may read them, and the predicate is "is a party to this
+   * requirement", not "is this requirement still discoverable":
+   *
+   * - the owner, in any state;
+   * - the hired provider, in any state — they are the one person besides the
+   *   client who needs the brief most, and gating them on PUBLISHED would
+   *   take the files away at the exact moment accepting their proposal
+   *   flipped the requirement to FILLED;
+   * - anyone else, only while it is publicly visible, so cancelling
+   *   withdraws the files along with the ask.
+   *
+   * A provider who merely proposed and was not accepted keeps access only
+   * for as long as anyone else does. They saw the files while bidding, so
+   * this protects little in practice, but it is the boundary the rest of the
+   * module draws — no relationship, no standing — and honouring it here
+   * costs nothing. The hired provider is the only one who gained something
+   * the public filter cannot express.
    */
   async listAttachments(userId: string, jobId: string) {
     const job = await this.jobsRepository.findById(jobId);
@@ -308,12 +324,19 @@ export class JobsService {
     const isOwner = job.clientProfileId === profile.id;
 
     if (!isOwner) {
-      // Re-read through the public filter rather than checking status
-      // inline: that way "who may see this" has one definition, and a
-      // suspended client's attachments disappear with their requirement.
+      // Public filter first, because it is the common case — a provider
+      // reading a live requirement they might bid on. Re-read through it
+      // rather than checking status inline so "who may discover this" keeps
+      // one definition, and a suspended client's requirement still
+      // disappears from everyone who is not party to it.
       const visible = await this.jobsRepository.findPublicById(jobId);
       if (!visible) {
-        throw new ForbiddenException('You do not have access to this requirement');
+        // Not discoverable any more — but it may have stopped being
+        // discoverable *because this caller was hired for it*.
+        const hiredProviderProfileId = await this.jobsRepository.findHiredProviderProfileId(jobId);
+        if (hiredProviderProfileId !== profile.id) {
+          throw new ForbiddenException('You do not have access to this requirement');
+        }
       }
     }
 

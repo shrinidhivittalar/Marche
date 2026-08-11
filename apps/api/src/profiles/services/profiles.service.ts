@@ -180,7 +180,10 @@ export class ProfilesService {
       throw new ForbiddenException('This profile is private');
     }
 
-    const details = await this.profilesRepository.withDetails(profile.id);
+    // isOwner decides more than the private-profile gate above: it also
+    // decides whether the owner's PRIVATE portfolio pieces come back. This
+    // is the public view, so for anyone else they must not.
+    const details = await this.profilesRepository.withDetails(profile.id, isOwner);
 
     return {
       id: profile.id,

@@ -27,6 +27,8 @@ export class EducationService {
     }
     assertOwnership(existing.profileId, profile.id);
 
+    // Passed through as sent: an explicit null clears the field, an omitted
+    // one is undefined and Prisma leaves the stored value alone.
     return this.educationRepository.update(educationId, dto);
   }
 

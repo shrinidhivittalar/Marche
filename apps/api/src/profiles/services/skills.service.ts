@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { SkillsRepository } from '../repositories/skills.repository';
 import { assertOwnership, assertProviderRole } from '../profile-access.util';
@@ -57,7 +62,7 @@ export class SkillsService {
 
     const skill = dto.skillId
       ? await this.skillsRepository.findSkillById(dto.skillId)
-      : await this.resolveTypedSkill(dto.name as string);
+      : await this.resolveTypedSkill(dto.name);
 
     if (!skill) {
       throw new NotFoundException('Skill not found');
@@ -71,7 +76,15 @@ export class SkillsService {
     return this.skillsRepository.addSkill(profile.id, skill.id);
   }
 
-  private async resolveTypedSkill(name: string): Promise<Skill> {
+  private async resolveTypedSkill(name: string | undefined): Promise<Skill> {
+    // The DTO already refuses a request with neither field, so reaching here
+    // without a name means something upstream changed. Refuse loudly rather
+    // than look up an empty name: nothing good can come of continuing, and a
+    // blank name would otherwise be created as a skill row.
+    if (!name?.trim()) {
+      throw new BadRequestException('Send either skillId or name');
+    }
+
     const existing = await this.skillsRepository.findSkillByName(name);
     if (existing) return existing;
 

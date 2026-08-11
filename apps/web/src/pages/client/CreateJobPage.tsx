@@ -135,6 +135,16 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     enabled: Boolean(draftId && token),
   });
 
+  // The files already hanging off that draft. A separate request because the
+  // requirement itself does not carry them, and without it a resumed draft
+  // reports "None" while the files are still attached server-side — so a
+  // client re-uploads and ends up with duplicates.
+  const draftAttachments = useApiResource(
+    () => jobsApi.attachments(token, draftId as string),
+    [draftId, token],
+    { enabled: Boolean(draftId && token) },
+  );
+
   const [currentJobId, setCurrentJobId] = useState<string | null>(draftId ?? null);
   const [step, setStep] = useState<WizardStep>(1);
   const [attemptedNext, setAttemptedNext] = useState(false);
@@ -188,6 +198,26 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     setBudgetMin(Number(loaded.budgetMin ?? 0));
     setBudgetMax(Number(loaded.budgetMax ?? 0));
     setDeliverables(loaded.deliverables);
+  }
+
+  // Same once-per-draft seeding for the attachments. Each one carries its
+  // attachmentId, so removing a loaded file detaches it on the server
+  // instead of only disappearing from this list. Anything uploaded while
+  // the request was in flight is kept — the load must not undo it.
+  const [seededAttachmentsFrom, setSeededAttachmentsFrom] = useState<string | null>(null);
+  if (draftAttachments.data && draftId && seededAttachmentsFrom !== draftId) {
+    const loaded = draftAttachments.data;
+    setSeededAttachmentsFrom(draftId);
+    setAttachments((prev) => [
+      ...loaded.map((a) => ({
+        mediaId: a.mediaId,
+        // The API leaves fileName null for files uploaded without one; the
+        // row still needs something to name and to label its remove button.
+        fileName: a.fileName ?? 'Attachment',
+        attachmentId: a.id,
+      })),
+      ...prev,
+    ]);
   }
 
   const selectedCategory = (categories.data ?? []).find((c) => c.id === categoryId);

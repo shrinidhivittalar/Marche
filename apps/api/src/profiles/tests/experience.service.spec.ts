@@ -75,4 +75,46 @@ describe('ExperienceService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
+
+  describe('update', () => {
+    const finished = {
+      id: 'e_1',
+      profileId: 'profile_1',
+      startDate: new Date('2024-01-01'),
+      endDate: new Date('2024-06-01'),
+      currentlyWorking: false,
+    };
+
+    beforeEach(() => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+      experienceRepository.findById.mockResolvedValue(finished as never);
+      experienceRepository.update.mockResolvedValue({ id: 'e_1' } as never);
+    });
+
+    it('clears the end date and re-marks the entry current in one request', async () => {
+      await service.update('user_1', 'e_1', { endDate: null, currentlyWorking: true });
+
+      // null, not undefined — undefined would leave the stored end date in
+      // place and strand the entry as permanently finished.
+      expect(experienceRepository.update).toHaveBeenCalledWith(
+        'e_1',
+        expect.objectContaining({ endDate: null, currentlyWorking: true }),
+      );
+    });
+
+    it('leaves the stored end date alone when the field is omitted', async () => {
+      await service.update('user_1', 'e_1', { position: 'Senior Dev' });
+
+      expect(experienceRepository.update).toHaveBeenCalledWith(
+        'e_1',
+        expect.objectContaining({ endDate: undefined }),
+      );
+    });
+
+    it('still rejects marking an entry current while keeping its end date', async () => {
+      await expect(
+        service.update('user_1', 'e_1', { currentlyWorking: true }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
 });

@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   Validate,
@@ -67,7 +68,10 @@ export class SearchServicesDto extends PaginationQueryDto {
           .filter(Boolean)
       : value,
   )
-  @IsString({ each: true })
+  // Skill ids reach Prisma as uuid column values, so a non-uuid here is a
+  // database-level error rather than an empty result. Rejected at the
+  // boundary as a 400, the same way service.dto.ts validates the same ids.
+  @IsUUID(undefined, { each: true })
   skills?: string[];
 
   @ApiPropertyOptional({ description: "Matches the provider's stored location" })

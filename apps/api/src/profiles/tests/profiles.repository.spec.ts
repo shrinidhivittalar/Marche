@@ -108,6 +108,37 @@ describe('ProfilesRepository public reads', () => {
     expect(where.AND).toHaveLength(2);
   });
 
+  // A PRIVATE piece is the provider's own draft. The public view must not
+  // carry it, or the setting is decoration.
+  it('drops private portfolio items from the public details read', async () => {
+    const { repository, profile } = build();
+
+    await repository.withDetails('profile_1', false);
+
+    const include = profile.findUnique.mock.calls[0][0].include;
+    expect(include.portfolioItems.where).toEqual({ deletedAt: null, visibility: 'PUBLIC' });
+  });
+
+  // The other half of the rule: the owner still sees their private work,
+  // otherwise they could set the flag and never be able to unset it.
+  it('keeps private portfolio items for the owner', async () => {
+    const { repository, profile } = build();
+
+    await repository.withDetails('profile_1', true);
+
+    const include = profile.findUnique.mock.calls[0][0].include;
+    expect(include.portfolioItems.where).toEqual({ deletedAt: null });
+  });
+
+  it('does not filter the owner-only details read by portfolio visibility', async () => {
+    const { repository, profile } = build();
+
+    await repository.findByUserIdWithDetails('user_1');
+
+    const include = profile.findFirst.mock.calls[0][0].include;
+    expect(include.portfolioItems.where).toEqual({ deletedAt: null });
+  });
+
   // The uniqueness check deliberately sees every profile: a suspended user
   // still owns their username.
   it('does not filter the username uniqueness check by account state', async () => {

@@ -45,16 +45,21 @@ export class UpdateEducationDto {
   @MaxLength(150)
   degree?: string;
 
-  @ApiPropertyOptional()
+  // Null clears the field, matching how avatarMediaId clears on the profile
+  // (update-profile.dto.ts) and endDate on experience. Omitting the field
+  // leaves it unchanged, so without an explicit null a value entered once
+  // (a mistyped field of study, a graduation that never happened) could never
+  // be removed.
+  @ApiPropertyOptional({ description: 'Field of study, or null to remove it' })
   @IsOptional()
   @IsString()
   @MaxLength(150)
-  fieldOfStudy?: string;
+  fieldOfStudy?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Graduation year, or null to remove it' })
   @IsOptional()
   @IsInt()
   @Min(MIN_YEAR)
   @Max(new Date().getFullYear() + MAX_YEARS_AHEAD)
-  graduationYear?: number;
+  graduationYear?: number | null;
 }

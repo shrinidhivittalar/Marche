@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiHideProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsOptional,
@@ -30,7 +30,6 @@ export class AddSkillDto {
   @ApiPropertyOptional({ description: 'Id of a skill from the platform list' })
   @IsOptional()
   @IsUUID()
-  @Validate(SkillIdOrName)
   skillId?: string;
 
   /**
@@ -57,4 +56,18 @@ export class AddSkillDto {
   @MinLength(2)
   @MaxLength(50)
   name?: string;
+
+  /**
+   * Carrier for the pair rule above, and nothing else.
+   *
+   * The rule cannot hang off skillId or name: both are optional, and
+   * `@IsOptional()` makes class-validator skip *every* validator on a
+   * property that was not sent. Attached to either one, a body of `{}` —
+   * the case the rule exists to catch — validated clean and reached the
+   * service with neither field set. A property that is always defined is
+   * always visited, so the rule now fires for all four combinations.
+   */
+  @ApiHideProperty()
+  @Validate(SkillIdOrName)
+  readonly skillIdOrName: boolean = true;
 }

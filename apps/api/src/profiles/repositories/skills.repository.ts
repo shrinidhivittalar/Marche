@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { UserSkill } from '@marche/db';
+import type { Skill, UserSkill } from '@marche/db';
 
 @Injectable()
 export class SkillsRepository {
@@ -15,7 +15,13 @@ export class SkillsRepository {
    * skill fragmenting the list. "Photography", "photography" and
    * "PHOTOGRAPHY" must all resolve to the one row the filters already use.
    */
-  findSkillByName(name: string) {
+  findSkillByName(name: string | undefined): Promise<Skill | null> {
+    // Prisma drops an undefined condition instead of matching nothing, so an
+    // absent or blank name would leave `findFirst` with no filter at all and
+    // it would return an arbitrary skill. "No name" has no match by
+    // definition; it must never mean "any row".
+    if (!name?.trim()) return Promise.resolve(null);
+
     return this.prisma.client.skill.findFirst({
       where: { name: { equals: name, mode: 'insensitive' } },
     });
