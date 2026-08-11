@@ -35,7 +35,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   if (authLoading) {
     return (
       <Card className="p-10 text-center" data-testid="public-profile-loading">
-        <p className="text-muted">Loading…</p>
+        <p className="text-ink-muted">Loading…</p>
       </Card>
     );
   }
@@ -51,7 +51,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   if (profile.loading) {
     return (
       <Card className="p-10 text-center" data-testid="public-profile-loading">
-        <p className="text-muted">Loading profile…</p>
+        <p className="text-ink-muted">Loading profile…</p>
       </Card>
     );
   }
@@ -80,7 +80,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
       <button
         type="button"
         onClick={goBack}
-        className="flex items-center gap-2 text-sm text-muted hover:text-ink"
+        className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink"
         data-testid="public-profile-back"
       >
         <ArrowLeft className="w-4 h-4" /> Back
@@ -99,7 +99,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
             // A neutral placeholder, not a stock photo of a stranger.
             <div
               data-testid="public-avatar-placeholder"
-              className="w-20 h-20 rounded-2xl bg-surface-subtle border border-border flex items-center justify-center text-xl font-semibold text-muted"
+              className="w-20 h-20 rounded-2xl bg-surface-subtle border border-border flex items-center justify-center text-xl font-semibold text-ink-muted"
             >
               {p.displayName.charAt(0).toUpperCase()}
             </div>
@@ -121,12 +121,12 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
             </div>
 
             {p.headline && (
-              <p className="text-sm text-muted" data-testid="public-headline">
+              <p className="text-sm text-ink-muted" data-testid="public-headline">
                 {p.headline}
               </p>
             )}
 
-            <p className="text-xs text-muted flex items-center gap-3 flex-wrap">
+            <p className="text-xs text-ink-muted flex items-center gap-3 flex-wrap">
               {p.location && (
                 <span className="flex items-center gap-1" data-testid="public-location">
                   <MapPin className="w-3.5 h-3.5" />
@@ -149,7 +149,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
             exist (recorded in module2.md). Showing "0 completed projects"
             would read as a real signal about this provider rather than a
             missing feature, so the section says what it actually is. */}
-        <p className="text-xs text-muted" data-testid="public-stats-unavailable">
+        <p className="text-xs text-ink-muted" data-testid="public-stats-unavailable">
           Ratings and completed-project counts aren&apos;t available yet.
         </p>
       </Card>
@@ -198,7 +198,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
                   )}
                   <div className="p-4 space-y-1">
                     <p className="font-medium text-ink">{item.title}</p>
-                    <p className="text-xs text-muted">{item.description}</p>
+                    <p className="text-xs text-ink-muted">{item.description}</p>
                   </div>
                 </div>
               );
@@ -215,7 +215,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
               <p className="text-sm font-medium text-ink">
                 {exp.position} — {exp.company}
               </p>
-              <p className="text-xs text-muted">
+              <p className="text-xs text-ink-muted">
                 {new Date(exp.startDate).getFullYear()} –{' '}
                 {exp.currentlyWorking
                   ? 'Present'
@@ -223,7 +223,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
                     ? new Date(exp.endDate).getFullYear()
                     : '—'}
               </p>
-              {exp.description && <p className="text-xs text-muted mt-1">{exp.description}</p>}
+              {exp.description && <p className="text-xs text-ink-muted mt-1">{exp.description}</p>}
             </div>
           ))}
         </Card>

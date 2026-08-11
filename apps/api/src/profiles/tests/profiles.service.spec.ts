@@ -1,6 +1,19 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ProfilesService } from '../services/profiles.service';
+import { ProfilesController } from '../controllers/profiles.controller';
 import type { ProfilesRepository } from '../repositories/profiles.repository';
+
+function buildDetails(overrides: Record<string, unknown> = {}) {
+  return {
+    portfolioItems: [],
+    experiences: [],
+    educations: [],
+    certifications: [],
+    skills: [],
+    languages: [],
+    ...overrides,
+  };
+}
 
 function buildProfile(overrides: Record<string, unknown> = {}) {
   return {
@@ -181,6 +194,25 @@ describe('ProfilesService', () => {
       );
     });
 
+    // The repository, not the service, drops profiles whose owner is
+    // suspended or soft-deleted — so what matters here is that the viewer's
+    // id reaches it. Without it a suspended owner would be locked out of
+    // their own profile page rather than merely hidden from the public.
+    it('passes the requesting user through to the repository', async () => {
+      profilesRepository.findById.mockResolvedValue(null);
+      profilesRepository.findByUsername.mockResolvedValue(null);
+
+      await expect(service.getPublicProfileById('profile_1', 'user_1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.getPublicProfileByUsername('jane', 'user_1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+
+      expect(profilesRepository.findById).toHaveBeenCalledWith('profile_1', 'user_1');
+      expect(profilesRepository.findByUsername).toHaveBeenCalledWith('jane', 'user_1');
+    });
+
     it('rejects a private profile viewed by someone else', async () => {
       profilesRepository.findById.mockResolvedValue(
         buildProfile({ visibility: 'PRIVATE' }) as never,
@@ -229,5 +261,125 @@ describe('ProfilesService', () => {
         totalReviews: 0,
       });
     });
+
+    // The repository does the filtering; what the service owes it is an
+    // honest answer to "is this the owner looking". Get that wrong and a
+    // PRIVATE piece is either published to the world or hidden from the
+    // person who wrote it.
+    it('asks for the public portfolio when the viewer is not the owner', async () => {
+      profilesRepository.findByUsername.mockResolvedValue(buildProfile() as never);
+      profilesRepository.withDetails.mockResolvedValue(buildDetails() as never);
+
+      await service.getPublicProfileByUsername('jane', 'someone_else');
+
+      expect(profilesRepository.withDetails).toHaveBeenCalledWith('profile_1', false);
+    });
+
+    it('asks for the public portfolio for an anonymous viewer', async () => {
+      profilesRepository.findByUsername.mockResolvedValue(buildProfile() as never);
+      profilesRepository.withDetails.mockResolvedValue(buildDetails() as never);
+
+      await service.getPublicProfileByUsername('jane');
+
+      expect(profilesRepository.withDetails).toHaveBeenCalledWith('profile_1', false);
+    });
+
+    it('asks for the full portfolio when the owner views their own profile', async () => {
+      profilesRepository.findByUsername.mockResolvedValue(buildProfile() as never);
+      profilesRepository.withDetails.mockResolvedValue(buildDetails() as never);
+
+      await service.getPublicProfileByUsername('jane', 'user_1');
+
+      expect(profilesRepository.withDetails).toHaveBeenCalledWith('profile_1', true);
+    });
+
+    // End to end over the two halves of the fix: the repository filter is
+    // stubbed here the way the database would apply it, so what is asserted
+    // is that a private piece never reaches the public response body while
+    // the owner still gets it.
+    it('omits a private portfolio item from the public view but keeps it for the owner', async () => {
+      const PRIVATE_ITEM = { id: 'item_private', visibility: 'PRIVATE', images: [] };
+      const PUBLIC_ITEM = { id: 'item_public', visibility: 'PUBLIC', images: [] };
+      profilesRepository.findByUsername.mockResolvedValue(buildProfile() as never);
+      profilesRepository.withDetails.mockImplementation(
+        (_id: string, viewerIsOwner: boolean) =>
+          buildDetails({
+            portfolioItems: viewerIsOwner ? [PUBLIC_ITEM, PRIVATE_ITEM] : [PUBLIC_ITEM],
+          }) as never,
+      );
+
+      const publicView = await service.getPublicProfileByUsername('jane', 'someone_else');
+      const ownerView = await service.getPublicProfileByUsername('jane', 'user_1');
+
+      expect(publicView.portfolioItems).toHaveLength(1);
+      expect(ownerView.portfolioItems).toHaveLength(2);
+    });
+  });
+});
+
+// The controller is a passthrough, so the only thing worth asserting about
+// it is the thing that was wrong: /u/:username has to stay open to anonymous
+// callers and still hand a signed-in owner's id to the service. Without that
+// id the owner branch of readableProfileWhere cannot fire, and a suspended
+// owner gets a 404 on their own page.
+describe('ProfilesController /u/:username', () => {
+  let profilesService: { getPublicProfileByUsername: jest.Mock };
+  let controller: ProfilesController;
+
+  beforeEach(() => {
+    profilesService = { getPublicProfileByUsername: jest.fn().mockResolvedValue(null) };
+    controller = new ProfilesController(profilesService as never);
+  });
+
+  it('reads anonymously, with no viewer id', async () => {
+    await controller.getByUsername('jane', undefined);
+
+    expect(profilesService.getPublicProfileByUsername).toHaveBeenCalledWith('jane', undefined);
+  });
+
+  it('forwards a signed-in viewer so the owner escape hatch can fire', async () => {
+    await controller.getByUsername('jane', { id: 'user_1' } as never);
+
+    expect(profilesService.getPublicProfileByUsername).toHaveBeenCalledWith('jane', 'user_1');
+  });
+});
+
+// An anonymous read of a live public profile, and a suspended owner reading
+// their own — the two ends of the route, driven through the controller into
+// a real service so nothing between them is assumed.
+describe('/u/:username end to end', () => {
+  function wire(findByUsername: jest.Mock) {
+    const repository = {
+      findByUsername,
+      withDetails: jest.fn().mockResolvedValue(buildDetails()),
+    } as unknown as jest.Mocked<ProfilesRepository>;
+    const media = { signViewUrl: jest.fn().mockResolvedValue(null) };
+    return new ProfilesController(new ProfilesService(repository, media as never) as never);
+  }
+
+  it('serves an active public profile to an anonymous reader', async () => {
+    const controller = wire(jest.fn().mockResolvedValue(buildProfile()));
+
+    const result = await controller.getByUsername('jane', undefined);
+
+    expect(result).toMatchObject({ id: 'profile_1', displayName: 'Jane' });
+  });
+
+  // readableProfileWhere already hides the suspended account from everyone
+  // else; the repository is stubbed to that behaviour here, keyed on the
+  // viewer id the controller passes.
+  it('serves a suspended owner their own profile rather than a 404', async () => {
+    const controller = wire(
+      jest.fn((_username: string, viewerUserId?: string) =>
+        Promise.resolve(viewerUserId === 'user_1' ? buildProfile() : null),
+      ),
+    );
+
+    await expect(controller.getByUsername('jane', undefined)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(
+      controller.getByUsername('jane', { id: 'user_1' } as never),
+    ).resolves.toMatchObject({ id: 'profile_1' });
   });
 });

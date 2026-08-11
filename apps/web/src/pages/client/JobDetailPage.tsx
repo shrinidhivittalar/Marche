@@ -197,7 +197,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               {requirement.deliverables.map((deliverable) => (
                 <div
                   key={deliverable}
-                  className="p-3 bg-white border border-border rounded-xl text-xs text-ink flex items-center gap-2.5"
+                  className="p-3 bg-surface border border-border rounded-xl text-xs text-ink flex items-center gap-2.5"
                 >
                   <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                   <span>{deliverable}</span>
@@ -221,7 +221,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
                   href={file.url ?? undefined}
                   target="_blank"
                   rel="noreferrer"
-                  className={`p-3 bg-white border border-border rounded-xl text-xs text-ink flex items-center gap-2.5 ${
+                  className={`p-3 bg-surface border border-border rounded-xl text-xs text-ink flex items-center gap-2.5 ${
                     file.url ? 'hover:border-zinc-300 hover:shadow-xs transition-all' : 'opacity-60'
                   }`}
                 >

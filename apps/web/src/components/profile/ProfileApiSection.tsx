@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
+import { Button, Card, Combobox, Input, TextField, Textarea } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ImageUploader } from '../media/ImageUploader';
@@ -87,7 +87,7 @@ export const ProfileApiSection: React.FC = () => {
   if (profile.loading) {
     return (
       <Card className="p-8" data-testid="profile-loading">
-        <p className="text-muted">Loading your profile…</p>
+        <p className="text-ink-muted">Loading your profile…</p>
       </Card>
     );
   }
@@ -145,7 +145,7 @@ export const ProfileApiSection: React.FC = () => {
                 </Button>
               ))}
             </div>
-            <p className="text-sm text-muted" data-testid="availability-current">
+            <p className="text-sm text-ink-muted" data-testid="availability-current">
               Currently: {p.availabilityStatus}
             </p>
           </Card>
@@ -155,6 +155,9 @@ export const ProfileApiSection: React.FC = () => {
             availableSkills={availableSkills}
             disabled={saving}
             onAdd={(skillId) => run(() => profilesApi.addSkill(token, skillId), 'Skill added.')}
+            onAddNamed={(name) =>
+              run(() => profilesApi.addSkillByName(token, name), 'Skill added.')
+            }
             onRemove={(userSkillId) =>
               run(() => profilesApi.removeSkill(token, userSkillId), 'Skill removed.')
             }
@@ -332,7 +335,7 @@ function CoreProfileForm({
             Private
           </Button>
         </div>
-        <p className="text-xs text-muted" data-testid="visibility-explainer">
+        <p className="text-xs text-ink-muted" data-testid="visibility-explainer">
           {visibility === 'PUBLIC'
             ? 'Clients can find you in the marketplace and view your profile.'
             : 'Your profile is hidden and your services will not appear in marketplace search.'}
@@ -373,12 +376,14 @@ function SkillsCard({
   availableSkills,
   disabled,
   onAdd,
+  onAddNamed,
   onRemove,
 }: {
   profile: ApiProfile;
   availableSkills: { id: string; name: string }[];
   disabled: boolean;
   onAdd: (skillId: string) => void;
+  onAddNamed: (name: string) => void;
   onRemove: (userSkillId: string) => void;
 }) {
   const [selected, setSelected] = useState('');
@@ -387,7 +392,7 @@ function SkillsCard({
       <h2 className="text-lg font-semibold text-ink">Skills</h2>
       <div className="flex flex-wrap gap-2" data-testid="skill-list">
         {(profile.skills ?? []).length === 0 && (
-          <p className="text-sm text-muted" data-testid="skills-empty">
+          <p className="text-sm text-ink-muted" data-testid="skills-empty">
             No skills added yet.
           </p>
         )}
@@ -404,7 +409,7 @@ function SkillsCard({
               data-testid={`remove-skill-${entry.skill.name}`}
               disabled={disabled}
               onClick={() => onRemove(entry.id)}
-              className="text-muted hover:text-danger"
+              className="text-ink-muted hover:text-danger"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -412,19 +417,29 @@ function SkillsCard({
         ))}
       </div>
       <div className="flex gap-2">
-        <select
+        <Combobox
           value={selected}
-          onChange={(e) => setSelected(e.target.value)}
+          onChange={setSelected}
+          options={availableSkills.map((s) => ({ value: s.id, label: s.name }))}
+          placeholder="Choose a skill…"
+          searchPlaceholder="Search or type your own…"
+          emptyText="No matching skills."
+          disabled={disabled}
           data-testid="skill-select"
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-        >
-          <option value="">Choose a skill…</option>
-          {availableSkills.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+          className="flex-1 h-auto py-2 text-sm"
+          // Typing your own is the point: the seeded list cannot cover every
+          // craft. The server matches a typed name against the list
+          // case-insensitively before creating anything, so this adds a
+          // duplicate only if one genuinely does not exist yet.
+          //
+          // availableSkills already excludes skills the profile holds, so
+          // retyping one of those wouldn't match anything in `options` and
+          // would offer to "create" it — a name the server already has,
+          // just not attachable twice. existingLabels catches that case too.
+          existingLabels={(profile.skills ?? []).map((entry) => entry.skill.name)}
+          onCreate={(name) => onAddNamed(name)}
+          createLabel={(name) => `Add "${name}" as a new skill`}
+        />
         <Button
           disabled={disabled || !selected}
           data-testid="add-skill"
@@ -436,6 +451,10 @@ function SkillsCard({
           Add
         </Button>
       </div>
+      <p className="text-xs text-ink-muted">
+        Pick from the list where you can — those are what clients filter on. Anything missing, type
+        it and press Enter.
+      </p>
     </Card>
   );
 }
@@ -466,7 +485,7 @@ function ExperienceCard({
       <h2 className="text-lg font-semibold text-ink">Experience</h2>
       <div className="space-y-2" data-testid="experience-list">
         {(profile.experiences ?? []).length === 0 && (
-          <p className="text-sm text-muted" data-testid="experience-empty">
+          <p className="text-sm text-ink-muted" data-testid="experience-empty">
             No experience added yet.
           </p>
         )}
@@ -478,7 +497,7 @@ function ExperienceCard({
           >
             <span className="text-sm text-ink">
               {exp.position} — {exp.company}
-              <span className="block text-xs text-muted">
+              <span className="block text-xs text-ink-muted">
                 {new Date(exp.startDate).getFullYear()} –{' '}
                 {exp.currentlyWorking
                   ? 'Present'
@@ -493,7 +512,7 @@ function ExperienceCard({
               data-testid={`remove-experience-${exp.id}`}
               disabled={disabled}
               onClick={() => onRemove(exp.id)}
-              className="text-muted hover:text-danger"
+              className="text-ink-muted hover:text-danger"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -528,7 +547,7 @@ function ExperienceCard({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <label htmlFor="experience-start" className="text-xs text-muted">
+          <label htmlFor="experience-start" className="text-xs text-ink-muted">
             Start date
           </label>
           <Input
@@ -540,7 +559,7 @@ function ExperienceCard({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="experience-end" className="text-xs text-muted">
+          <label htmlFor="experience-end" className="text-xs text-ink-muted">
             End date
           </label>
           <Input
@@ -614,7 +633,7 @@ function EducationCard({
       <h2 className="text-lg font-semibold text-ink">Education</h2>
       <div className="space-y-2" data-testid="education-list">
         {(profile.educations ?? []).length === 0 && (
-          <p className="text-sm text-muted" data-testid="education-empty">
+          <p className="text-sm text-ink-muted" data-testid="education-empty">
             No education added yet.
           </p>
         )}
@@ -633,7 +652,7 @@ function EducationCard({
               data-testid={`remove-education-${edu.id}`}
               disabled={disabled}
               onClick={() => onRemove(edu.id)}
-              className="text-muted hover:text-danger"
+              className="text-ink-muted hover:text-danger"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -688,7 +707,7 @@ function LanguagesCard({
       <h2 className="text-lg font-semibold text-ink">Languages</h2>
       <div className="space-y-2" data-testid="language-list">
         {(profile.languages ?? []).length === 0 && (
-          <p className="text-sm text-muted" data-testid="languages-empty">
+          <p className="text-sm text-ink-muted" data-testid="languages-empty">
             No languages added yet.
           </p>
         )}
@@ -707,7 +726,7 @@ function LanguagesCard({
               data-testid={`remove-language-${lang.id}`}
               disabled={disabled}
               onClick={() => onRemove(lang.id)}
-              className="text-muted hover:text-danger"
+              className="text-ink-muted hover:text-danger"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -791,7 +810,7 @@ function PortfolioCard({
 
       <div className="space-y-2" data-testid="portfolio-list">
         {(profile.portfolioItems ?? []).length === 0 && (
-          <p className="text-sm text-muted" data-testid="portfolio-empty">
+          <p className="text-sm text-ink-muted" data-testid="portfolio-empty">
             No portfolio pieces yet. Add your best work so clients can see it.
           </p>
         )}
@@ -804,8 +823,8 @@ function PortfolioCard({
           >
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink">{item.title}</p>
-              <p className="text-xs text-muted truncate">{item.description}</p>
-              <p className="text-xs text-muted">
+              <p className="text-xs text-ink-muted truncate">{item.description}</p>
+              <p className="text-xs text-ink-muted">
                 {(item.images ?? []).length} image
                 {(item.images ?? []).length === 1 ? '' : 's'}
                 {item.projectDate ? ` · ${new Date(item.projectDate).getFullYear()}` : ''}
@@ -817,7 +836,7 @@ function PortfolioCard({
               data-testid={`remove-portfolio-${item.id}`}
               disabled={disabled}
               onClick={() => onRemove(item.id)}
-              className="text-muted hover:text-danger shrink-0"
+              className="text-ink-muted hover:text-danger shrink-0"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -852,7 +871,7 @@ function PortfolioCard({
       />
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="portfolio-date" className="text-xs text-muted">
+        <label htmlFor="portfolio-date" className="text-xs text-ink-muted">
           Project date (optional)
         </label>
         <Input

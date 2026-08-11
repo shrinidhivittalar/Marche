@@ -53,7 +53,7 @@ export class ConnectionsRepository {
    * POST route exists.
    */
   create(client: Prisma.TransactionClient, data: Prisma.ConnectionUncheckedCreateInput) {
-    return client.connection.create({ data });
+    return client.connection.create({ data, select: CONNECTION_FIELDS });
   }
 
   findById(id: string) {

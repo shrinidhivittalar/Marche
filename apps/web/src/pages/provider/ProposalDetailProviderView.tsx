@@ -1,5 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { ArrowLeft, Paperclip, Trash2, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarClock,
+  CalendarDays,
+  MapPin,
+  Paperclip,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -9,6 +17,7 @@ import { mediaApi } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
+import { formatEventWhen, formatDeadline } from '../../lib/formatJob';
 
 // A provider's own proposal.
 //
@@ -157,6 +166,46 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
           </p>
         </Card>
       )}
+
+      {/* The requirement's own facts, before the offer made against them.
+          A provider opening an accepted proposal is usually here to check
+          the date, not to re-read their own cover message. */}
+      <Card className="p-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">The requirement</h2>
+          <button
+            type="button"
+            onClick={() => navigate(`/provider/jobs/${mine.job.id}`)}
+            className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+          >
+            View the posting
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="flex items-start gap-2.5">
+            <CalendarDays className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-ink">{formatEventWhen(mine.job) ?? 'No date set'}</p>
+              <p className="text-[11px] text-ink-muted">Event</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-ink">{mine.job.location ?? 'Not stated'}</p>
+              <p className="text-[11px] text-ink-muted">Location</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <CalendarClock className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-ink">{formatDeadline(mine.job) ?? 'None'}</p>
+              <p className="text-[11px] text-ink-muted">Proposal deadline</p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card className="p-8 space-y-6">
         <h2 className="text-lg font-bold text-ink">What you offered</h2>

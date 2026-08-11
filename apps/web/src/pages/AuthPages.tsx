@@ -308,9 +308,14 @@ export const AuthSignUpPage: React.FC = () => {
         <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
           <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />
           <h1 className="text-xl font-extrabold text-ink tracking-tight">Check your email</h1>
+          {/* Wording has to hold for both outcomes the API allows: a new
+              account (verification link sent) and an address that already had
+              one (a notice sent instead). The API does not tell us which, on
+              purpose — saying "we sent a verification link" outright would be
+              wrong in the second case. */}
           <p className="text-xs text-ink-muted leading-relaxed">
-            We sent a verification link to <span className="font-semibold text-ink">{email}</span>.
-            Verify your address, then sign in to continue.
+            If <span className="font-semibold text-ink">{email}</span> can be used to sign up,
+            we&apos;ve sent it a verification link. Check your inbox, then sign in to continue.
           </p>
           <Button size="md" className="w-full" onClick={() => navigate('/auth/signin')}>
             Go to Sign In

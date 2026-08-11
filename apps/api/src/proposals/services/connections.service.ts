@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
+import { getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { ConnectionsRepository } from '../repositories/connections.repository';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
@@ -61,10 +62,6 @@ export class ConnectionsService {
   }
 
   private async getOwnProfile(userId: string) {
-    const profile = await this.profilesRepository.findByUserId(userId);
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
-    return profile;
+    return getOwnProfileOrThrow(this.profilesRepository, userId);
   }
 }

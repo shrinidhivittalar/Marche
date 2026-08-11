@@ -56,6 +56,15 @@ export interface ApiJob {
   status: JobStatus;
   publishedAt: string | null;
   cancelledAt?: string | null;
+  /**
+   * How many proposals this requirement has received.
+   *
+   * Owner reads only — `/jobs/me` and `/jobs/me/:id`. Absent on the public
+   * routes, because it is the client's own count of who replied and no part
+   * of discovery needs it. Counted per request rather than stored, so it
+   * cannot drift the way a cached column would.
+   */
+  proposalCount?: number;
   createdAt: string;
   category: { id: string; name: string; slug: string };
   clientProfile: {
@@ -126,6 +135,12 @@ export const jobsApi = {
 
   create: (token: string, body: JobBody) =>
     apiFetch<ApiJob>('/jobs', token, { method: 'POST', body: JSON.stringify(body) }),
+
+  rephraseField: (token: string, field: 'title' | 'description', text: string) =>
+    apiFetch<{ text: string }>('/jobs/rephrase', token, {
+      method: 'POST',
+      body: JSON.stringify({ field, text }),
+    }),
 
   update: (token: string, id: string, body: Partial<JobBody>) =>
     apiFetch<ApiJob>(`/jobs/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),

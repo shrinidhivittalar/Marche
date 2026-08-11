@@ -53,6 +53,41 @@ describe('EducationService', () => {
     await expect(service.remove('user_1', 'edu_1')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  describe('update', () => {
+    const stored = {
+      id: 'edu_1',
+      profileId: 'profile_1',
+      fieldOfStudy: 'Physics',
+      graduationYear: 2020,
+    };
+
+    beforeEach(() => {
+      profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
+      educationRepository.findById.mockResolvedValue(stored as never);
+      educationRepository.update.mockResolvedValue({ id: 'edu_1' } as never);
+    });
+
+    it('clears the optional fields on an explicit null', async () => {
+      await service.update('user_1', 'edu_1', { fieldOfStudy: null, graduationYear: null });
+
+      // null, not undefined — undefined would leave the stored values in place
+      // and make a wrongly entered field of study or year impossible to remove.
+      expect(educationRepository.update).toHaveBeenCalledWith(
+        'edu_1',
+        expect.objectContaining({ fieldOfStudy: null, graduationYear: null }),
+      );
+    });
+
+    it('leaves the stored optional fields alone when they are omitted', async () => {
+      await service.update('user_1', 'edu_1', { degree: 'MSc' });
+
+      expect(educationRepository.update).toHaveBeenCalledWith(
+        'edu_1',
+        expect.not.objectContaining({ fieldOfStudy: expect.anything() }),
+      );
+    });
+  });
+
   it('throws NotFoundException for a missing entry', async () => {
     profilesRepository.findByUserId.mockResolvedValue(buildProfile() as never);
     educationRepository.findById.mockResolvedValue(null);

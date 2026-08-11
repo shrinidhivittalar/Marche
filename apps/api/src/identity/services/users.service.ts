@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UsersRepository } from '../repositories/users.repository';
-import type { PublicUser } from './auth.service';
+import { toPublicUser, type PublicUser } from './auth.service';
 
 @Injectable()
 export class UsersService {
@@ -11,12 +11,6 @@ export class UsersService {
     if (!user || user.deletedAt) {
       throw new NotFoundException('User not found');
     }
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      emailVerified: user.emailVerifiedAt !== null,
-    };
+    return toPublicUser(user);
   }
 }

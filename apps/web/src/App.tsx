@@ -44,7 +44,6 @@ import { ClientOnboardingPage } from './pages/client/ClientOnboardingPage';
 import { JobDetailPage } from './pages/client/JobDetailPage';
 import { ProposalDetailPage } from './pages/client/ProposalDetailPage';
 import { ContractDetailPage } from './pages/client/ContractDetailPage';
-import { SearchTalentPage } from './pages/client/SearchTalentPage';
 import { YourHiresPage } from './pages/client/freelancers/YourHiresPage';
 import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
 import { ReferFreelancersPage } from './pages/client/freelancers/ReferFreelancersPage';
@@ -78,7 +77,13 @@ import { ServiceDetailPage } from './pages/marketplace/ServiceDetailPage';
 
 const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
-  '/client/search': () => <SearchTalentPage />,
+  // The client's "Search" nav lands here, on the same API-backed browse
+  // screen as /marketplace. It used to render SearchTalentPage, whose rows
+  // came from mock fixtures while its links pointed at the real
+  // /profiles/:id — so every result was a "Profile not found" dead end.
+  // That page is gone; this one searches real services and real providers,
+  // and its provider cards carry profile ids the profile route can resolve.
+  '/client/search': () => <BrowseServicesPage />,
   '/client/freelancers/hired': () => <YourHiresPage />,
   '/client/freelancers/saved': () => <SavedTalentPage />,
   '/client/freelancers/refer': () => <ReferFreelancersPage />,
@@ -196,7 +201,7 @@ function AppContent() {
         className="h-screen bg-bg text-ink flex items-center justify-center font-sans"
         data-testid="app-auth-loading"
       >
-        <p className="text-muted text-sm">Loading…</p>
+        <p className="text-ink-muted text-sm">Loading…</p>
       </div>
     );
   }

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Search,
   X,
-  Heart,
   ThumbsDown,
   SlidersHorizontal,
   Megaphone,
@@ -26,92 +25,104 @@ import {
   Checkbox,
 } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
-import { formatEventSchedule } from '../../lib/formatTime';
-import { formatBudget } from '../../lib/formatBudget';
-import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
-import { useJobFacets } from '../../hooks/useJobFacets';
+import {
+  isProfileComplete as computeIsProfileComplete,
+  isApiProfileComplete,
+} from '../../lib/profileCompleteness';
+import { useApiResource } from '../../hooks/useApiResource';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { profilesApi, marketplaceApi } from '../../lib/marketplace-api';
+import { jobsApi } from '../../lib/jobs-api';
+import { formatJobBudget, formatEventWhen, formatDeadline, postedAgo } from '../../lib/formatJob';
+import { LOCATIONS } from '../../data/categoryOptions';
 
-type FeedTab = 'best' | 'recent' | 'saved' | 'invites';
+// The provider landing feed, on the real Jobs API — the same source
+// SearchJobsPage, JobDetailProviderView and MyWorkPage already read. It used
+// to render mock requirements, so the ids on its cards could never resolve
+// against GET /jobs/:id and "View Full Details" always landed on
+// "Requirement not found".
+//
+// What the mock offered and the API cannot back, therefore removed rather
+// than faked:
+//
+// - "Best matches". Nothing ranks requirements in Phase 1, and sorting an
+//   arbitrary page client-side would be a relevance claim with no relevance
+//   behind it. The feed is newest-first and says so.
+// - The saved tab and the heart. Saving was never persisted; with a
+//   paginated feed a "Saved" list could only ever show what happens to be on
+//   the current page, which is worse than not offering it.
+// - Invites. There is no invitation endpoint, so a permanently empty tab
+//   only promises a feature that does not exist.
+// - Facet counts on the filters. They were counted off the full mock array;
+//   the server would have to aggregate them and Module 4 has no such route.
+//
+// "Not interested" stays: it is local, applied after the fetch so it cannot
+// skew the server's page, exactly as on SearchJobsPage.
+
+const FEED_LIMIT = 12;
 
 export const ProviderHomePage: React.FC = () => {
-  const {
-    currentUser,
-    jobs,
-    navigate,
-    searchQuery,
-    setSearchQuery,
-    selectedCategoryFilter,
-    setSelectedCategoryFilter,
-  } = useApp();
+  const { currentUser, navigate, searchQuery, setSearchQuery, accessToken } = useApp();
 
-  const isProfileComplete = computeIsProfileComplete(currentUser);
+  // The real profile, not the demo user — the editor writes to /profiles/me
+  // once signed in, so completeness measured against the mock fields could
+  // never become true and these notices never went away.
+  //
+  // Treated as complete while loading, so a provider who finished long ago
+  // does not see the banner flash on every visit.
+  const myProfile = useApiResource(() => profilesApi.me(accessToken as string), [accessToken], {
+    enabled: Boolean(accessToken),
+  });
+  const isProfileComplete = accessToken
+    ? myProfile.loading || isApiProfileComplete(myProfile.data)
+    : computeIsProfileComplete(currentUser);
 
-  // ---- Upwork-inspired home feed state ----
   const [noticeDismissed, setNoticeDismissed] = useState(false);
-  const [feedTab, setFeedTab] = useState<FeedTab>('best');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [locationFilter, setLocationFilter] = useState('All');
-  const [pendingCategory, setPendingCategory] = useState(selectedCategoryFilter);
-  const [pendingLocation, setPendingLocation] = useState(locationFilter);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [categorySlug, setCategorySlug] = useState('');
+  const [location, setLocation] = useState('');
+  const [pendingCategory, setPendingCategory] = useState('');
+  const [pendingLocation, setPendingLocation] = useState('');
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const selectedJob = selectedJobId
-    ? jobs.find((r) => r.id === selectedJobId)
-    : undefined;
 
-  const toggleSaved = (id: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  // Typing must not fire a request per keystroke.
+  const debouncedQuery = useDebouncedValue(searchQuery, 300);
 
-  const dismissJob = (id: string) => {
-    setDismissedIds((prev) => new Set(prev).add(id));
-  };
+  // Real categories: the API matches on a seeded slug, not on the display
+  // names the mock filter used.
+  const categories = useApiResource(() => marketplaceApi.categories(), []);
 
-  const { searchMatched, categoryCounts, locationCounts } = useJobFacets(
-    jobs,
-    dismissedIds,
-    searchQuery,
+  const jobs = useApiResource(
+    () =>
+      jobsApi.search({
+        q: debouncedQuery || undefined,
+        category: categorySlug || undefined,
+        location: location || undefined,
+        sort: 'newest',
+        limit: FEED_LIMIT,
+      }),
+    [debouncedQuery, categorySlug, location],
   );
 
-  const filteredFeed = searchMatched.filter((req) => {
-    const matchesCategory =
-      selectedCategoryFilter === 'All' || req.category === selectedCategoryFilter;
-    const matchesLocation =
-      locationFilter === 'All' || req.location.toLowerCase().includes(locationFilter.toLowerCase());
-    return matchesCategory && matchesLocation;
-  });
-
-  const feedItems =
-    feedTab === 'saved'
-      ? filteredFeed.filter((r) => savedIds.has(r.id))
-      : feedTab === 'recent'
-      ? [...filteredFeed].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      : filteredFeed; // 'best' — default relevance order; 'invites' handled separately below
+  const feedItems = (jobs.data?.items ?? []).filter((job) => !dismissedIds.has(job.id));
+  const selectedJob = feedItems.find((job) => job.id === selectedJobId);
 
   const openFiltersModal = () => {
-    setPendingCategory(selectedCategoryFilter);
-    setPendingLocation(locationFilter);
+    setPendingCategory(categorySlug);
+    setPendingLocation(location);
     setFiltersOpen(true);
   };
 
   const applyFilters = () => {
-    setSelectedCategoryFilter(pendingCategory);
-    setLocationFilter(pendingLocation);
+    setCategorySlug(pendingCategory);
+    setLocation(pendingLocation);
     setFiltersOpen(false);
   };
 
   const clearFilters = () => {
-    setPendingCategory('All');
-    setPendingLocation('All');
+    setPendingCategory('');
+    setPendingLocation('');
   };
 
   return (
@@ -167,119 +178,96 @@ export const ProviderHomePage: React.FC = () => {
       {/* Jobs Feed */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-bold text-ink">Jobs you might like</h2>
+          <h2 className="text-lg font-bold text-ink">Latest jobs</h2>
           <p className="text-xs text-ink-muted mt-0.5">
-            Browse open client requests that match your services. Ordered by relevance.
+            The newest open client requirements. Search the full board for more.
           </p>
         </div>
 
         <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2">
-            {(
-              [
-                ['best', 'Best matches'],
-                ['recent', 'Most recent'],
-                ['saved', `Saved (${filteredFeed.filter((r) => savedIds.has(r.id)).length})`],
-                ['invites', 'Invites'],
-              ] as [FeedTab, string][]
-            ).map(([tab, label]) => (
-              <button
-                key={tab}
-                onClick={() => setFeedTab(tab)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                  feedTab === tab
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'bg-white text-ink-muted hover:text-ink border border-border'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <span className="text-xs text-ink-muted">
+            {jobs.loading ? 'Loading…' : `${jobs.data?.total ?? 0} open requirements`}
+          </span>
 
-          <button
-            onClick={openFiltersModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-xs font-medium text-primary hover:bg-surface-subtle transition-colors cursor-pointer"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            Filters
-            {(selectedCategoryFilter !== 'All' || locationFilter !== 'All') && (
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openFiltersModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-xs font-medium text-primary hover:bg-surface-subtle transition-colors cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Filters
+              {(categorySlug !== '' || location !== '') && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
+            </button>
+            <button
+              onClick={() => navigate('/provider/search')}
+              className="px-3 py-1.5 rounded-full border border-border text-xs font-medium text-primary hover:bg-surface-subtle transition-colors cursor-pointer"
+            >
+              Browse all
+            </button>
+          </div>
         </div>
 
-        {feedTab === 'invites' ? (
+        {jobs.error ? (
           <EmptyState
-            title="No invitations yet"
-            description="When clients invite you directly to bid on a job, it will show up here."
+            title="Requirements could not be loaded"
+            description={jobs.error}
+            actionLabel="Try again"
+            onAction={() => void jobs.refetch()}
           />
-        ) : feedItems.length === 0 ? (
+        ) : !jobs.loading && feedItems.length === 0 ? (
           <EmptyState
-            title={feedTab === 'saved' ? 'No saved jobs' : 'No jobs match your filters'}
-            description={
-              feedTab === 'saved'
-                ? 'Tap the heart icon on a job to save it here for later.'
-                : 'Try adjusting your keyword search or category filters.'
-            }
+            title="No jobs match your filters"
+            description="Try adjusting your keyword search or category filters."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {feedItems.map((req) => (
+            {feedItems.map((job) => (
               <div
-                key={req.id}
-                onClick={() => setSelectedJobId(req.id)}
+                key={job.id}
+                onClick={() => setSelectedJobId(job.id)}
                 className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-surface-subtle text-[11px] font-bold text-primary border border-border">
-                    {req.category}
+                    {job.category.name}
                   </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        dismissJob(req.id);
-                      }}
-                      title="Not interested"
-                      className="text-zinc-400 hover:text-ink cursor-pointer"
-                    >
-                      <ThumbsDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSaved(req.id);
-                      }}
-                      title="Save"
-                      className={`cursor-pointer ${savedIds.has(req.id) ? 'text-rose-500' : 'text-zinc-400 hover:text-rose-500'}`}
-                    >
-                      <Heart className="w-4 h-4" fill={savedIds.has(req.id) ? 'currentColor' : 'none'} />
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDismissedIds((prev) => new Set(prev).add(job.id));
+                    }}
+                    title="Not interested"
+                    className="text-zinc-400 hover:text-ink cursor-pointer shrink-0"
+                  >
+                    <ThumbsDown className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <h3 className="text-sm font-bold text-ink line-clamp-2 leading-snug">{req.title}</h3>
+                <h3 className="text-sm font-bold text-ink line-clamp-2 leading-snug">
+                  {job.title}
+                </h3>
 
                 <p className="text-xs text-ink-muted line-clamp-3 leading-relaxed flex-1">
-                  {req.description}
+                  {job.description}
                 </p>
 
                 <div className="space-y-1.5 text-xs text-ink-muted pt-2 border-t border-border">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-primary">
-                      {formatBudget(req)}
-                    </span>
-                    <span className="shrink-0">{req.proposalsCount} proposals</span>
+                    <span className="font-semibold text-primary">{formatJobBudget(job)}</span>
+                    <span className="shrink-0">{postedAgo(job.publishedAt ?? job.createdAt)}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
-                    <span className="truncate">{req.location}</span>
-                  </div>
-                  {req.clientVerified && (
+                  {job.location && (
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
+                      <span className="truncate">{job.location}</span>
+                    </div>
+                  )}
+                  {job.clientProfile.verifiedAt && (
                     <span className="flex items-center gap-1 text-primary font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      Payment Verified
+                      Verified client
                     </span>
                   )}
                 </div>
@@ -290,22 +278,19 @@ export const ProviderHomePage: React.FC = () => {
       </div>
 
       {/* Job Overview Dialog */}
-      <Dialog
-        open={!!selectedJobId}
-        onOpenChange={(open) => !open && setSelectedJobId(null)}
-      >
+      <Dialog open={!!selectedJobId} onOpenChange={(open) => !open && setSelectedJobId(null)}>
         <DialogContent className="max-w-lg">
           {selectedJob && (
             <>
               <DialogHeader>
                 <div>
                   <span className="inline-block px-2.5 py-0.5 rounded-full bg-surface-subtle text-[11px] font-bold text-primary border border-border mb-2">
-                    {selectedJob.category}
+                    {selectedJob.category.name}
                   </span>
                   <DialogTitle>{selectedJob.title}</DialogTitle>
                   <DialogDescription>
-                    Posted {new Date(selectedJob.createdAt).toLocaleDateString()} •{' '}
-                    {selectedJob.proposalsCount} proposals
+                    {postedAgo(selectedJob.publishedAt ?? selectedJob.createdAt)} •{' '}
+                    {selectedJob.clientProfile.displayName}
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -315,44 +300,35 @@ export const ProviderHomePage: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 bg-bg border border-border rounded-xl">
-                    <span className="block text-[10px] text-ink-muted uppercase font-mono">Budget</span>
-                    <span className="font-bold text-primary">
-                      {formatBudget(selectedJob)}
+                    <span className="block text-[10px] text-ink-muted uppercase font-mono">
+                      Budget
                     </span>
+                    <span className="font-bold text-primary">{formatJobBudget(selectedJob)}</span>
                   </div>
-                  <div className="p-3 bg-bg border border-border rounded-xl">
-                    <span className="flex items-center gap-1 text-[10px] text-ink-muted uppercase font-mono">
-                      <Calendar className="w-3 h-3" /> Event Schedule
-                    </span>
-                    <span className="font-semibold text-ink">
-                      {formatEventSchedule(
-                        selectedJob.eventDate,
-                        selectedJob.timingMode,
-                        selectedJob.eventStartTime,
-                        selectedJob.eventEndTime,
-                      )}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="font-semibold text-ink">{selectedJob.location}</span>
-                  </div>
-                  <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
-                    <CalendarClock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span className="font-semibold text-amber-700">
-                      Due {selectedJob.proposalDeadline}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-ink-muted">
-                  {selectedJob.clientVerified && (
-                    <span className="flex items-center gap-1 text-primary font-semibold">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Payment Verified
-                    </span>
+                  {/* Each of these is optional on the API, so it is only shown
+                      when the client actually stated it. */}
+                  {formatEventWhen(selectedJob) && (
+                    <div className="p-3 bg-bg border border-border rounded-xl">
+                      <span className="flex items-center gap-1 text-[10px] text-ink-muted uppercase font-mono">
+                        <Calendar className="w-3 h-3" /> Event Schedule
+                      </span>
+                      <span className="font-semibold text-ink">{formatEventWhen(selectedJob)}</span>
+                    </div>
                   )}
-                  <span>{selectedJob.clientCompany || selectedJob.clientName}</span>
+                  {selectedJob.location && (
+                    <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <span className="font-semibold text-ink">{selectedJob.location}</span>
+                    </div>
+                  )}
+                  {formatDeadline(selectedJob) && (
+                    <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
+                      <CalendarClock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="font-semibold text-amber-700">
+                        Due {formatDeadline(selectedJob)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </DialogBody>
 
@@ -384,39 +360,65 @@ export const ProviderHomePage: React.FC = () => {
             <div>
               <DialogTitle>Filters</DialogTitle>
               <DialogDescription>
-                Filters will only apply to "Best matches" and "Most recent" searches.
+                The feed shows the newest requirements matching your filters.
               </DialogDescription>
             </div>
           </DialogHeader>
 
           <DialogBody className="space-y-6">
+            {/* Single-select, because the API filters on one category slug and
+                one location. Kept as checkboxes to preserve the look, but they
+                behave as radios — picking one clears the rest. */}
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wide">Category</h3>
               <div className="space-y-2.5">
-                {categoryCounts.map(({ value, count }) => (
-                  <label key={value} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                <label className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                  <Checkbox
+                    checked={pendingCategory === ''}
+                    onCheckedChange={() => setPendingCategory('')}
+                  />
+                  <span className="flex-1">All categories</span>
+                </label>
+                {(categories.data ?? []).map((category) => (
+                  <label
+                    key={category.id}
+                    className="flex items-center gap-2.5 text-xs text-ink cursor-pointer"
+                  >
                     <Checkbox
-                      checked={pendingCategory === value}
-                      onCheckedChange={(checked) => setPendingCategory(checked ? value : 'All')}
+                      checked={pendingCategory === category.slug}
+                      onCheckedChange={(checked) =>
+                        setPendingCategory(checked ? category.slug : '')
+                      }
                     />
-                    <span className="flex-1">{value}</span>
-                    <span className="text-ink-muted">({count})</span>
+                    <span className="flex-1">{category.name}</span>
                   </label>
                 ))}
+                {categories.error && (
+                  <p className="text-[11px] text-danger">Categories could not be loaded.</p>
+                )}
               </div>
             </div>
 
             <div className="space-y-3 pt-4 border-t border-border">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wide">Location</h3>
               <div className="space-y-2.5">
-                {locationCounts.map(({ value, label, count }) => (
-                  <label key={value} className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                <label className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                  <Checkbox
+                    checked={pendingLocation === ''}
+                    onCheckedChange={() => setPendingLocation('')}
+                  />
+                  <span className="flex-1">Anywhere</span>
+                </label>
+                {LOCATIONS.map((loc) => (
+                  <label
+                    key={loc.value}
+                    className="flex items-center gap-2.5 text-xs text-ink cursor-pointer"
+                  >
                     <Checkbox
-                      checked={pendingLocation === value}
-                      onCheckedChange={(checked) => setPendingLocation(checked ? value : 'All')}
+                      checked={pendingLocation === loc.value}
+                      onCheckedChange={(checked) => setPendingLocation(checked ? loc.value : '')}
                     />
-                    <span className="flex-1">{label}</span>
-                    <span className="text-ink-muted">({count})</span>
+                    <span className="flex-1">{loc.label}</span>
                   </label>
                 ))}
               </div>

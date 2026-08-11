@@ -284,7 +284,7 @@ Not responsible for:
 
 - Proposal Submission — **[Updated]** moved to the Proposals module below.
 - Marking a requirement `FILLED` **as a client action** — **[New]** the
-  transition exists (`JobsService.markFilled`) and is exported, but there is
+  transition exists (`JobsService.claimFilled`) and is exported, but there is
   no route to it. It is the consequence of accepting a proposal, so it
   belongs to the workflow that accepts one; a client declaring their own job
   filled would let the two sides of the same hire disagree.
@@ -311,7 +311,7 @@ Responsible for:
 Not responsible for:
 
 - Requirements — read from Jobs, and mutated only through the one exported
-  transition (`markFilled`).
+  transition (`claimFilled`).
 - Provider identity or professional data — read from Profiles, never written.
 - Contracts, messaging, payments — these consume the Connection later; the
   Connection itself carries no workflow.
@@ -403,7 +403,7 @@ Modules should never directly manipulate another module's internal business logi
 
 ```
 Proposals ──reads──→ Jobs, Profiles, Media
-Proposals ──calls──→ JobsService.markFilled   (the only write it makes outside its own tables)
+Proposals ──calls──→ JobsService.claimFilled   (the only write it makes outside its own tables)
 Jobs      ──────────→ (nothing in Proposals)
 ```
 

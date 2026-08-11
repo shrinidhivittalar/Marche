@@ -1,9 +1,28 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { SkillsRepository } from '../repositories/skills.repository';
 import { assertOwnership, assertProviderRole } from '../profile-access.util';
 import type { PaginationQueryDto } from '../dto/pagination-query.dto';
+import type { AddSkillDto } from '../dto/add-skill.dto';
 import type { Skill, UserSkill } from '@marche/db';
+
+// Postgres' unique-violation code, surfaced by Prisma. Skill.name is unique,
+// so two providers typing the same new skill at once is a real race.
+const UNIQUE_VIOLATION = 'P2002';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
+}
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -28,21 +47,60 @@ export class SkillsService {
     return { items, total, page, limit };
   }
 
-  async addSkill(userId: string, skillId: string): Promise<UserSkill> {
+  /**
+   * Adds a skill by id (picked from the platform list) or by name (typed by
+   * the provider).
+   *
+   * A typed name is matched against the list case-insensitively before
+   * anything is created, so "photography" attaches the same row the filters
+   * already use rather than a near-duplicate beside it. Only a genuinely new
+   * name creates a skill.
+   */
+  async addSkill(userId: string, dto: AddSkillDto): Promise<UserSkill> {
     const profile = await this.getOwnProfile(userId);
     assertProviderRole(profile.user.role);
 
-    const skill = await this.skillsRepository.findSkillById(skillId);
+    const skill = dto.skillId
+      ? await this.skillsRepository.findSkillById(dto.skillId)
+      : await this.resolveTypedSkill(dto.name);
+
     if (!skill) {
       throw new NotFoundException('Skill not found');
     }
 
-    const existing = await this.skillsRepository.findUserSkill(profile.id, skillId);
+    const existing = await this.skillsRepository.findUserSkill(profile.id, skill.id);
     if (existing) {
       throw new ConflictException('That skill has already been added to this profile');
     }
 
-    return this.skillsRepository.addSkill(profile.id, skillId);
+    return this.skillsRepository.addSkill(profile.id, skill.id);
+  }
+
+  private async resolveTypedSkill(name: string | undefined): Promise<Skill> {
+    // The DTO already refuses a request with neither field, so reaching here
+    // without a name means something upstream changed. Refuse loudly rather
+    // than look up an empty name: nothing good can come of continuing, and a
+    // blank name would otherwise be created as a skill row.
+    if (!name?.trim()) {
+      throw new BadRequestException('Send either skillId or name');
+    }
+
+    const existing = await this.skillsRepository.findSkillByName(name);
+    if (existing) return existing;
+
+    try {
+      return await this.skillsRepository.createSkill(name);
+    } catch (error) {
+      // Two providers typing the same new skill at the same moment: the
+      // unique constraint on Skill.name decides, and the loser reads back
+      // the winner's row rather than failing on something the caller did
+      // nothing wrong to cause.
+      if (isUniqueViolation(error)) {
+        const winner = await this.skillsRepository.findSkillByName(name);
+        if (winner) return winner;
+      }
+      throw error;
+    }
   }
 
   async removeSkill(userId: string, userSkillId: string): Promise<void> {

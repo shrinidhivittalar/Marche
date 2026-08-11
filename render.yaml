@@ -53,11 +53,22 @@ services:
         sync: false
 
       # Transactional email for verification and password-reset links.
-      # Without RESEND_API_KEY the links are logged instead of sent, which
-      # means nobody can verify their email and therefore nobody can log in.
-      - key: RESEND_API_KEY
+      # Without SMTP_HOST the links are logged instead of sent, which means
+      # nobody can verify their email and therefore nobody can log in.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
         sync: false
       - key: EMAIL_FROM
+        sync: false
+
+      # Powers "Rephrase with AI" on the job-posting form. Without it that
+      # one button errors; nothing else on the site depends on it.
+      - key: GROQ_API_KEY
         sync: false
 
       - key: LOG_LEVEL

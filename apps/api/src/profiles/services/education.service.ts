@@ -16,7 +16,16 @@ export class EducationService {
     const profile = await this.getOwnProfile(userId);
     assertProviderRole(profile.user.role);
 
-    return this.educationRepository.create({ profileId: profile.id, ...dto });
+    // Fields are enumerated rather than spread, matching Service.create: a
+    // field added to the DTO later reaches the database only when someone
+    // adds it here deliberately.
+    return this.educationRepository.create({
+      profileId: profile.id,
+      institution: dto.institution,
+      degree: dto.degree,
+      fieldOfStudy: dto.fieldOfStudy,
+      graduationYear: dto.graduationYear,
+    });
   }
 
   async update(userId: string, educationId: string, dto: UpdateEducationDto): Promise<Education> {
@@ -27,6 +36,8 @@ export class EducationService {
     }
     assertOwnership(existing.profileId, profile.id);
 
+    // Passed through as sent: an explicit null clears the field, an omitted
+    // one is undefined and Prisma leaves the stored value alone.
     return this.educationRepository.update(educationId, dto);
   }
 

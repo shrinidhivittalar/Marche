@@ -8,6 +8,7 @@ import {
   Clock,
   FileText,
   IndianRupee,
+  Loader2,
   MapPin,
   Paperclip,
   Sparkles,
@@ -103,7 +104,15 @@ interface PendingAttachment {
   attachmentId?: string;
 }
 
-function RephraseWithAiButton({ show, onClick }: { show: boolean; onClick: () => void }) {
+function RephraseWithAiButton({
+  show,
+  loading,
+  onClick,
+}: {
+  show: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
   if (!show) return null;
 
   return (
@@ -111,10 +120,16 @@ function RephraseWithAiButton({ show, onClick }: { show: boolean; onClick: () =>
       type="button"
       title="Rephrase with AI"
       aria-label="Rephrase with AI"
+      aria-busy={loading}
+      disabled={loading}
       onClick={onClick}
-      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border border-primary/20 bg-primary-subtle text-primary shadow-sm transition-colors hover:bg-primary hover:text-primary-fg focus-visible:shadow-focus cursor-pointer"
+      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border border-primary/20 bg-primary-subtle text-primary shadow-sm transition-colors hover:bg-primary hover:text-primary-fg focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-60 cursor-pointer"
     >
-      <Sparkles className="h-3.5 w-3.5" />
+      {loading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Sparkles className="h-3.5 w-3.5" />
+      )}
     </button>
   );
 }
@@ -135,12 +150,23 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     enabled: Boolean(draftId && token),
   });
 
+  // The files already hanging off that draft. A separate request because the
+  // requirement itself does not carry them, and without it a resumed draft
+  // reports "None" while the files are still attached server-side — so a
+  // client re-uploads and ends up with duplicates.
+  const draftAttachments = useApiResource(
+    () => jobsApi.attachments(token, draftId as string),
+    [draftId, token],
+    { enabled: Boolean(draftId && token) },
+  );
+
   const [currentJobId, setCurrentJobId] = useState<string | null>(draftId ?? null);
   const [step, setStep] = useState<WizardStep>(1);
   const [attemptedNext, setAttemptedNext] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [rephrasing, setRephrasing] = useState<'title' | 'description' | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -188,6 +214,26 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     setBudgetMin(Number(loaded.budgetMin ?? 0));
     setBudgetMax(Number(loaded.budgetMax ?? 0));
     setDeliverables(loaded.deliverables);
+  }
+
+  // Same once-per-draft seeding for the attachments. Each one carries its
+  // attachmentId, so removing a loaded file detaches it on the server
+  // instead of only disappearing from this list. Anything uploaded while
+  // the request was in flight is kept — the load must not undo it.
+  const [seededAttachmentsFrom, setSeededAttachmentsFrom] = useState<string | null>(null);
+  if (draftAttachments.data && draftId && seededAttachmentsFrom !== draftId) {
+    const loaded = draftAttachments.data;
+    setSeededAttachmentsFrom(draftId);
+    setAttachments((prev) => [
+      ...loaded.map((a) => ({
+        mediaId: a.mediaId,
+        // The API leaves fileName null for files uploaded without one; the
+        // row still needs something to name and to label its remove button.
+        fileName: a.fileName ?? 'Attachment',
+        attachmentId: a.id,
+      })),
+      ...prev,
+    ]);
   }
 
   const selectedCategory = (categories.data ?? []).find((c) => c.id === categoryId);
@@ -390,8 +436,20 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     });
   };
 
-  const handleAiRephraseClick = () => {
-    showToast('AI rephrasing will be available soon.');
+  const handleAiRephraseClick = async (field: 'title' | 'description') => {
+    const value = field === 'title' ? title : description;
+    if (!value.trim() || rephrasing) return;
+
+    setRephrasing(field);
+    try {
+      const { text } = await jobsApi.rephraseField(token, field, value);
+      if (field === 'title') setTitle(text);
+      else setDescription(text);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'AI rephrasing failed. Please try again.');
+    } finally {
+      setRephrasing(null);
+    }
   };
 
   const currentPhaseIndex = PHASES.findIndex((p) => p.steps.includes(step));
@@ -537,7 +595,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                   data-testid="job-title-input"
                   className={title.trim() ? 'pr-12' : undefined}
                 />
-                <RephraseWithAiButton show={!!title.trim()} onClick={handleAiRephraseClick} />
+                <RephraseWithAiButton
+                  show={!!title.trim()}
+                  loading={rephrasing === 'title'}
+                  onClick={() => void handleAiRephraseClick('title')}
+                />
               </div>
               {showTitleError && (
                 <p className="text-[11px] text-destructive mt-1.5 font-medium">
@@ -596,7 +658,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                   data-testid="job-description-input"
                   className={description.trim() ? 'pr-12' : undefined}
                 />
-                <RephraseWithAiButton show={!!description.trim()} onClick={handleAiRephraseClick} />
+                <RephraseWithAiButton
+                  show={!!description.trim()}
+                  loading={rephrasing === 'description'}
+                  onClick={() => void handleAiRephraseClick('description')}
+                />
               </div>
               {showDescriptionError && (
                 <p className="text-[11px] text-destructive mt-1.5 font-medium">

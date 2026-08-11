@@ -62,6 +62,19 @@ const JOB_FIELDS = {
   },
 } satisfies Prisma.JobSelect;
 
+// What the owner sees on top of the shared fields.
+//
+// The proposal count is counted, never stored — the schema comment above
+// JobStatus says why: a PROPOSAL_ACTIVITY column would have to be flipped on
+// every submission and unflipped on every withdrawal, and would be wrong the
+// first time either was missed. Owner reads only: it is the client's own
+// count of who has replied, and no part of discovery needs it.
+const OWNER_JOB_FIELDS = {
+  ...JOB_FIELDS,
+  cancelledAt: true,
+  _count: { select: { proposals: true } },
+} satisfies Prisma.JobSelect;
+
 @Injectable()
 export class JobsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -76,7 +89,7 @@ export class JobsRepository {
   findByIdForOwner(id: string) {
     return this.prisma.client.job.findFirst({
       where: { id, deletedAt: null },
-      select: { ...JOB_FIELDS, cancelledAt: true, updatedAt: true },
+      select: { ...OWNER_JOB_FIELDS, updatedAt: true },
     });
   }
 
@@ -89,7 +102,7 @@ export class JobsRepository {
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip,
       take,
-      select: { ...JOB_FIELDS, cancelledAt: true },
+      select: OWNER_JOB_FIELDS,
     });
   }
 
@@ -195,6 +208,24 @@ export class JobsRepository {
     // Scoped by jobId as well as attachmentId: checking the attachment id
     // alone would let any client detach any other requirement's file.
     return this.prisma.client.jobAttachment.deleteMany({ where: { id: attachmentId, jobId } });
+  }
+
+  /**
+   * The provider profile hired on this requirement, or null if none is.
+   *
+   * Reads the Connection row rather than importing anything from Proposals:
+   * the dependency runs Proposals -> Jobs and must not be reversed. What is
+   * shared is the schema, not the module — Job has a `connection` relation,
+   * jobId is unique on it, so "who was hired for this job" is a fact the Job
+   * row can reach on its own.
+   *
+   * Only the id is selected: the caller is an access check, and everything
+   * else on a connection belongs to the module that owns it.
+   */
+  findHiredProviderProfileId(jobId: string): Promise<string | null> {
+    return this.prisma.client.connection
+      .findUnique({ where: { jobId }, select: { providerProfileId: true } })
+      .then((connection) => connection?.providerProfileId ?? null);
   }
 
   countAttachments(jobId: string) {

@@ -1,4 +1,4 @@
-﻿import { ConflictException, UnauthorizedException } from '@nestjs/common';
+﻿import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { AuthService } from '../services/auth.service';
@@ -69,7 +69,8 @@ describe('AuthService', () => {
 
     emailService = {
       sendVerificationEmail: jest.fn(),
-      sendPasswordResetEmail: jest.fn(),
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+      sendDuplicateRegistrationEmail: jest.fn(),
     } as unknown as jest.Mocked<EmailService>;
 
     auditService = {
@@ -100,19 +101,58 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('rejects a duplicate email', async () => {
+    const registerDto = {
+      email: 'jane@example.com',
+      password: 'Password123',
+      name: 'Jane',
+      role: 'CLIENT',
+    } as const;
+
+    it('answers a duplicate email exactly as it answers a new one', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      usersRepository.create.mockResolvedValue(buildUser());
+      const newAddressResult = await authService.register({ ...registerDto });
+
+      jest.clearAllMocks();
       usersRepository.findByEmail.mockResolvedValue(buildUser());
+      const takenAddressResult = await authService.register({ ...registerDto });
 
-      await expect(
-        authService.register({
-          email: 'jane@example.com',
-          password: 'Password123',
-          name: 'Jane',
-          role: 'CLIENT',
-        }),
-      ).rejects.toBeInstanceOf(ConflictException);
-
+      // Identical resolved body, and no thrown status to tell them apart.
+      expect(takenAddressResult).toEqual(newAddressResult);
       expect(usersRepository.create).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('warns the existing owner and audits the duplicate attempt', async () => {
+      const existing = buildUser();
+      usersRepository.findByEmail.mockResolvedValue(existing);
+
+      await authService.register({ ...registerDto });
+
+      expect(emailService.sendDuplicateRegistrationEmail).toHaveBeenCalledWith(existing.email);
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'auth.register.duplicate',
+          userId: existing.id,
+        }),
+      );
+    });
+
+    it('pays the argon2 cost on the duplicate path too, so timing is not the new oracle', async () => {
+      // argon2 is intentionally slow and dominates this request. Skipping it
+      // for a duplicate would make the duplicate branch obviously faster, so
+      // measure against the cost of a single hash rather than a fixed number
+      // of milliseconds, which would differ per machine.
+      const hashStart = Date.now();
+      await argon2.hash('Password123');
+      const oneHash = Date.now() - hashStart;
+
+      usersRepository.findByEmail.mockResolvedValue(buildUser());
+      const duplicateStart = Date.now();
+      await authService.register({ ...registerDto });
+      const duplicateElapsed = Date.now() - duplicateStart;
+
+      expect(duplicateElapsed).toBeGreaterThanOrEqual(oneHash / 2);
     });
 
     it('creates the user, hashes the password, and sends a verification email', async () => {
@@ -137,7 +177,7 @@ describe('AuthService', () => {
         'jane@example.com',
         expect.any(String),
       );
-      expect(result).toEqual(expect.objectContaining({ id: created.id, emailVerified: false }));
+      expect(result).toEqual({ status: 'verification_email_sent' });
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: 'auth.register', userId: created.id }),
       );
@@ -422,6 +462,41 @@ describe('AuthService', () => {
         'jane@example.com',
         expect.any(String),
       );
+    });
+
+    it('holds both the known and unknown branches to the same floor', async () => {
+      // The original leak was duration, not content: the unknown branch
+      // returned after one SELECT while the known one awaited an outbound
+      // send. Assert the floor applies to both, so neither is measurably
+      // quicker than the other.
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const unknownStart = Date.now();
+      await authService.forgotPassword('unknown@example.com');
+      const unknownElapsed = Date.now() - unknownStart;
+
+      usersRepository.findByEmail.mockResolvedValue(buildUser());
+      const knownStart = Date.now();
+      await authService.forgotPassword('jane@example.com');
+      const knownElapsed = Date.now() - knownStart;
+
+      // A little slack: setTimeout is allowed to fire a tick early.
+      expect(unknownElapsed).toBeGreaterThanOrEqual(240);
+      expect(knownElapsed).toBeGreaterThanOrEqual(240);
+    });
+
+    it('does not wait for the reset row or the email before answering', async () => {
+      // The floor alone is not the fix, and this is the test that says so.
+      // With mocked repositories every write is instant, so a test that only
+      // measures elapsed time passes even if the work is awaited — which is
+      // exactly how a 3x gap survived against the real database, where the
+      // insert and the audit write cost ~500ms.
+      //
+      // So assert the property instead: hang the reset insert forever and
+      // require the endpoint to answer anyway.
+      usersRepository.findByEmail.mockResolvedValue(buildUser());
+      passwordResetsRepository.create.mockReturnValue(new Promise(() => {}));
+
+      await expect(authService.forgotPassword('jane@example.com')).resolves.toBeUndefined();
     });
   });
 

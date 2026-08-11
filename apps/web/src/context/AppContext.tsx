@@ -204,6 +204,11 @@ const LOCAL_STORAGE_KEY = 'marche_app_state_v8';
 const ACK_NUMBER_MIN = 1000;
 const ACK_NUMBER_RANGE = 9000; // yields a random 4-digit suffix (1000-9999)
 const TERMS_VERSION = 'marche-terms-v1';
+// Mirrors the access-token TTL in apps/api/src/identity/services/auth.service.ts.
+// Renewed a minute early so a request in flight when the timer fires is still
+// carrying a token the API accepts.
+const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
+const ACCESS_TOKEN_RENEW_MARGIN_MS = 60 * 1000;
 const PRIVACY_VERSION = 'marche-privacy-v1';
 
 const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
@@ -512,6 +517,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     navigate('/auth/signin');
   };
 
+  // The access token expires after 15 minutes and nothing renewed it, so a tab
+  // left open came back to every useApiResource screen failing until a reload.
+  // Renewing on a timer — rather than reacting to a 401 — is what this app's
+  // shape supports: the token is an argument to every API function and a
+  // dependency of every useApiResource call, so publishing a new one here
+  // refetches the screens by itself. A 401 interceptor would instead have to
+  // reach back into each call site to hand it the replacement token.
+  //
+  // Concurrent refreshes collapse inside refreshRequest(), which shares one
+  // in-flight promise — the refresh cookie is single-use and rotating, so a
+  // second call would arrive with a revoked token.
+  useEffect(() => {
+    if (!accessToken) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { accessToken: token } = await refreshRequest();
+        setAccessToken(token);
+      } catch {
+        // The refresh cookie is expired or already rotated away. Nothing but
+        // fresh credentials can recover from that, so end the session cleanly
+        // instead of retrying against a token that will never work again.
+        setAccessToken(null);
+        setCurrentUser(loadUserWithOverrides('client'));
+        navigate('/auth/signin');
+      }
+    }, ACCESS_TOKEN_TTL_MS - ACCESS_TOKEN_RENEW_MARGIN_MS);
+    return () => clearTimeout(timer);
+    // Only the token may restart the timer — `navigate` is redefined every
+    // render, so depending on it would reset the timeout before it ever fired.
+  }, [accessToken]);
+
   const requestPasswordReset = async (email: string) => {
     await forgotPasswordRequest(email);
   };
@@ -525,15 +561,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCurrentUser = (updates: Partial<User>) => {
-    setCurrentUser((prev) => {
-      const savedRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY}_profile_${prev.role}`);
-      const savedOverrides = savedRaw ? JSON.parse(savedRaw) : {};
-      localStorage.setItem(
-        `${LOCAL_STORAGE_KEY}_profile_${prev.role}`,
-        JSON.stringify({ ...savedOverrides, ...updates }),
-      );
-      return { ...prev, ...updates };
-    });
+    // Persisted here rather than inside the updater: React double-invokes
+    // updaters under StrictMode, so the write ran twice per call. Same shape
+    // acceptLegalTerms already uses — merge onto the stored overrides, then
+    // update state.
+    const storageKey = `${LOCAL_STORAGE_KEY}_profile_${currentUser.role}`;
+    const savedRaw = localStorage.getItem(storageKey);
+    const savedOverrides = savedRaw ? JSON.parse(savedRaw) : {};
+    localStorage.setItem(storageKey, JSON.stringify({ ...savedOverrides, ...updates }));
+    setCurrentUser((prev) => ({ ...prev, ...updates }));
   };
 
   const acceptLegalTerms = (data: {

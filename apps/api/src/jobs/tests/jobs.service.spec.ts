@@ -30,7 +30,9 @@ function build(jobOverrides: Record<string, unknown> = {}) {
       publishedAt: null,
       ...jobOverrides,
     }),
-    findByIdForOwner: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
+    findByIdForOwner: jest
+      .fn()
+      .mockResolvedValue({ id: 'job_1', title: 'A requirement', _count: { proposals: 3 } }),
     listByProfile: jest.fn().mockResolvedValue([]),
     countByProfile: jest.fn().mockResolvedValue(0),
     findPublicById: jest.fn().mockResolvedValue({ id: 'job_1', title: 'A requirement' }),
@@ -40,6 +42,8 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     addAttachment: jest.fn().mockResolvedValue({ id: 'attachment_1' }),
     removeAttachment: jest.fn().mockResolvedValue({ count: 1 }),
     countAttachments: jest.fn().mockResolvedValue(0),
+    // Nobody hired by default: the requirement has no connection yet.
+    findHiredProviderProfileId: jest.fn().mockResolvedValue(null),
   };
   const categoriesService = { resolveFilterIds: jest.fn().mockResolvedValue(['cat_1']) };
   const mediaService = {
@@ -382,6 +386,43 @@ describe('JobsService', () => {
       expect(jobs.listAttachments).toHaveBeenCalledWith('job_1');
     });
 
+    it('lets the owner read attachments once the requirement is filled', async () => {
+      const { service, jobs } = build({ status: 'FILLED' as JobStatus });
+
+      await service.listAttachments('user_1', 'job_1');
+
+      expect(jobs.listAttachments).toHaveBeenCalledWith('job_1');
+    });
+
+    it('lets the hired provider read attachments on a filled requirement', async () => {
+      // profile_1 is the caller; the requirement belongs to profile_2 and is
+      // no longer publicly visible because accepting the proposal filled it.
+      const { service, jobs } = build({
+        clientProfileId: 'profile_2',
+        status: 'FILLED' as JobStatus,
+      });
+      jobs.findPublicById.mockResolvedValue(null);
+      jobs.findHiredProviderProfileId.mockResolvedValue('profile_1');
+
+      await service.listAttachments('user_1', 'job_1');
+
+      expect(jobs.listAttachments).toHaveBeenCalledWith('job_1');
+    });
+
+    it('refuses a provider who was not the one hired', async () => {
+      const { service, jobs } = build({
+        clientProfileId: 'profile_2',
+        status: 'FILLED' as JobStatus,
+      });
+      jobs.findPublicById.mockResolvedValue(null);
+      jobs.findHiredProviderProfileId.mockResolvedValue('profile_9');
+
+      await expect(service.listAttachments('user_1', 'job_1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(jobs.listAttachments).not.toHaveBeenCalled();
+    });
+
     it('refuses a non-owner when the requirement is not publicly visible', async () => {
       const { service, jobs } = build({ clientProfileId: 'profile_2' });
       jobs.findPublicById.mockResolvedValue(null);
@@ -423,6 +464,28 @@ describe('JobsService', () => {
       expect(attachment.fileName).toBe('floor-plan.pdf');
       expect(attachment).not.toHaveProperty('media');
       expect(JSON.stringify(attachment)).not.toContain('secret-path');
+    });
+  });
+
+  describe('proposal counts', () => {
+    it('flattens the Prisma aggregate into a plain number', async () => {
+      const { service } = build();
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      // `_count` is an ORM detail; a client should not have to know which
+      // ORM produced its JSON.
+      expect(job).toMatchObject({ proposalCount: 3 });
+      expect(job).not.toHaveProperty('_count');
+    });
+
+    it('reports zero rather than undefined when nothing has been proposed', async () => {
+      const { service, jobs } = build();
+      jobs.findByIdForOwner.mockResolvedValue({ id: 'job_1', title: 'A requirement' });
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      expect(job).toMatchObject({ proposalCount: 0 });
     });
   });
 

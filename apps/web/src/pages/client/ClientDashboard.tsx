@@ -1,56 +1,75 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Plus,
-  Briefcase,
   Search,
   CheckCircle2,
-  Pause,
-  Play,
-  Trash2,
-  Edit3,
-  Sparkles,
-  X,
   User,
-  CreditCard,
   Sliders,
   ChevronRight,
-  ChevronLeft,
-  Mail,
-  LayoutGrid,
-  List as ListIcon,
   FileSignature,
   ArrowUpDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MyRequirements } from '../../components/jobs/MyRequirements';
-import { Button, Card, Input, IconTile } from '@marche/ui';
-import { Job } from '../../types';
-import { formatBudget } from '../../lib/formatBudget';
-import { isProfileComplete as computeIsProfileComplete } from '../../lib/profileCompleteness';
+import { Button, Card, Input } from '@marche/ui';
+import {
+  isProfileComplete as computeIsProfileComplete,
+  isApiProfileComplete,
+} from '../../lib/profileCompleteness';
+import { useApiResource } from '../../hooks/useApiResource';
+import { profilesApi } from '../../lib/marketplace-api';
+import { jobsApi, type JobStatus } from '../../lib/jobs-api';
+import { formatJobBudget } from '../../lib/formatJob';
+
+// Wording for the statuses the API actually has. The mock model had Paused,
+// Closed and Completed as well; none of them exists on a real requirement.
+const REQUIREMENT_STATUS: Record<JobStatus, { label: string; className: string }> = {
+  DRAFT: {
+    label: 'Draft',
+    className: 'bg-surface-subtle text-ink-muted border-border',
+  },
+  PUBLISHED: {
+    label: 'Published',
+    className:
+      'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20',
+  },
+  FILLED: {
+    label: 'Filled',
+    className: 'bg-primary-subtle text-primary border-primary/20',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    className:
+      'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20',
+  },
+};
 
 interface ClientDashboardProps {
   view?: 'dashboard' | 'jobs' | 'settings';
 }
 
 export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashboard' }) => {
-  const {
-    currentUser,
-    jobs,
-    proposals,
-    contracts,
-    navigate,
-    saveJobDraft,
-    togglePauseJob,
-    deleteJob,
-    updateJob,
-    updateCurrentUser,
-    clientSettings,
-    updateClientSettings,
-  } = useApp();
+  const { currentUser, contracts, navigate, clientSettings, updateClientSettings, accessToken } =
+    useApp();
 
-  const isProfileComplete = computeIsProfileComplete(currentUser);
-  const isSetupComplete =
-    Boolean(currentUser.paymentMethodAdded) && isProfileComplete && currentUser.verified;
+  // Read from the real profile, not the demo user. The editor writes to
+  // /profiles/me once signed in, so a checklist built on the mock fields
+  // could never be satisfied — which is exactly how it ended up permanent.
+  const myProfile = useApiResource(() => profilesApi.me(accessToken as string), [accessToken], {
+    enabled: Boolean(accessToken),
+  });
+  const isProfileComplete = accessToken
+    ? isApiProfileComplete(myProfile.data)
+    : computeIsProfileComplete(currentUser);
+
+  // Only the profile counts. Payments do not exist in Phase 1, and email
+  // verification already happened at sign-up and is not actionable from
+  // here — listing either as an outstanding task asks for something that
+  // cannot be done.
+  //
+  // Still loading is treated as complete, so the card does not flash on
+  // every dashboard load for someone who finished setting up long ago.
+  const isSetupComplete = myProfile.loading || isProfileComplete;
 
   // Top-level tab for Jobs View (matches "All job posts" / "All contracts")
   const [jobsTab, setJobsTab] = useState<'posts' | 'contracts'>('posts');
@@ -60,40 +79,31 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // The Jobs view's own filter tabs, search and category state went with the
   // mock list it filtered — MyRequirements owns those now, against real data.
 
-  // Modals state
-  const [editModalReq, setEditModalReq] = useState<Job | null>(null);
-  const [deleteConfirmReq, setDeleteConfirmReq] = useState<Job | null>(null);
-
-  // Edit form state
-  const [editTitle, setEditTitle] = useState('');
-  const [editBudgetMin, setEditBudgetMin] = useState<number>(0);
-  const [editBudgetMax, setEditBudgetMax] = useState<number>(0);
-  const [editLocation, setEditLocation] = useState('');
+  // The edit and delete modals, the row menu and the carousel went with the
+  // mock overview they served. Editing and cancelling a requirement live on
+  // its own page, against the real API.
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Row action menu (default dashboard view)
-  const [activeMenuReqId, setActiveMenuReqId] = useState<string | null>(null);
-
-  // Overview layout toggle (default dashboard view)
-  const [overviewLayout, setOverviewLayout] = useState<'grid' | 'list'>('grid');
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const scrollCarousel = (dir: 'left' | 'right') => {
-    carouselRef.current?.scrollBy({ left: dir === 'left' ? -272 : 272, behavior: 'smooth' });
-  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // User's jobs
-  const myJobs = jobs.filter((r) => r.clientId === currentUser.id);
+  // The client's real requirements, for the overview and the KPI row. The
+  // mock list this replaced was filtered by a mock client id, so it matched
+  // nothing once the requirements themselves became real.
+  const myRequirements = useApiResource(
+    () => jobsApi.mine(accessToken as string, 1, 50),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
 
-  // Stats calculation
-  const activeJobsCount = myJobs.filter(
-    (r) => r.status !== 'Completed' && r.status !== 'Closed' && r.status !== 'Cancelled',
+  // "Active" means live to providers. A draft is not, and a filled or
+  // cancelled one has left discovery.
+  const activeJobsCount = (myRequirements.data?.items ?? []).filter(
+    (r) => r.status === 'PUBLISHED',
   ).length;
 
   const inProgressContracts = contracts.filter(
@@ -123,150 +133,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       return contractSortDir === 'asc' ? diff : -diff;
     });
 
-  // Handlers
-  const openEditModal = (req: Job) => {
-    setEditModalReq(req);
-    setEditTitle(req.title);
-    setEditBudgetMin(req.budgetMin);
-    setEditBudgetMax(req.budgetMax);
-    setEditLocation(req.location);
-  };
-
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editModalReq) return;
-    // AppContext's updateJob normalizes budgetMax to budgetMin for fixed-budget jobs.
-    updateJob(editModalReq.id, {
-      title: editTitle,
-      budgetMin: Number(editBudgetMin),
-      budgetMax: Number(editBudgetMax),
-      location: editLocation,
-    });
-    setEditModalReq(null);
-    showToast('Job details updated successfully.');
-  };
-
-  const handleConfirmDelete = () => {
-    if (!deleteConfirmReq) return;
-    deleteJob(deleteConfirmReq.id);
-    setDeleteConfirmReq(null);
-    showToast('Job removed from marketplace.');
-  };
-
   // Shared by every view below — previously copy-pasted once per view and had drifted
   // (different button styles) between the copies.
-  const renderEditJobModal = () => {
-    if (!editModalReq) return null;
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-surface border border-border rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <h3 className="text-base font-bold text-ink">Edit Job</h3>
-            <button
-              onClick={() => setEditModalReq(null)}
-              className="p-1 text-ink-muted hover:text-ink cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSaveEdit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Title</label>
-              <Input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Min Budget (₹)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editBudgetMin}
-                  onChange={(e) => setEditBudgetMin(Math.max(0, Number(e.target.value)))}
-                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Max Budget (₹)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editModalReq?.budgetMode === 'fixed' ? editBudgetMin : editBudgetMax}
-                  onChange={(e) => setEditBudgetMax(Math.max(0, Number(e.target.value)))}
-                  disabled={editModalReq?.budgetMode === 'fixed'}
-                  className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary disabled:opacity-60"
-                  required
-                />
-                {editModalReq?.budgetMode === 'fixed' && (
-                  <p className="text-[10px] text-ink-muted mt-1">Fixed budget — mirrors min.</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Location</label>
-              <Input
-                type="text"
-                value={editLocation}
-                onChange={(e) => setEditLocation(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-primary"
-                required
-              />
-            </div>
-
-            <div className="pt-3 border-t border-border flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setEditModalReq(null)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm">
-                Save Changes
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  const renderDeleteJobModal = () => {
-    if (!deleteConfirmReq) return null;
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-surface border border-border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-          <h3 className="text-base font-bold text-rose-600">Delete Job?</h3>
-          <p className="text-xs text-ink-muted">
-            Are you sure you want to remove <strong>"{deleteConfirmReq.title}"</strong>?
-          </p>
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-            <Button variant="outline" size="sm" onClick={() => setDeleteConfirmReq(null)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className="bg-rose-600 hover:bg-rose-700 text-white"
-              onClick={handleConfirmDelete}
-            >
-              Delete Job
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // ---------------------------------------------------------------------
   // VIEW: MY JOBS ONLY
@@ -497,36 +365,17 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // ---------------------------------------------------------------------
   // DEFAULT VIEW: CLIENT DASHBOARD
   // ---------------------------------------------------------------------
-  const totalProposalsReceived = myJobs.reduce((sum, r) => {
-    return sum + proposals.filter((p) => p.jobId === r.id).length;
-  }, 0);
-
-  const pendingProposalsCount = myJobs.filter((r) => {
-    const pCount = proposals.filter((p) => p.jobId === r.id).length;
-    const hasContract = contracts.some((c) => c.jobId === r.id);
-    return pCount > 0 && !hasContract;
-  }).length;
-
-  const handleDuplicateJob = (req: Job) => {
-    // Saved as a draft (not republished live) so the client can update the stale
-    // event date / proposal deadline before it goes back out to the marketplace.
-    saveJobDraft(null, {
-      title: `${req.title} (Copy)`,
-      category: req.category,
-      description: req.description,
-      budgetMode: req.budgetMode,
-      budgetMin: req.budgetMin,
-      budgetMax: req.budgetMax,
-      location: req.location,
-      eventDate: req.eventDate,
-      timingMode: req.timingMode,
-      eventStartTime: req.eventStartTime,
-      eventEndTime: req.eventEndTime,
-      proposalDeadline: req.proposalDeadline,
-      deliverables: req.deliverables,
-    });
-    showToast(`Job "${req.title}" duplicated as a draft — review the date before publishing.`);
-  };
+  // Counted from the client's real requirements. The proposal count comes
+  // back on each one — counted per request rather than stored, so it cannot
+  // drift out of date the way a cached column would.
+  const requirements = myRequirements.data?.items ?? [];
+  const requirementTotal = myRequirements.data?.total ?? requirements.length;
+  const totalProposalsReceived = requirements.reduce((sum, r) => sum + (r.proposalCount ?? 0), 0);
+  // Still open and waiting on the client: published, with at least one
+  // proposal nobody has decided on yet.
+  const pendingProposalsCount = requirements.filter(
+    (r) => r.status === 'PUBLISHED' && (r.proposalCount ?? 0) > 0,
+  ).length;
 
   // Generate insight line
   const getInsightText = () => {
@@ -574,103 +423,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         </div>
       </div>
 
-      {/* Setup Checklist — disappears once every item below is complete */}
+      {/* Setup checklist — one item, because one is real.
+          The payment card and the email-verified card were removed: payments
+          are not built, and email verification happens at sign-up and cannot
+          be acted on from here. Both were listed as outstanding work that no
+          amount of clicking could clear. */}
       {!isSetupComplete && (
         <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-2xs">
           <h2 className="text-sm font-extrabold text-ink tracking-tight mb-3">
             Finish setting up your account
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {currentUser.paymentMethodAdded ? (
-              <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                    Required to hire
-                  </span>
-                  <CreditCard className="w-4 h-4 text-ink-muted" />
-                </div>
-                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Payment method added
-                </p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  updateCurrentUser({ paymentMethodAdded: true });
-                  showToast(
-                    "Payment methods aren't wired up yet — Marché is still a frontend preview.",
-                  );
-                }}
-                className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-border-strong hover:bg-surface transition-all cursor-pointer space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                    Required to hire
-                  </span>
-                  <CreditCard className="w-4 h-4 text-ink-muted" />
-                </div>
-                <p className="text-xs font-bold text-primary underline underline-offset-2">
-                  Add a payment method
-                </p>
-                <p className="text-[11px] text-ink-muted leading-relaxed">
-                  Used to pay for your booking once a proposal is accepted. No cost until you hire.
-                </p>
-              </button>
-            )}
-
-            {isProfileComplete ? (
-              <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                    Required to publish
-                  </span>
-                  <User className="w-4 h-4 text-ink-muted" />
-                </div>
-                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Profile complete
-                </p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate('/client/profile')}
-                className="text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-border-strong hover:bg-surface transition-all cursor-pointer space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                    Required to publish
-                  </span>
-                  <User className="w-4 h-4 text-ink-muted" />
-                </div>
-                <p className="text-xs font-bold text-primary underline underline-offset-2">
-                  Complete your profile
-                </p>
-                <p className="text-[11px] text-ink-muted leading-relaxed">
-                  Add your company details so vendors know who they're proposing to.
-                </p>
-              </button>
-            )}
-
-            <div className="p-3.5 rounded-xl border border-border bg-bg/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-                  Required to hire
-                </span>
-                <Mail className="w-4 h-4 text-ink-muted" />
-              </div>
-              {currentUser.verified ? (
-                <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Email address verified
-                </p>
-              ) : (
-                <p className="text-xs font-bold text-ink">Email not verified</p>
-              )}
+          <button
+            type="button"
+            onClick={() => navigate('/client/profile')}
+            className="w-full text-left p-3.5 rounded-xl border border-border bg-bg/60 hover:border-border-strong hover:bg-surface transition-all cursor-pointer space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                Helps providers price your work
+              </span>
+              <User className="w-4 h-4 text-ink-muted" />
             </div>
-          </div>
+            <p className="text-xs font-bold text-primary underline underline-offset-2">
+              Complete your profile
+            </p>
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              Add a headline, a short bio and your location so providers know who they are proposing
+              to.
+            </p>
+          </button>
         </div>
       )}
 
@@ -755,283 +536,86 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         </div>
       </div>
 
-      {/* Overview */}
+      {/* Overview — the client's real requirements.
+          This block used to read mock jobs filtered by a mock client id, so
+          it was permanently empty for anyone signed in. The row menu went
+          with it: Edit, Pause, Duplicate and Delete all operated on mock
+          state, and only two of the four have a real equivalent (cancel, and
+          delete-a-draft) — both already on the requirement's own page. */}
       <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-3">
-          <div>
-            <h2 className="text-base font-extrabold text-ink tracking-tight">Overview</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/client/jobs')}
-              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>View All ({myJobs.length})</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <div className="flex items-center rounded-lg border border-border p-0.5 bg-bg">
-              <button
-                type="button"
-                onClick={() => setOverviewLayout('grid')}
-                title="Card view"
-                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                  overviewLayout === 'grid'
-                    ? 'bg-surface shadow-2xs text-primary'
-                    : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setOverviewLayout('list')}
-                title="List view"
-                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                  overviewLayout === 'list'
-                    ? 'bg-surface shadow-2xs text-primary'
-                    : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <ListIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          <h2 className="text-base font-extrabold text-ink tracking-tight">Overview</h2>
+          <button
+            onClick={() => navigate('/client/jobs')}
+            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <span>View all ({requirementTotal})</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {myJobs.length === 0 ? (
-          <div className="py-8 px-4 text-center space-y-2 bg-bg/60 rounded-xl border border-border">
-            <Briefcase className="w-7 h-7 text-ink-muted mx-auto" />
-            <div className="space-y-0.5">
-              <h3 className="text-xs font-bold text-ink">No Jobs Yet</h3>
-              <p className="text-[11px] text-ink-muted">
-                Post a service job to start receiving proposals.
-              </p>
-            </div>
+        {myRequirements.loading && (
+          <p className="text-xs text-ink-muted">Loading your requirements…</p>
+        )}
+
+        {myRequirements.error && <p className="text-xs text-destructive">{myRequirements.error}</p>}
+
+        {!myRequirements.loading && !myRequirements.error && requirements.length === 0 && (
+          <div className="py-8 text-center space-y-3">
+            <p className="text-xs text-ink-muted">
+              You have not posted a requirement yet. Post one and providers can start proposing.
+            </p>
             <Button size="sm" icon={Plus} onClick={() => navigate('/client/jobs/new')}>
-              Create Job
+              Post a job
             </Button>
           </div>
-        ) : overviewLayout === 'grid' ? (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => scrollCarousel('left')}
-              aria-label="Scroll left"
-              className="hidden sm:flex absolute -left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-surface border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+        )}
 
-            <div
-              ref={carouselRef}
-              className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {myJobs.slice(0, 8).map((req) => {
-                const pCount = proposals.filter((p) => p.jobId === req.id).length;
-                const isPaused = (!req.isDraftPost && req.status === 'Draft') || !!req.isPaused;
-                return (
-                  <div
-                    key={req.id}
-                    onClick={() => navigate(`/client/jobs/${req.id}`)}
-                    className="group shrink-0 w-64 snap-start rounded-xl border border-border bg-surface hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer p-3.5 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <IconTile icon={<Briefcase className="w-4 h-4" />} tone="primary" size="sm" />
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                          isPaused
-                            ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
-                            : 'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20'
-                        }`}
-                      >
-                        {isPaused ? 'Paused' : req.status}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-ink line-clamp-2 group-hover:text-primary transition-colors">
-                        {req.title}
-                      </p>
-                      <p className="text-[11px] text-ink-muted">{req.category}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-border">
-                      <span>{formatBudget(req)}</span>
-                      <span>
-                        <strong className="text-ink">{pCount}</strong> proposal
-                        {pCount !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <button
-                type="button"
-                onClick={() => navigate('/client/jobs/new')}
-                className="shrink-0 w-64 snap-start rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-2 text-ink-muted hover:text-primary hover:border-primary hover:bg-primary/5 transition-all cursor-pointer p-3.5 min-h-[152px]"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="text-xs font-bold">Post a Job</span>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => scrollCarousel('right')}
-              aria-label="Scroll right"
-              className="hidden sm:flex absolute -right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-surface border border-border shadow-xs items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-            {myJobs.slice(0, 4).map((req) => {
-              const pCount = proposals.filter((p) => p.jobId === req.id).length;
-              const isMenuOpen = activeMenuReqId === req.id;
-              const isPaused = (!req.isDraftPost && req.status === 'Draft') || !!req.isPaused;
-
+        {requirements.length > 0 && (
+          <div className="space-y-2.5">
+            {requirements.slice(0, 5).map((req) => {
+              const status = REQUIREMENT_STATUS[req.status];
               return (
-                <div
+                <button
                   key={req.id}
-                  className="p-3.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-all flex items-center justify-between gap-3 relative"
+                  type="button"
+                  data-testid="overview-requirement"
+                  onClick={() => navigate(`/client/jobs/${req.id}`)}
+                  className="w-full text-left p-3.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-all flex items-center justify-between gap-3"
                 >
-                  {/* Information */}
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        onClick={() => navigate(`/client/jobs/${req.id}`)}
-                        className="text-xs font-bold text-ink hover:text-primary transition-colors cursor-pointer truncate max-w-[220px] sm:max-w-none"
-                      >
+                      <span className="text-xs font-bold text-ink truncate max-w-[220px] sm:max-w-none">
                         {req.title}
                       </span>
                       <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                          isPaused
-                            ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
-                            : 'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20'
-                        }`}
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${status.className}`}
                       >
-                        {isPaused ? 'Paused' : req.status}
+                        {status.label}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
-                      <span className="font-semibold text-ink">{req.category}</span>
+                      <span className="font-semibold text-ink">{req.category.name}</span>
                       <span>•</span>
                       <span>
-                        Budget: <strong className="text-ink">{formatBudget(req)}</strong>
+                        Budget: <strong className="text-ink">{formatJobBudget(req)}</strong>
                       </span>
                       <span>•</span>
                       <span>
-                        <strong className="text-ink">{pCount}</strong> proposal
-                        {pCount !== 1 ? 's' : ''}
+                        <strong className="text-ink">{req.proposalCount ?? 0}</strong> proposal
+                        {(req.proposalCount ?? 0) !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1.5 shrink-0 relative">
-                    <button
-                      onClick={() => navigate(`/client/jobs/${req.id}`)}
-                      className="px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                    >
-                      View
-                    </button>
-
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuReqId(isMenuOpen ? null : req.id);
-                        }}
-                        className="px-2 py-1.5 text-ink hover:text-ink hover:bg-surface-subtle rounded-lg transition-colors cursor-pointer border border-border bg-surface flex items-center justify-center"
-                        title="More options"
-                      >
-                        <span className="text-[10px] font-bold tracking-widest leading-none">
-                          •••
-                        </span>
-                      </button>
-
-                      {isMenuOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setActiveMenuReqId(null)}
-                          />
-                          <div className="absolute right-0 mt-1 w-40 bg-surface rounded-xl shadow-xl border border-border py-1 z-50 text-xs text-ink animate-in fade-in zoom-in-95 duration-150">
-                            <button
-                              onClick={() => {
-                                setActiveMenuReqId(null);
-                                openEditModal(req);
-                              }}
-                              className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-ink-muted" />
-                              <span>Edit</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setActiveMenuReqId(null);
-                                togglePauseJob(req.id);
-                                showToast(
-                                  isPaused
-                                    ? `Job "${req.title}" resumed.`
-                                    : `Job "${req.title}" paused.`,
-                                );
-                              }}
-                              className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
-                            >
-                              {isPaused ? (
-                                <>
-                                  <Play className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Resume</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Pause className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>Pause</span>
-                                </>
-                              )}
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setActiveMenuReqId(null);
-                                handleDuplicateJob(req);
-                              }}
-                              className="w-full text-left px-3.5 py-2 hover:bg-bg flex items-center gap-2 font-medium"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-ink-muted" />
-                              <span>Duplicate</span>
-                            </button>
-
-                            <div className="my-1 border-t border-border" />
-
-                            <button
-                              onClick={() => {
-                                setActiveMenuReqId(null);
-                                setDeleteConfirmReq(req);
-                              }}
-                              className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 flex items-center gap-2 font-medium"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
+                </button>
               );
             })}
           </div>
         )}
       </div>
-
-      {renderDeleteJobModal()}
-      {renderEditJobModal()}
     </div>
   );
 };

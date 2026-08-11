@@ -225,8 +225,15 @@ describe('marketplace HTTP', () => {
     });
 
     it('splits comma-separated skills into an array', async () => {
-      await request(app.getHttpServer()).get('/services?skills=a,b,c');
-      expect(servicesService.search.mock.calls.at(-1)![0].skills).toEqual(['a', 'b', 'c']);
+      const ids = ['3f2504e0-4f89-11d3-9a0c-0305e82c3301', '9c858901-8a57-4791-81fe-4c455b099bc9'];
+      await request(app.getHttpServer()).get(`/services?skills=${ids.join(',')}`);
+      expect(servicesService.search.mock.calls.at(-1)![0].skills).toEqual(ids);
+    });
+
+    // Skill ids are matched against a uuid column, so anything else has to be
+    // turned away here rather than becoming a Prisma error further in.
+    it('rejects a non-uuid skill id instead of failing in the database', async () => {
+      expect((await request(app.getHttpServer()).get('/services?skills=abc')).status).toBe(400);
     });
 
     it('defaults to newest, page 1, limit 20', async () => {

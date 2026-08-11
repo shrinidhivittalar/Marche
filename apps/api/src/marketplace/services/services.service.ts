@@ -55,7 +55,7 @@ export class ServicesService {
   }
 
   async update(userId: string, serviceId: string, dto: UpdateServiceDto): Promise<Service> {
-    const { service, profile } = await this.getOwnService(userId, serviceId);
+    const { service } = await this.getOwnService(userId, serviceId);
 
     if (dto.categoryId) {
       await this.assertCategoryExists(dto.categoryId);
@@ -78,7 +78,6 @@ export class ServicesService {
       await this.replaceSkills(service.id, dto.skillIds);
     }
 
-    void profile;
     return updated;
   }
 

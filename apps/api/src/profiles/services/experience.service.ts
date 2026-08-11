@@ -52,8 +52,15 @@ export class ExperienceService {
     }
     assertOwnership(existing.profileId, profile.id);
 
+    // An explicit null clears the end date; an omitted field keeps the stored
+    // one. The two have to be told apart here, because Prisma reads undefined
+    // as "leave unchanged" — collapsing them would leave an entry that has an
+    // end date unable to ever be marked "currently working" again.
+    const clearsEndDate = dto.endDate === null;
     const startDate = dto.startDate ?? existing.startDate.toISOString();
-    const endDate = dto.endDate ?? (existing.endDate ? existing.endDate.toISOString() : undefined);
+    const endDate = clearsEndDate
+      ? undefined
+      : (dto.endDate ?? (existing.endDate ? existing.endDate.toISOString() : undefined));
     const currentlyWorking = dto.currentlyWorking ?? existing.currentlyWorking;
     validateDates(startDate, endDate, currentlyWorking);
 
@@ -62,7 +69,7 @@ export class ExperienceService {
       position: dto.position,
       description: dto.description,
       startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-      endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      endDate: clearsEndDate ? null : dto.endDate ? new Date(dto.endDate) : undefined,
       currentlyWorking: dto.currentlyWorking,
     });
   }

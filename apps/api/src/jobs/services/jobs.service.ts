@@ -9,7 +9,7 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
 import { CategoriesService } from '../../marketplace/services/categories.service';
 import { MediaService } from '../../media/media.service';
-import { assertClientRole } from '../../profiles/profile-access.util';
+import { assertClientRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
@@ -38,8 +38,20 @@ const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
 // agreed to.
 const EDITABLE_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED'];
 
+// Prisma returns an aggregate as `_count: { proposals: n }`. Flattened to a
+// plain number before it leaves the service: `_count` is an ORM detail, and
+// a client should not have to know which ORM produced its JSON.
+function withProposalCount<T extends { _count?: { proposals: number } }>(job: T) {
+  const { _count, ...rest } = job;
+  return { ...rest, proposalCount: _count?.proposals ?? 0 };
+}
+
 @Injectable()
 export class JobsService {
+  // Capped for the same reason service images are: a requirement with
+  // forty files attached is a document dump, not a brief.
+  private static readonly MAX_ATTACHMENTS = 10;
+
   constructor(
     private readonly jobsRepository: JobsRepository,
     private readonly profilesRepository: ProfilesRepository,
@@ -219,7 +231,7 @@ export class JobsService {
       this.jobsRepository.countByProfile(profile.id),
     ]);
 
-    return paginate(data, total, page, limit);
+    return paginate(data.map(withProposalCount), total, page, limit);
   }
 
   async findMineById(userId: string, jobId: string) {
@@ -232,14 +244,10 @@ export class JobsService {
     if (!job) {
       throw new NotFoundException('Requirement not found');
     }
-    return job;
+    return withProposalCount(job);
   }
 
   // ---------- attachments ----------
-
-  // Capped for the same reason service images are: a requirement with
-  // forty files attached is a document dump, not a brief.
-  private static readonly MAX_ATTACHMENTS = 10;
 
   async addAttachment(userId: string, jobId: string, mediaId: string) {
     const { job } = await this.getOwnJob(userId, jobId);
@@ -286,9 +294,25 @@ export class JobsService {
    *
    * Authenticated callers only, and never on the public requirement route:
    * a guest can read what a client is asking for, but not download their
-   * floor plan. The owner sees their own in any state; everyone else sees
-   * them only while the requirement is actually published, so cancelling
-   * withdraws the files along with the ask.
+   * floor plan.
+   *
+   * Three parties may read them, and the predicate is "is a party to this
+   * requirement", not "is this requirement still discoverable":
+   *
+   * - the owner, in any state;
+   * - the hired provider, in any state — they are the one person besides the
+   *   client who needs the brief most, and gating them on PUBLISHED would
+   *   take the files away at the exact moment accepting their proposal
+   *   flipped the requirement to FILLED;
+   * - anyone else, only while it is publicly visible, so cancelling
+   *   withdraws the files along with the ask.
+   *
+   * A provider who merely proposed and was not accepted keeps access only
+   * for as long as anyone else does. They saw the files while bidding, so
+   * this protects little in practice, but it is the boundary the rest of the
+   * module draws — no relationship, no standing — and honouring it here
+   * costs nothing. The hired provider is the only one who gained something
+   * the public filter cannot express.
    */
   async listAttachments(userId: string, jobId: string) {
     const job = await this.jobsRepository.findById(jobId);
@@ -300,12 +324,19 @@ export class JobsService {
     const isOwner = job.clientProfileId === profile.id;
 
     if (!isOwner) {
-      // Re-read through the public filter rather than checking status
-      // inline: that way "who may see this" has one definition, and a
-      // suspended client's attachments disappear with their requirement.
+      // Public filter first, because it is the common case — a provider
+      // reading a live requirement they might bid on. Re-read through it
+      // rather than checking status inline so "who may discover this" keeps
+      // one definition, and a suspended client's requirement still
+      // disappears from everyone who is not party to it.
       const visible = await this.jobsRepository.findPublicById(jobId);
       if (!visible) {
-        throw new ForbiddenException('You do not have access to this requirement');
+        // Not discoverable any more — but it may have stopped being
+        // discoverable *because this caller was hired for it*.
+        const hiredProviderProfileId = await this.jobsRepository.findHiredProviderProfileId(jobId);
+        if (hiredProviderProfileId !== profile.id) {
+          throw new ForbiddenException('You do not have access to this requirement');
+        }
       }
     }
 
@@ -383,11 +414,7 @@ export class JobsService {
   }
 
   private async getOwnProfile(userId: string) {
-    const profile = await this.profilesRepository.findByUserId(userId);
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
-    return profile;
+    return getOwnProfileOrThrow(this.profilesRepository, userId);
   }
 
   /**
@@ -397,8 +424,13 @@ export class JobsService {
    * nothing, but 403 is what the rest of the codebase returns once a
    * resource has been found (see assertOwnership), and consistency matters
    * more here than the marginal secrecy.
+   *
+   * Public rather than private: ProposalsService needs the exact same
+   * ownership check for "does this client own the requirement a proposal
+   * targets" and already injects JobsService to get it, rather than
+   * re-implementing it against JobsRepository directly.
    */
-  private async getOwnJob(userId: string, jobId: string) {
+  async getOwnJob(userId: string, jobId: string) {
     const profile = await this.getOwnProfile(userId);
     const job = await this.jobsRepository.findById(jobId);
 

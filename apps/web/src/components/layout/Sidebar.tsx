@@ -23,7 +23,14 @@ import {
   TrendingUp,
   Search,
 } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent, PopoverClose, Button, ThemeToggle } from '@marche/ui';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverClose,
+  Button,
+  ThemeToggle,
+} from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
@@ -41,9 +48,13 @@ const FREELANCERS_LINKS = [
   { label: 'Bring freelancers to Marché', path: '/client/freelancers/refer' },
 ];
 
+// Keyed by the item's own path, not by its label. Keying by label meant a
+// provider's "Finances" — a plain link to /provider/finances — picked up the
+// client's sub-links, every one of which is a /client/* route the role gate
+// bounces straight back to the provider's home.
 const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
-  Finances: FINANCES_LINKS,
-  Freelancers: FREELANCERS_LINKS,
+  '/client/payments': FINANCES_LINKS,
+  '/client/freelancers/hired': FREELANCERS_LINKS,
 };
 
 export const Sidebar: React.FC = () => {
@@ -125,24 +136,24 @@ export const Sidebar: React.FC = () => {
     currentUser.role === 'client'
       ? clientNav
       : currentUser.role === 'vendor'
-      ? vendorNav
-      : adminNav;
+        ? vendorNav
+        : adminNav;
 
   const homePath =
     currentUser.role === 'client'
       ? '/client/dashboard'
       : currentUser.role === 'vendor'
-      ? '/provider/dashboard'
-      : currentUser.role === 'admin'
-      ? '/admin/audit'
-      : '/';
+        ? '/provider/dashboard'
+        : currentUser.role === 'admin'
+          ? '/admin/audit'
+          : '/';
 
   const profilePath =
     currentUser.role === 'vendor'
       ? '/provider/profile'
       : currentUser.role === 'client'
-      ? '/client/profile'
-      : '/admin/profile';
+        ? '/client/profile'
+        : '/admin/profile';
 
   const identityItemClass = (variant: 'default' | 'danger' = 'default') =>
     `w-full flex items-center rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -161,7 +172,9 @@ export const Sidebar: React.FC = () => {
     >
       <div className="space-y-4">
         {/* Brand & Collapse Toggle */}
-        <div className={`flex items-center pb-1 ${collapsed ? 'flex-col gap-2' : 'justify-between'}`}>
+        <div
+          className={`flex items-center pb-1 ${collapsed ? 'flex-col gap-2' : 'justify-between'}`}
+        >
           <button
             onClick={() => navigate(homePath)}
             className="flex items-center gap-2.5 cursor-pointer group"
@@ -182,7 +195,11 @@ export const Sidebar: React.FC = () => {
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               className="flex items-center p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-subtle transition-colors cursor-pointer"
             >
-              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+              {collapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
@@ -193,8 +210,12 @@ export const Sidebar: React.FC = () => {
             const Icon = item.icon;
             const isActive =
               route === item.path ||
-              (item.label === 'Finances' && route.startsWith('/client/finances/')) ||
-              (item.label === 'Freelancers' && route.startsWith('/client/freelancers/'));
+              // Matched on the item's own path for the same reason
+              // SECTION_LINKS is: a provider's Finances must not light up
+              // because a client finance route is open.
+              (item.path === '/client/payments' && route.startsWith('/client/finances/')) ||
+              (item.path === '/client/freelancers/hired' &&
+                route.startsWith('/client/freelancers/'));
             const navButtonClass = `w-full flex items-center rounded-xl text-xs font-medium transition-all cursor-pointer ${
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
             } ${
@@ -205,7 +226,9 @@ export const Sidebar: React.FC = () => {
             const navButtonContent = (
               <>
                 <div className={`flex items-center relative ${collapsed ? '' : 'gap-3'}`}>
-                  <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`} />
+                  <Icon
+                    className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`}
+                  />
                   {!collapsed && <span>{item.label}</span>}
                   {collapsed && item.badge && item.badge > 0 ? (
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
@@ -264,10 +287,10 @@ export const Sidebar: React.FC = () => {
                                   n.type === 'proposal'
                                     ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
                                     : n.type === 'contract'
-                                    ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
-                                    : n.type === 'job_alert'
-                                    ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-400'
-                                    : 'bg-surface-subtle text-ink'
+                                      ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
+                                      : n.type === 'job_alert'
+                                        ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-400'
+                                        : 'bg-surface-subtle text-ink'
                                 }`}
                               >
                                 {n.type === 'proposal' ? (
@@ -309,7 +332,7 @@ export const Sidebar: React.FC = () => {
               );
             }
 
-            const sectionLinks = SECTION_LINKS[item.label];
+            const sectionLinks = SECTION_LINKS[item.path];
             if (sectionLinks) {
               // Collapsed sidebar can't fit an inline-expanding sub-list — fall back to a flyout popover.
               if (collapsed) {
@@ -339,7 +362,9 @@ export const Sidebar: React.FC = () => {
                 <div key={item.label}>
                   <button onClick={() => toggleSection(item.label)} className={navButtonClass}>
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`} />
+                      <Icon
+                        className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`}
+                      />
                       <span>{item.label}</span>
                     </div>
                     <ChevronDown
@@ -397,7 +422,10 @@ export const Sidebar: React.FC = () => {
               </button>
             )}
 
-            <button onClick={() => navigate('/auth/signin')} className={identityItemClass('danger')}>
+            <button
+              onClick={() => navigate('/auth/signin')}
+              className={identityItemClass('danger')}
+            >
               <LogOut className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Log Out</span>}
             </button>

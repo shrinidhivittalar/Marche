@@ -26,14 +26,32 @@ const REFRESH_COOKIE_NAME = 'marche_refresh_token';
 // would actually target — the global 100/min default (app.module.ts) is too
 // loose to stop rapid password guessing on its own.
 //
-// Overridable only by an explicit environment variable, and only upward by
-// whoever sets it; the default is unchanged at 5/min, so production keeps
-// the strict limit unless someone deliberately opts out. This exists for
-// automated end-to-end runs, which sign in far more often than any human
-// would and otherwise trip the limiter partway through a suite. Refresh
-// tokens are single-use and rotating (auth.service.ts), so a test run
-// cannot avoid this by reusing one saved session.
-const AUTH_RATE_LIMIT = Number(process.env.AUTH_RATE_LIMIT ?? 5);
+// Overridable by an explicit environment variable. This exists for automated
+// end-to-end runs, which sign in far more often than any human would and
+// otherwise trip the limiter partway through a suite (playwright.config.ts
+// sets 500). Refresh tokens are single-use and rotating (auth.service.ts), so
+// a test run cannot avoid this by reusing one saved session.
+export const DEFAULT_AUTH_RATE_LIMIT = 5;
+
+// The override is parsed defensively because the failure is silent and total:
+// `Number('abc')` is NaN and `Number('')` is 0, and @Throttle given either
+// stops limiting in any meaningful way. A typo on the Render dashboard would
+// therefore switch brute-force protection off with no error and no log line.
+// Anything that is not a positive finite count falls back to the default.
+//
+// No upper clamp. Any ceiling would have to sit above the 500 the e2e suite
+// legitimately needs, and 500/min is already far past the point where a limit
+// constrains an attacker — so a clamp would buy no protection while adding a
+// second number to keep in sync with the test config.
+export function resolveAuthRateLimit(raw: string | undefined): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_AUTH_RATE_LIMIT;
+  }
+  return Math.floor(parsed);
+}
+
+const AUTH_RATE_LIMIT = resolveAuthRateLimit(process.env.AUTH_RATE_LIMIT);
 const AUTH_THROTTLE = { default: { limit: AUTH_RATE_LIMIT, ttl: 60_000 } };
 
 function requestContext(req: Request) {
@@ -44,24 +62,45 @@ function requestContext(req: Request) {
 // never handed back in a JSON body — so it can't be exfiltrated by an XSS
 // payload the way a JS-accessible token could (CLAUDE.md security rule).
 //
-// CSRF: no separate token here. sameSite:'strict' already stops the browser
-// from attaching this cookie to any cross-site-triggered request in every
-// modern browser, and CORS is locked to the exact FRONTEND_ORIGIN, so even a
-// same-site-cookie edge case couldn't read the response. A double-submit
+// CSRF: no separate token here. The cookie is scoped to path /auth so it is
+// never attached to a state-changing business route in the first place, those
+// routes authenticate with a bearer header instead, and CORS is locked to the
+// exact FRONTEND_ORIGIN so a forged request couldn't read the response. A double-submit
 // CSRF token was tried and reverted — it fundamentally conflicts with
 // restoring a session silently on page load (the frontend has no token to
 // send on that very first /auth/refresh call, since one is only ever handed
 // out in a login/refresh response, and in-memory state doesn't survive a
 // reload) and adds real complexity for protection that's already redundant
-// with sameSite+CORS given how narrowly these two cookies are used.
-function setRefreshCookie(res: Response, refreshToken: string) {
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+// with path scoping+CORS given how narrowly these two cookies are used.
+//
+// SameSite has to be 'none' in production: the web app is served from a
+// different origin than the API there (FRONTEND_ORIGIN in render.yaml), so a
+// Strict cookie is never sent on /auth/refresh and every session dies
+// silently the moment the 15-minute access token expires. 'none' only works
+// paired with Secure — browsers drop the cookie otherwise — which costs
+// nothing, production is HTTPS. Development stays Strict: localhost:5173 and
+// localhost:4000 are same-site, so there is nothing to gain by relaxing it.
+//
+// What that gives up is the browser-level guarantee that this cookie is never
+// attached to a cross-site-triggered request. The defences listed above carry
+// it instead: /auth is the only path the cookie reaches, every state-changing
+// business route reads a bearer header an attacker's page cannot forge, and
+// CORS won't let a forged /auth/refresh read its own response. The worst such
+// a request achieves is rotating the victim's refresh token into a body the
+// attacker never sees.
+export function refreshCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: isProduction,
+    sameSite: isProduction ? ('none' as const) : ('strict' as const),
     path: '/auth',
     maxAge: REFRESH_TOKEN_TTL_MS,
-  });
+  };
+}
+
+function setRefreshCookie(res: Response, refreshToken: string) {
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
 }
 
 function clearRefreshCookie(res: Response) {
@@ -75,7 +114,10 @@ export class AuthController {
 
   @Post('register')
   @Throttle(AUTH_THROTTLE)
-  @ApiOperation({ summary: 'Create an account and send a verification email' })
+  @ApiOperation({
+    summary:
+      'Create an account and send a verification email (always 201 with the same body, whether or not the address was already registered)',
+  })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }

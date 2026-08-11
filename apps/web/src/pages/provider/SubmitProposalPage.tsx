@@ -48,6 +48,7 @@ interface SubmitProposalPageProps {
 // and gives the provider the message before they lose their typing.
 const MIN_COVER_MESSAGE = 20;
 const MAX_COVER_MESSAGE = 3000;
+const MAX_PRICE = 10000000;
 
 export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId }) => {
   const { navigate, goBack, accessToken } = useApp();
@@ -93,7 +94,12 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
   const days = Number(deliveryDays);
   const message = coverMessage.trim();
 
-  const priceValid = proposedPrice !== '' && Number.isFinite(price) && price >= 0;
+  const priceValid =
+    proposedPrice !== '' &&
+    Number.isFinite(price) &&
+    price >= 0 &&
+    price <= MAX_PRICE &&
+    /^\d+(\.\d{1,2})?$/.test(proposedPrice.trim());
   const daysValid = Number.isInteger(days) && days >= 1 && days <= 365;
   const messageValid = message.length >= MIN_COVER_MESSAGE && message.length <= MAX_COVER_MESSAGE;
   const canSubmit = !closed && priceValid && daysValid && messageValid && !submitting;
