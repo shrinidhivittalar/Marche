@@ -136,6 +136,12 @@ export const jobsApi = {
   create: (token: string, body: JobBody) =>
     apiFetch<ApiJob>('/jobs', token, { method: 'POST', body: JSON.stringify(body) }),
 
+  rephraseField: (token: string, field: 'title' | 'description', text: string) =>
+    apiFetch<{ text: string }>('/jobs/rephrase', token, {
+      method: 'POST',
+      body: JSON.stringify({ field, text }),
+    }),
+
   update: (token: string, id: string, body: Partial<JobBody>) =>
     apiFetch<ApiJob>(`/jobs/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),
 

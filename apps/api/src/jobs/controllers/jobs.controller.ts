@@ -12,14 +12,23 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
 import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { JobsService } from '../services/jobs.service';
+import { AiService } from '../../ai/ai.service';
 import { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import { SearchJobsDto } from '../dto/search-jobs.dto';
 import { AttachFileDto } from '../dto/attach-file.dto';
+import { RephraseJobFieldDto } from '../dto/rephrase-job-field.dto';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
+
+// Tighter than the global 100/min default (app.module.ts): each request is
+// a billed LLM call, not a database read, so the limit is about cost rather
+// than brute-force protection. Matches the AUTH_THROTTLE pattern in
+// auth.controller.ts — a local constant for the one route that needs it.
+const AI_THROTTLE = { default: { limit: 15, ttl: 60_000 } };
 
 // "Requirement" in every summary, "job" in every path and type name — the
 // product word and the domain word for the same thing, kept separate on
@@ -27,7 +36,10 @@ import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 @ApiTags('jobs')
 @Controller('jobs')
 export class JobsController {
-  constructor(private readonly jobsService: JobsService) {}
+  constructor(
+    private readonly jobsService: JobsService,
+    private readonly aiService: AiService,
+  ) {}
 
   // ---------------------------------------------------------------------
   // Route order is load-bearing. Nest matches in declaration order, so the
@@ -77,6 +89,18 @@ export class JobsController {
   @UseGuards(JwtAuthGuard)
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateJobDto) {
     return this.jobsService.create(user.id, dto);
+  }
+
+  // Stateless text transform, not a requirement lookup — no :id in the
+  // path, so this sits before /:id and never risks being shadowed by it.
+  @Post('rephrase')
+  @ApiBearerAuth()
+  @Throttle(AI_THROTTLE)
+  @ApiOperation({ summary: "Rephrase a requirement's title or description with AI" })
+  @UseGuards(JwtAuthGuard)
+  async rephrase(@Body() dto: RephraseJobFieldDto) {
+    const text = await this.aiService.rephraseJobField(dto.field, dto.text);
+    return { text };
   }
 
   @Patch(':id')

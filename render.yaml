@@ -66,5 +66,10 @@ services:
       - key: EMAIL_FROM
         sync: false
 
+      # Powers "Rephrase with AI" on the job-posting form. Without it that
+      # one button errors; nothing else on the site depends on it.
+      - key: GROQ_API_KEY
+        sync: false
+
       - key: LOG_LEVEL
         value: info
