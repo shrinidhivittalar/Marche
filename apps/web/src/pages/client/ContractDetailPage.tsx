@@ -76,10 +76,15 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   const isVendor = currentUser.id === contract.vendorId;
   const contractReview = getReviewForContract(contract.id);
   const contractDispute = getDisputeForContract(contract.id);
-  const canRaiseDispute = (isClient || isVendor) && !contractDispute && contract.bookingState !== 'Closed' && contract.bookingState !== 'Cancelled';
+  const canRaiseDispute =
+    (isClient || isVendor) &&
+    !contractDispute &&
+    contract.bookingState !== 'Closed' &&
+    contract.bookingState !== 'Cancelled';
   const workDiaryEntries = getWorkDiaryForContract(contract.id);
   const totalLoggedHours = workDiaryEntries.reduce((total, entry) => total + entry.hours, 0);
-  const canAddWorkDiary = isVendor && (contract.bookingState === 'Confirmed' || contract.bookingState === 'Completed');
+  const canAddWorkDiary =
+    isVendor && (contract.bookingState === 'Confirmed' || contract.bookingState === 'Completed');
 
   const handleClientConfirmCompletion = () => {
     clientConfirmCompletion(contract.id);
@@ -170,7 +175,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             icon={FileCheck}
             onClick={() => setAcknowledgementOpen(true)}
           >
-            Booking Acknowledgement
+            View Invoice
           </Button>
         </div>
       </div>
@@ -218,8 +223,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             </div>
             <div
               className={`p-2.5 rounded-xl border transition-all ${
-                contract.bookingState === 'Completed' ||
-                contract.bookingState === 'Closed'
+                contract.bookingState === 'Completed' || contract.bookingState === 'Closed'
                   ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/20 text-primary'
                   : 'bg-bg border-border text-ink-muted'
               }`}
@@ -271,28 +275,43 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               Frontend record of the terms accepted when this contract was confirmed.
             </p>
           </div>
-          <span className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${agreement ? 'bg-primary/5 border-primary/20 text-primary' : 'bg-bg border-border text-ink-muted'}`}>
+          <span
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${agreement ? 'bg-primary/5 border-primary/20 text-primary' : 'bg-bg border-border text-ink-muted'}`}
+          >
             {agreement ? 'Accepted' : 'Legacy contract'}
           </span>
         </div>
         {agreement ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div className="p-3 bg-bg border border-border rounded-xl">
-              <span className="block text-[10px] font-mono uppercase text-ink-muted">Accepted by</span>
+              <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                Accepted by
+              </span>
               <p className="font-bold text-ink mt-1">{agreement.acceptedByName}</p>
             </div>
             <div className="p-3 bg-bg border border-border rounded-xl">
-              <span className="block text-[10px] font-mono uppercase text-ink-muted">Accepted on</span>
-              <p className="font-bold text-ink mt-1">{new Date(agreement.acceptedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+              <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                Accepted on
+              </span>
+              <p className="font-bold text-ink mt-1">
+                {new Date(agreement.acceptedAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </p>
             </div>
             <div className="p-3 bg-bg border border-border rounded-xl">
-              <span className="block text-[10px] font-mono uppercase text-ink-muted">Terms version</span>
+              <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                Terms version
+              </span>
               <p className="font-bold text-ink mt-1">{agreement.termsVersion}</p>
             </div>
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-border bg-bg p-4 text-xs text-ink-muted">
-            This demo contract was created before agreement snapshots were added, so no signed terms record is stored for it.
+            This demo contract was created before agreement snapshots were added, so no signed terms
+            record is stored for it.
           </div>
         )}
       </Card>
@@ -301,7 +320,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           <div>
             <h3 className="text-base font-bold text-ink">Work diary</h3>
             <p className="text-xs text-ink-muted mt-1">
-              Manual proof-of-work entries for this contract. Automatic screenshots/activity capture still requires a real tracker.
+              Manual proof-of-work entries for this contract. Automatic screenshots/activity capture
+              still requires a real tracker.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -309,7 +329,12 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               {totalLoggedHours.toFixed(1)} hrs logged
             </span>
             {canAddWorkDiary && (
-              <Button size="sm" variant="outline" icon={Clock} onClick={() => setWorkDiaryModalOpen(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                icon={Clock}
+                onClick={() => setWorkDiaryModalOpen(true)}
+              >
                 Log Work
               </Button>
             )}
@@ -326,9 +351,16 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <div key={entry.id} className="py-4 space-y-2">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <p className="text-sm font-bold text-ink">{entry.hours.toFixed(1)} hour{entry.hours === 1 ? '' : 's'}</p>
+                    <p className="text-sm font-bold text-ink">
+                      {entry.hours.toFixed(1)} hour{entry.hours === 1 ? '' : 's'}
+                    </p>
                     <p className="text-[11px] text-ink-muted">
-                      {new Date(entry.workDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} by {entry.vendorName}
+                      {new Date(entry.workDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}{' '}
+                      by {entry.vendorName}
                     </p>
                   </div>
                   {entry.proofUrl && (
@@ -362,7 +394,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <span>Booking Confirmed (₹{contract.amount.toLocaleString('en-IN')})</span>
             </div>
             <p className="leading-relaxed">
-              This booking is confirmed for the scheduled event date ({contract.eventDate}). The provider will mark it completed once the event is delivered.
+              This booking is confirmed for the scheduled event date ({contract.eventDate}). The
+              provider will mark it completed once the event is delivered.
             </p>
           </div>
         )}
@@ -374,7 +407,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <span>Event Marked Complete — Awaiting Your Confirmation</span>
             </div>
             <p className="leading-relaxed">
-              {contract.vendorName} marked this event as delivered. Confirm below to close out the booking.
+              {contract.vendorName} marked this event as delivered. Confirm below to close out the
+              booking.
             </p>
           </div>
         )}
@@ -386,7 +420,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <span>Booking Completed & Closed</span>
             </div>
             <p className="leading-relaxed">
-              Full payment of ₹{contract.amount.toLocaleString('en-IN')} was confirmed for {contract.vendorName}.
+              Full payment of ₹{contract.amount.toLocaleString('en-IN')} was confirmed for{' '}
+              {contract.vendorName}.
             </p>
           </div>
         )}
@@ -395,10 +430,17 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h4 className="text-xs font-bold text-ink">Client review</h4>
-                <p className="text-[11px] text-ink-muted mt-0.5">Visible on this provider's public reputation.</p>
+                <p className="text-[11px] text-ink-muted mt-0.5">
+                  Visible on this provider's public reputation.
+                </p>
               </div>
               {!contractReview && isClient && (
-                <Button size="sm" variant="outline" icon={Star} onClick={() => setReviewModalOpen(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={Star}
+                  onClick={() => setReviewModalOpen(true)}
+                >
                   Leave Review
                 </Button>
               )}
@@ -417,13 +459,22 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                   </span>
                   <span>{contractReview.rating.toFixed(1)}</span>
                 </div>
-                <p className="text-xs text-ink leading-relaxed">&quot;{contractReview.comment}&quot;</p>
+                <p className="text-xs text-ink leading-relaxed">
+                  &quot;{contractReview.comment}&quot;
+                </p>
                 <p className="text-[11px] text-ink-muted">
-                  {contractReview.clientName} on {new Date(contractReview.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {contractReview.clientName} on{' '}
+                  {new Date(contractReview.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
                 </p>
               </div>
             ) : (
-              <p className="text-xs text-ink-muted">No review has been submitted for this booking yet.</p>
+              <p className="text-xs text-ink-muted">
+                No review has been submitted for this booking yet.
+              </p>
             )}
           </div>
         )}
@@ -434,7 +485,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                 <AlertTriangle className="w-5 h-5" />
                 <span>Active dispute - {contractDispute.status.replace('_', ' ')}</span>
               </div>
-              <span className="font-mono text-[10px] uppercase text-red-700 dark:text-red-300">{contractDispute.id}</span>
+              <span className="font-mono text-[10px] uppercase text-red-700 dark:text-red-300">
+                {contractDispute.id}
+              </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -462,24 +515,17 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           <div className="flex items-center gap-3">
             {/* Vendor Action */}
             {isVendor && contract.bookingState === 'Confirmed' && (
-              <Button
-                icon={CheckCircle2}
-                onClick={() => vendorMarkCompleted(contract.id)}
-              >
+              <Button icon={CheckCircle2} onClick={() => vendorMarkCompleted(contract.id)}>
                 [Vendor] Mark Event Completed
               </Button>
             )}
 
             {/* Client Action */}
             {isClient && contract.bookingState === 'Completed' && (
-              <Button
-                icon={CheckCircle2}
-                onClick={handleClientConfirmCompletion}
-              >
+              <Button icon={CheckCircle2} onClick={handleClientConfirmCompletion}>
                 [Client] Confirm Completion
               </Button>
             )}
-
 
             {canRaiseDispute && (
               <Button variant="outline" icon={Gavel} onClick={() => setDisputeModalOpen(true)}>
@@ -507,37 +553,62 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                 <div>
                   <p className="text-base font-black text-ink">{agreement.jobTitle}</p>
-                  <p className="text-[11px] text-ink-muted mt-1">{agreement.category} • {agreement.location}</p>
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    {agreement.category} • {agreement.location}
+                  </p>
                 </div>
                 <StatusBadge status={contract.bookingState} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <span className="block text-[10px] font-mono uppercase text-ink-muted">Client</span>
+                  <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                    Client
+                  </span>
                   <p className="font-bold text-ink">{contract.clientName}</p>
                 </div>
                 <div>
-                  <span className="block text-[10px] font-mono uppercase text-ink-muted">Service provider</span>
+                  <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                    Service provider
+                  </span>
                   <p className="font-bold text-ink">{contract.vendorName}</p>
                 </div>
                 <div>
-                  <span className="block text-[10px] font-mono uppercase text-ink-muted">Schedule</span>
-                  <p className="font-semibold text-ink">{formatEventSchedule(agreement.eventDate, agreement.timingMode, agreement.eventStartTime, agreement.eventEndTime)}</p>
+                  <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                    Schedule
+                  </span>
+                  <p className="font-semibold text-ink">
+                    {formatEventSchedule(
+                      agreement.eventDate,
+                      agreement.timingMode,
+                      agreement.eventStartTime,
+                      agreement.eventEndTime,
+                    )}
+                  </p>
                 </div>
                 <div>
-                  <span className="block text-[10px] font-mono uppercase text-ink-muted">Agreed amount</span>
-                  <p className="font-bold text-primary">₹{agreement.amount.toLocaleString('en-IN')}</p>
+                  <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                    Agreed amount
+                  </span>
+                  <p className="font-bold text-primary">
+                    ₹{agreement.amount.toLocaleString('en-IN')}
+                  </p>
                 </div>
               </div>
               <div className="p-3 bg-bg border border-border rounded-xl">
-                <span className="block text-[10px] font-mono uppercase text-ink-muted">Acceptance</span>
+                <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                  Acceptance
+                </span>
                 <p className="font-semibold text-ink mt-1">
-                  {agreement.acceptedByName} accepted {agreement.termsVersion} on {new Date(agreement.acceptedAt).toLocaleString()}.
+                  {agreement.acceptedByName} accepted {agreement.termsVersion} on{' '}
+                  {new Date(agreement.acceptedAt).toLocaleString()}.
                 </p>
-                <p className="text-[11px] text-ink-muted mt-1">Reference: {agreement.acknowledgementNumber} • Proposal: {agreement.proposalId}</p>
+                <p className="text-[11px] text-ink-muted mt-1">
+                  Reference: {agreement.acknowledgementNumber} • Proposal: {agreement.proposalId}
+                </p>
               </div>
               <p className="text-[10px] text-ink-muted italic leading-relaxed">
-                This is a local frontend record. A legally reliable agreement still needs backend timestamping, immutable storage, user authentication, and versioned legal documents.
+                This is a local frontend record. A legally reliable agreement still needs backend
+                timestamping, immutable storage, user authentication, and versioned legal documents.
               </p>
             </div>
           ) : (
@@ -546,7 +617,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             </div>
           )}
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setAgreementOpen(false)}>Close</Button>
+            <Button size="sm" onClick={() => setAgreementOpen(false)}>
+              Close
+            </Button>
           </div>
         </div>
       </Modal>
@@ -560,11 +633,20 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
         <div className="space-y-5 pt-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-date">Work date</label>
-              <Input id="work-date" type="date" value={workDate} onChange={(event) => setWorkDate(event.target.value)} />
+              <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-date">
+                Work date
+              </label>
+              <Input
+                id="work-date"
+                type="date"
+                value={workDate}
+                onChange={(event) => setWorkDate(event.target.value)}
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-hours">Hours</label>
+              <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-hours">
+                Hours
+              </label>
               <Input
                 id="work-hours"
                 type="number"
@@ -577,7 +659,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-ink" htmlFor="work-summary">Summary</label>
+            <label className="text-xs font-semibold text-ink" htmlFor="work-summary">
+              Summary
+            </label>
             <Textarea
               id="work-summary"
               rows={5}
@@ -590,7 +674,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-proof">Proof link</label>
+            <label className="block text-xs font-semibold text-ink mb-1" htmlFor="work-proof">
+              Proof link
+            </label>
             <Input
               id="work-proof"
               value={workProofUrl}
@@ -600,8 +686,12 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           </div>
           {workDiaryError && <p className="text-xs font-medium text-red-600">{workDiaryError}</p>}
           <div className="flex justify-end gap-3">
-            <Button variant="outline" size="sm" onClick={() => setWorkDiaryModalOpen(false)}>Cancel</Button>
-            <Button size="sm" icon={Clock} onClick={handleAddWorkDiaryEntry}>Save Entry</Button>
+            <Button variant="outline" size="sm" onClick={() => setWorkDiaryModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" icon={Clock} onClick={handleAddWorkDiaryEntry}>
+              Save Entry
+            </Button>
           </div>
         </div>
       </Modal>
@@ -614,10 +704,13 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       >
         <div className="space-y-5 pt-2">
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-            Disputes are stored locally and notify the other party plus the demo admin. Real mediation, evidence storage, and arbitration still require backend support.
+            Disputes are stored locally and notify the other party plus the demo admin. Real
+            mediation, evidence storage, and arbitration still require backend support.
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-ink" htmlFor="dispute-reason">Reason</label>
+            <label className="text-xs font-semibold text-ink" htmlFor="dispute-reason">
+              Reason
+            </label>
             <Textarea
               id="dispute-reason"
               rows={4}
@@ -630,7 +723,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-ink" htmlFor="dispute-evidence">Evidence</label>
+            <label className="text-xs font-semibold text-ink" htmlFor="dispute-evidence">
+              Evidence
+            </label>
             <Textarea
               id="dispute-evidence"
               rows={5}
@@ -644,8 +739,12 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             {disputeError && <p className="text-xs font-medium text-red-600">{disputeError}</p>}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" size="sm" onClick={() => setDisputeModalOpen(false)}>Cancel</Button>
-            <Button size="sm" icon={Gavel} onClick={handleRaiseDispute}>Submit Dispute</Button>
+            <Button variant="outline" size="sm" onClick={() => setDisputeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" icon={Gavel} onClick={handleRaiseDispute}>
+              Submit Dispute
+            </Button>
           </div>
         </div>
       </Modal>
@@ -707,67 +806,113 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
         </div>
       </Modal>
 
-      {/* Official Non-Fiscal Booking Acknowledgement Modal */}
+      {/* Invoice modal. `.print-area` + the print stylesheet in index.css
+          isolate this block so window.print() prints only the invoice —
+          not the sidebar, the page behind it, or the modal's own
+          Print/Close buttons (marked `.no-print`). */}
       <Modal
         isOpen={acknowledgementOpen}
         onClose={() => setAcknowledgementOpen(false)}
-        title="Official Booking Acknowledgement"
-        description="A non-fiscal confirmation of your marketplace service reservation."
+        title="Invoice"
+        description="A summary of this booking, for your records."
         maxWidth="xl"
       >
         <div className="space-y-6 pt-2 text-xs">
-          <div className="p-6 bg-surface border border-border rounded-2xl shadow-xs space-y-4">
-            <div className="flex justify-between items-start border-b border-border pb-4">
+          <div className="print-area p-8 bg-white text-ink border border-border rounded-2xl shadow-xs space-y-6">
+            <div className="flex justify-between items-start pb-6 border-b border-border">
               <div>
-                <span className="text-lg font-black text-ink tracking-tight">MARCHÉ</span>
-                <span className="block text-[10px] font-mono text-ink-muted">
-                  Booking Reference ID: {contract.acknowledgementNumber}
-                </span>
+                <span className="text-xl font-black tracking-tight">MARCHÉ</span>
+                <p className="text-[10px] text-ink-muted mt-1">Event services marketplace</p>
               </div>
+              <div className="text-right">
+                <p className="text-sm font-bold uppercase tracking-wide">Invoice</p>
+                <p className="text-[10px] font-mono text-ink-muted mt-1">
+                  No. {contract.acknowledgementNumber}
+                </p>
+                <p className="text-[10px] text-ink-muted">
+                  Issued {new Date(contract.createdAt).toLocaleDateString('en-IN')}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-ink-muted">Billed to</span>
+                <p className="font-bold mt-0.5">{contract.clientName}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-mono uppercase text-ink-muted">
+                  Service provider
+                </span>
+                <p className="font-bold mt-0.5">{contract.vendorName}</p>
+              </div>
+            </div>
+
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="pb-2 text-[10px] font-mono uppercase text-ink-muted font-semibold">
+                    Description
+                  </th>
+                  <th className="pb-2 text-[10px] font-mono uppercase text-ink-muted font-semibold text-right">
+                    Amount
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border">
+                  <td className="py-3 align-top">
+                    <p className="font-semibold">{contract.jobTitle}</p>
+                    <p className="text-ink-muted mt-0.5">{contract.category}</p>
+                    <p className="text-ink-muted">
+                      {formatEventSchedule(
+                        contract.eventDate,
+                        contract.timingMode,
+                        contract.eventStartTime,
+                        contract.eventEndTime,
+                      )}
+                    </p>
+                    <p className="text-ink-muted">{contract.location}</p>
+                  </td>
+                  <td className="py-3 text-right font-mono align-top">
+                    ₹{contract.amount.toLocaleString('en-IN')}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="flex justify-end">
+              <div className="w-48 space-y-1.5">
+                <div className="flex justify-between text-ink-muted">
+                  <span>Subtotal</span>
+                  <span className="font-mono">₹{contract.amount.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-ink-muted">
+                  <span>Marché fee</span>
+                  <span className="font-mono">₹0</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm pt-1.5 border-t border-border">
+                  <span>Total</span>
+                  <span className="font-mono">₹{contract.amount.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <span className="text-[10px] font-mono uppercase text-ink-muted">Status</span>
               <StatusBadge status={contract.bookingState} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="text-[10px] font-mono uppercase text-ink-muted">Client</span>
-                <p className="font-bold text-ink">{contract.clientName}</p>
-              </div>
-              <div>
-                <span className="text-[10px] font-mono uppercase text-ink-muted">
-                  Service Provider
-                </span>
-                <p className="font-bold text-ink">{contract.vendorName}</p>
-              </div>
-              <div>
-                <span className="text-[10px] font-mono uppercase text-ink-muted">Event Date & Time</span>
-                <p className="font-semibold text-ink">
-                  {formatEventSchedule(contract.eventDate, contract.timingMode, contract.eventStartTime, contract.eventEndTime)}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] font-mono uppercase text-ink-muted">Category</span>
-                <p className="font-bold text-primary">{contract.category}</p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-bg border border-border rounded-xl flex justify-between font-mono font-bold text-sm">
-              <span>Contract Agreed Total:</span>
-              <span className="text-primary">₹{contract.amount.toLocaleString('en-IN')}</span>
-            </div>
-
-            <p className="text-[10px] text-ink-muted italic leading-relaxed pt-2 border-t border-border">
-              Notice: This document is a non-fiscal confirmation of a marketplace service reservation. It does not constitute a tax invoice.
+            <p className="text-[10px] text-ink-muted italic leading-relaxed pt-4 border-t border-border">
+              Non-fiscal document — a record of the amount agreed between the parties for this
+              booking. It does not replace a formal tax invoice; Marché does not currently issue or
+              process payments for this booking.
             </p>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={Printer}
-              onClick={() => window.print()}
-            >
-              Print Document
+          <div className="no-print flex justify-end gap-3 pt-2">
+            <Button variant="outline" size="sm" icon={Printer} onClick={() => window.print()}>
+              Print / Save as PDF
             </Button>
             <Button size="sm" onClick={() => setAcknowledgementOpen(false)}>
               Close View

@@ -1,9 +1,9 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @source "../../../packages/ui/src";
 
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@marche/ui/styles/tokens.css";
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@marche/ui/styles/tokens.css';
 
 @layer base {
   html {
@@ -19,7 +19,15 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-ink);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
@@ -35,22 +43,79 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
+  background: #d1d5db;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
+  background: #9ca3af;
 }
 
 /* Soft elevation shadows matching Linear / Apple design */
 .shadow-marche {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.02),
+    0 1px 2px -1px rgba(0, 0, 0, 0.03);
 }
 
 .shadow-marche-card {
-  box-shadow: 0 2px 8px -2px rgba(17, 24, 39, 0.04), 0 1px 3px -1px rgba(17, 24, 39, 0.02);
+  box-shadow:
+    0 2px 8px -2px rgba(17, 24, 39, 0.04),
+    0 1px 3px -1px rgba(17, 24, 39, 0.02);
 }
 
 .shadow-marche-popover {
-  box-shadow: 0 12px 32px -8px rgba(17, 24, 39, 0.08), 0 4px 12px -2px rgba(17, 24, 39, 0.04);
+  box-shadow:
+    0 12px 32px -8px rgba(17, 24, 39, 0.08),
+    0 4px 12px -2px rgba(17, 24, 39, 0.04);
+}
+
+/* Printable documents (invoices, booking acknowledgements, …).
+   Without this, window.print() prints the whole visible page — sidebar,
+   nav, every other open panel — behind whatever modal triggered it, which
+   is why "Print" used to produce what looked like a screenshot of the
+   app rather than a document. Wrap the one thing that should print in
+   `.print-area`, and mark anything inside it that shouldn't (buttons,
+   close controls) with `.no-print`.
+
+   When `.print-area` sits inside a Dialog (packages/ui/src/components/
+   Dialog.tsx), the dialog's own fixed positioning and max-h-[90vh]/
+   overflow-hidden clip it to whatever fit on screen at the moment Print
+   was clicked — the content isn't hidden, just cut off. The :has()
+   rules below neutralize just those constraints, only on a dialog that
+   is actually printing something, so unrelated dialogs are untouched. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .no-print {
+    display: none !important;
+  }
+
+  /* Left `fixed` (the overlay's own base style): a fixed element is out of
+     normal flow, so it reserves no space where the (hidden) app used to
+     be — switching it to `static` here left a blank page's worth of
+     nothing before the invoice, since everything above it in the DOM was
+     merely invisible, not removed from layout. */
+  [data-slot='dialog-overlay']:has(.print-area) {
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    align-items: flex-start;
+  }
+  [data-slot='dialog-content']:has(.print-area) {
+    max-height: none;
+    max-width: none;
+    width: 100%;
+    overflow: visible;
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+  [data-slot='dialog-body']:has(.print-area) {
+    overflow: visible;
+  }
 }
