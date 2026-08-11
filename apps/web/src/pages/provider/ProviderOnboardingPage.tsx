@@ -93,6 +93,31 @@ const Q3_OPTIONS = [
   },
 ];
 
+// Maps each question's UI label to the profile enum value it saves as.
+// Keyed off the option label rather than an index, so reordering the
+// option arrays above can't silently change what a stored answer means.
+const EXPERIENCE_LEVEL_BY_LABEL: Record<string, 'NEW' | 'SOME_EXPERIENCE' | 'EXPERT'> = {
+  'I am brand new to this': 'NEW',
+  'I have some experience': 'SOME_EXPERIENCE',
+  'I am an expert': 'EXPERT',
+};
+
+const GOAL_BY_LABEL: Record<string, 'MAIN_INCOME' | 'SIDE_INCOME' | 'EXPERIENCE' | 'UNDECIDED'> = {
+  'To earn my main income': 'MAIN_INCOME',
+  'To make money on the side': 'SIDE_INCOME',
+  'To get experience, for a full-time job': 'EXPERIENCE',
+  "I don't have a goal in mind yet": 'UNDECIDED',
+};
+
+const WORK_PREFERENCE_BY_LABEL: Record<
+  string,
+  'FIND_OPPORTUNITIES' | 'PACKAGE_SERVICES' | 'CONTRACT_TO_HIRE'
+> = {
+  "I'd like to find opportunities myself": 'FIND_OPPORTUNITIES',
+  "I'd like to package up my work for clients to buy": 'PACKAGE_SERVICES',
+  'contract-to-hire': 'CONTRACT_TO_HIRE',
+};
+
 const CATEGORIES: EventCategory[] = [
   'Photography',
   'Catering',
@@ -363,9 +388,11 @@ export const ProviderOnboardingPage: React.FC = () => {
   };
 
   const handleFinish = async () => {
-    // Title and bio are the two fields this wizard collects that also live on
-    // /profiles/me and that the dashboard's completeness check reads, so they
-    // go to the real API. Everything else this wizard collects — categories,
+    // Title, bio and the Q1/Q2/Q3 answers are the fields this wizard collects
+    // that also live on /profiles/me. Title/bio feed the dashboard's
+    // completeness check; the Q1/Q2/Q3 answers have no reader yet (see
+    // schema.prisma), but are saved rather than discarded now that there's a
+    // column for them. Everything else this wizard collects — categories,
     // free-text skills, work history, education, languages, rate, phone, date
     // of birth — either has no column on the profile or has its own endpoint
     // per row; those stay on the local demo user, editable in profile
@@ -378,6 +405,13 @@ export const ProviderOnboardingPage: React.FC = () => {
         await profilesApi.updateMe(accessToken, {
           headline: title.trim() || null,
           bio: bio.trim() || null,
+          experienceLevel: q1 ? EXPERIENCE_LEVEL_BY_LABEL[q1] : undefined,
+          primaryGoal: q2 ? GOAL_BY_LABEL[q2] : undefined,
+          workPreferences: q3.size
+            ? [...q3]
+                .map((label) => WORK_PREFERENCE_BY_LABEL[label])
+                .filter((v): v is NonNullable<typeof v> => v !== undefined)
+            : undefined,
         });
       }
       updateCurrentUser({

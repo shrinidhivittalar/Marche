@@ -154,6 +154,26 @@ enum LanguageProficiency {
   NATIVE
 }
 
+// Provider onboarding-wizard answers (Q1/Q2/Q3 in ProviderOnboardingPage).
+enum ProviderExperienceLevel {
+  NEW
+  SOME_EXPERIENCE
+  EXPERT
+}
+
+enum ProviderGoal {
+  MAIN_INCOME
+  SIDE_INCOME
+  EXPERIENCE
+  UNDECIDED
+}
+
+enum ProviderWorkPreference {
+  FIND_OPPORTUNITIES
+  PACKAGE_SERVICES
+  CONTRACT_TO_HIRE
+}
+
 model Profile {
   id     String @id @default(uuid())
   userId String @unique
@@ -173,6 +193,19 @@ model Profile {
   location      String?
   timezone      String?
   socialLinks   Json?
+
+  // Onboarding-wizard answers. Asked on both onboarding screens, previously
+  // collected in local component state and discarded on submit — nothing
+  // read them, and there was nowhere to put them. Nullable/empty until a
+  // caller actually sends one; no Phase 1 feature reads them back yet
+  // either, so they are stored as asked and left for a later feature to
+  // consume rather than driving any behaviour today.
+  experienceLevel ProviderExperienceLevel?
+  primaryGoal     ProviderGoal?
+  workPreferences ProviderWorkPreference[]
+  // Client-side onboarding answers, same story.
+  orgSize String?
+  website String?
 
   visibility         ProfileVisibility  @default(PUBLIC)
   availabilityStatus AvailabilityStatus @default(AVAILABLE)

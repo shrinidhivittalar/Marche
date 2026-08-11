@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsIn,
   IsObject,
   IsOptional,
@@ -16,6 +18,13 @@ const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/;
 const MAX_SOCIAL_LINKS = 10;
 const MAX_SOCIAL_LINK_KEY_LENGTH = 30;
 const MAX_SOCIAL_LINK_URL_LENGTH = 300;
+
+// Matches ProviderOnboardingPage's Q1/Q2/Q3 and ClientOnboardingPage's org
+// size options exactly — a controlled set, not free text from the client.
+const EXPERIENCE_LEVELS = ['NEW', 'SOME_EXPERIENCE', 'EXPERT'] as const;
+const PROVIDER_GOALS = ['MAIN_INCOME', 'SIDE_INCOME', 'EXPERIENCE', 'UNDECIDED'] as const;
+const WORK_PREFERENCES = ['FIND_OPPORTUNITIES', 'PACKAGE_SERVICES', 'CONTRACT_TO_HIRE'] as const;
+const ORG_SIZES = ['Just me', '2 - 9', '10 - 99', '100 - 499', '500 - 4,999', '5,000+'] as const;
 
 // class-validator has no built-in decorator for "bounded map of URLs", and
 // this is the only place that shape appears — a one-off inline check is
@@ -120,4 +129,34 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsIn(['PUBLIC', 'PRIVATE'])
   visibility?: 'PUBLIC' | 'PRIVATE';
+
+  // Onboarding-wizard answers. See profiles.repository.ts / schema.prisma
+  // for why these exist but nothing reads them back yet.
+  @ApiPropertyOptional({ enum: EXPERIENCE_LEVELS })
+  @IsOptional()
+  @IsIn(EXPERIENCE_LEVELS)
+  experienceLevel?: (typeof EXPERIENCE_LEVELS)[number];
+
+  @ApiPropertyOptional({ enum: PROVIDER_GOALS })
+  @IsOptional()
+  @IsIn(PROVIDER_GOALS)
+  primaryGoal?: (typeof PROVIDER_GOALS)[number];
+
+  @ApiPropertyOptional({ enum: WORK_PREFERENCES, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(WORK_PREFERENCES.length)
+  @IsIn(WORK_PREFERENCES, { each: true })
+  workPreferences?: (typeof WORK_PREFERENCES)[number][];
+
+  @ApiPropertyOptional({ enum: ORG_SIZES })
+  @IsOptional()
+  @IsIn(ORG_SIZES)
+  orgSize?: (typeof ORG_SIZES)[number];
+
+  @ApiPropertyOptional({ maxLength: 300 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  website?: string;
 }

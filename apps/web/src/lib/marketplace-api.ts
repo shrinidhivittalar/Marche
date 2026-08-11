@@ -80,6 +80,13 @@ export interface ApiProfile {
   availabilityStatus: AvailabilityStatus;
   nextAvailableDate: string | null;
   verifiedAt: string | null;
+  // Onboarding-wizard answers — stored as asked, not read back by any
+  // Phase 1 feature yet. See update-profile.dto.ts for the allowed values.
+  experienceLevel: 'NEW' | 'SOME_EXPERIENCE' | 'EXPERT' | null;
+  primaryGoal: 'MAIN_INCOME' | 'SIDE_INCOME' | 'EXPERIENCE' | 'UNDECIDED' | null;
+  workPreferences: ('FIND_OPPORTUNITIES' | 'PACKAGE_SERVICES' | 'CONTRACT_TO_HIRE')[];
+  orgSize: string | null;
+  website: string | null;
   skills?: { id: string; skill: { id: string; name: string } }[];
   experiences?: ApiExperience[];
   educations?: ApiEducation[];
@@ -207,6 +214,11 @@ export const profilesApi = {
         | 'timezone'
         | 'username'
         | 'visibility'
+        | 'experienceLevel'
+        | 'primaryGoal'
+        | 'workPreferences'
+        | 'orgSize'
+        | 'website'
       >
     >,
   ) => apiFetch<ApiProfile>('/profiles/me', token, { method: 'PATCH', body: JSON.stringify(body) }),
