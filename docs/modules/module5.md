@@ -1032,7 +1032,7 @@ Matching `jobs/` exactly.
 | Profiles    | Profile                         | Provider and Client identity     |
 | Marketplace | —                               | —                                |
 | Media       | Media                           | Proposal attachments             |
-| Jobs        | Job, `JobsService.markFilled`   | Proposal target                  |
+| Jobs        | Job, `JobsService.claimFilled`  | Proposal target                  |
 | Proposals   | Jobs, Profiles, Media, Identity | Connection, Contracts, Messaging |
 
 **[Changed]** Marketplace is not a dependency. Module 05 never resolves a

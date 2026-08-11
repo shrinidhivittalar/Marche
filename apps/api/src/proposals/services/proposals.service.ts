@@ -10,7 +10,7 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { JobsService } from '../../jobs/services/jobs.service';
 import { MediaService } from '../../media/media.service';
-import { assertProviderRole } from '../../profiles/profile-access.util';
+import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { ProposalsRepository } from '../repositories/proposals.repository';
 import { ConnectionsRepository } from '../repositories/connections.repository';
@@ -311,7 +311,10 @@ export class ProposalsService {
    * over a shortlist should not silently lose it.
    */
   private assertAcceptingProposals(job: Job): void {
-    if (job.deletedAt !== null || job.status !== 'PUBLISHED') {
+    // deletedAt is not checked here: job always comes from
+    // JobsRepository.findById, which already filters deletedAt out, so a
+    // soft-deleted job can never reach this method.
+    if (job.status !== 'PUBLISHED') {
       throw new ConflictException('This requirement is not accepting proposals');
     }
 
@@ -342,11 +345,7 @@ export class ProposalsService {
   }
 
   private async getOwnProfile(userId: string) {
-    const profile = await this.profilesRepository.findByUserId(userId);
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
-    return profile;
+    return getOwnProfileOrThrow(this.profilesRepository, userId);
   }
 
   /**
@@ -373,17 +372,12 @@ export class ProposalsService {
     return { proposal, profile };
   }
 
+  // JobsService already owns this exact ownership check (used by its own
+  // writes); delegating rather than re-implementing it against
+  // JobsRepository keeps "does this client own this requirement" defined
+  // once.
   private async getOwnJob(userId: string, jobId: string) {
-    const profile = await this.getOwnProfile(userId);
-    const job = await this.jobsRepository.findById(jobId);
-
-    if (!job) {
-      throw new NotFoundException('Requirement not found');
-    }
-    if (job.clientProfileId !== profile.id) {
-      throw new ForbiddenException('You do not have access to this requirement');
-    }
-
+    const { job } = await this.jobsService.getOwnJob(userId, jobId);
     return job;
   }
 

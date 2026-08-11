@@ -244,8 +244,6 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
               )}
             </div>
 
-            {/* Module 4 ends here. Submitting is Module 5's job, and this
-                still points at the mock proposal screen until it exists. */}
             <Button
               size="lg"
               className="w-full"

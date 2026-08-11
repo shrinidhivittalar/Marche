@@ -673,7 +673,7 @@ architecture1.3.0.md.
 ## Modules
 
 - Proposals
-- Jobs — through the one exported transition, `markFilled`
+- Jobs — through the one exported transition, `claimFilled`
 - ~~Contracts~~ — **[Removed]** deferred; accepting establishes the
   relationship, not a contract
 - ~~Messaging~~ — **[Removed]** deferred; it will hang off the Connection

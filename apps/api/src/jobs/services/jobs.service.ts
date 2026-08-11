@@ -9,7 +9,7 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
 import { CategoriesService } from '../../marketplace/services/categories.service';
 import { MediaService } from '../../media/media.service';
-import { assertClientRole } from '../../profiles/profile-access.util';
+import { assertClientRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
@@ -48,6 +48,10 @@ function withProposalCount<T extends { _count?: { proposals: number } }>(job: T)
 
 @Injectable()
 export class JobsService {
+  // Capped for the same reason service images are: a requirement with
+  // forty files attached is a document dump, not a brief.
+  private static readonly MAX_ATTACHMENTS = 10;
+
   constructor(
     private readonly jobsRepository: JobsRepository,
     private readonly profilesRepository: ProfilesRepository,
@@ -245,10 +249,6 @@ export class JobsService {
 
   // ---------- attachments ----------
 
-  // Capped for the same reason service images are: a requirement with
-  // forty files attached is a document dump, not a brief.
-  private static readonly MAX_ATTACHMENTS = 10;
-
   async addAttachment(userId: string, jobId: string, mediaId: string) {
     const { job } = await this.getOwnJob(userId, jobId);
 
@@ -414,11 +414,7 @@ export class JobsService {
   }
 
   private async getOwnProfile(userId: string) {
-    const profile = await this.profilesRepository.findByUserId(userId);
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
-    return profile;
+    return getOwnProfileOrThrow(this.profilesRepository, userId);
   }
 
   /**
@@ -428,8 +424,13 @@ export class JobsService {
    * nothing, but 403 is what the rest of the codebase returns once a
    * resource has been found (see assertOwnership), and consistency matters
    * more here than the marginal secrecy.
+   *
+   * Public rather than private: ProposalsService needs the exact same
+   * ownership check for "does this client own the requirement a proposal
+   * targets" and already injects JobsService to get it, rather than
+   * re-implementing it against JobsRepository directly.
    */
-  private async getOwnJob(userId: string, jobId: string) {
+  async getOwnJob(userId: string, jobId: string) {
     const profile = await this.getOwnProfile(userId);
     const job = await this.jobsRepository.findById(jobId);
 

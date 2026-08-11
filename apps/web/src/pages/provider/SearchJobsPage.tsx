@@ -198,16 +198,27 @@ export const SearchJobsPage: React.FC = () => {
               <span className="flex-1">All categories</span>
             </label>
             {(categories.data ?? []).map((category) => (
-              <label
-                key={category.id}
-                className="flex items-center gap-2.5 text-xs text-ink cursor-pointer"
-              >
-                <Checkbox
-                  checked={categorySlug === category.slug}
-                  onCheckedChange={() => changeFilter(() => setCategorySlug(category.slug))}
-                />
-                <span className="flex-1">{category.name}</span>
-              </label>
+              <React.Fragment key={category.id}>
+                <label className="flex items-center gap-2.5 text-xs text-ink cursor-pointer">
+                  <Checkbox
+                    checked={categorySlug === category.slug}
+                    onCheckedChange={() => changeFilter(() => setCategorySlug(category.slug))}
+                  />
+                  <span className="flex-1">{category.name}</span>
+                </label>
+                {(category.children ?? []).map((child) => (
+                  <label
+                    key={child.id}
+                    className="flex items-center gap-2.5 pl-5 text-xs text-ink cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={categorySlug === child.slug}
+                      onCheckedChange={() => changeFilter(() => setCategorySlug(child.slug))}
+                    />
+                    <span className="flex-1">{child.name}</span>
+                  </label>
+                ))}
+              </React.Fragment>
             ))}
             {categories.error && (
               <p className="text-[11px] text-danger" data-testid="categories-error">

@@ -12,10 +12,12 @@ function formatTime(value: string): string {
   const minute = Number(mStr);
   const period = hour24 >= 12 ? 'PM' : 'AM';
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return minute === 0 ? `${hour12} ${period}` : `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+  return minute === 0
+    ? `${hour12} ${period}`
+    : `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
 }
 
-export function formatTimeRange(startTime: string, endTime: string): string {
+function formatTimeRange(startTime: string, endTime: string): string {
   return `${formatTime(startTime)} – ${formatTime(endTime)}`;
 }
 

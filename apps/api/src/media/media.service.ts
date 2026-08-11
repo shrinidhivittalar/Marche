@@ -187,9 +187,9 @@ export class MediaService {
    * the media through a relation do not pay for a second query.
    */
   async signViewUrl(
-    media: { objectKey: string; status?: string } | null | undefined,
+    media: { objectKey: string; status: string } | null | undefined,
   ): Promise<string | null> {
-    if (!media || (media.status && media.status !== 'UPLOADED')) return null;
+    if (!media || media.status !== 'UPLOADED') return null;
     return this.storage.createDownloadUrl(media.objectKey, mediaConfig.downloadUrlTtlSeconds);
   }
 
@@ -213,7 +213,9 @@ export class MediaService {
   }
 
   /**
-   * Removes rows for uploads that were authorised and never happened.
+   * Marks uploads that were authorised and never happened as FAILED (and
+   * deletes anything that did land in storage). Does not remove the rows —
+   * they stay as a FAILED record rather than disappearing.
    *
    * Fire-and-forget on purpose: this is housekeeping, and a failure here
    * must never turn a user's upload request into an error. Bounded per run

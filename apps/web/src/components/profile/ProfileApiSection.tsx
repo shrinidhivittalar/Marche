@@ -431,6 +431,12 @@ function SkillsCard({
           // craft. The server matches a typed name against the list
           // case-insensitively before creating anything, so this adds a
           // duplicate only if one genuinely does not exist yet.
+          //
+          // availableSkills already excludes skills the profile holds, so
+          // retyping one of those wouldn't match anything in `options` and
+          // would offer to "create" it — a name the server already has,
+          // just not attachable twice. existingLabels catches that case too.
+          existingLabels={(profile.skills ?? []).map((entry) => entry.skill.name)}
           onCreate={(name) => onAddNamed(name)}
           createLabel={(name) => `Add "${name}" as a new skill`}
         />

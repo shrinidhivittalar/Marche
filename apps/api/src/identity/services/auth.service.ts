@@ -65,7 +65,7 @@ export interface RegisterResult {
 
 const REGISTER_ACKNOWLEDGEMENT: RegisterResult = { status: 'verification_email_sent' };
 
-function toPublicUser(user: User): PublicUser {
+export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
     email: user.email,

@@ -55,7 +55,24 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   };
   const profiles = { findByUserId: jest.fn().mockResolvedValue(PROVIDER) };
   const jobs = { findById: jest.fn().mockResolvedValue(job) };
-  const jobsService = { claimFilled: jest.fn().mockResolvedValue(undefined) };
+  const jobsService = {
+    claimFilled: jest.fn().mockResolvedValue(undefined),
+    // Mirrors the real JobsService.getOwnJob ownership check, reusing this
+    // same build()'s `profiles`/`jobs` mocks — ProposalsService now
+    // delegates to it rather than re-implementing the check, and these
+    // tests are exercising that delegation, not JobsService's own logic
+    // (which has its own test suite).
+    getOwnJob: jest.fn().mockImplementation(async (userId: string, jobId: string) => {
+      const callerProfile = await profiles.findByUserId(userId);
+      if (!callerProfile) throw new NotFoundException('Profile not found');
+      const targetJob = await jobs.findById(jobId);
+      if (!targetJob) throw new NotFoundException('Requirement not found');
+      if (targetJob.clientProfileId !== callerProfile.id) {
+        throw new ForbiddenException('You do not have access to this requirement');
+      }
+      return { job: targetJob, profile: callerProfile };
+    }),
+  };
   const mediaService = {
     assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
     markPrivate: jest.fn().mockResolvedValue(undefined),
@@ -148,11 +165,9 @@ describe('ProposalsService', () => {
       await expect(service.submit('user_1', dto)).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('409s on a soft-deleted requirement', async () => {
-      const { service } = build({ job: { deletedAt: new Date() } });
-
-      await expect(service.submit('user_1', dto)).rejects.toBeInstanceOf(ConflictException);
-    });
+    // No "409s on a soft-deleted requirement" case: job always comes from
+    // JobsRepository.findById, which already filters deletedAt out, so
+    // assertAcceptingProposals no longer checks it — see proposals.service.ts.
 
     it('409s once the proposal deadline has passed', async () => {
       const { service } = build({ job: { proposalDeadline: new Date(Date.now() - 1000) } });

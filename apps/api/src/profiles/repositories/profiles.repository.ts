@@ -3,6 +3,28 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { readableProfileWhere } from '../profile-visibility';
 import type { Profile, Prisma } from '@marche/db';
 
+const MAX_NESTED_ITEMS = 100;
+
+// Shared by findByUserIdWithDetails and withDetails: both attach the same
+// five collections in the same shape, differing only in which portfolio
+// items are visible to the caller reading them.
+function nestedCollectionsInclude(portfolioWhere: Prisma.PortfolioWhereInput) {
+  return {
+    portfolioItems: {
+      where: portfolioWhere,
+      include: {
+        images: { include: { media: { select: { objectKey: true, status: true } } } },
+      },
+      take: MAX_NESTED_ITEMS,
+    },
+    experiences: { take: MAX_NESTED_ITEMS },
+    educations: { take: MAX_NESTED_ITEMS },
+    certifications: { take: MAX_NESTED_ITEMS },
+    skills: { include: { skill: true }, take: MAX_NESTED_ITEMS },
+    languages: { take: MAX_NESTED_ITEMS },
+  } satisfies Prisma.ProfileInclude;
+}
+
 @Injectable()
 export class ProfilesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -33,24 +55,12 @@ export class ProfilesRepository {
   // against a hosted database to leave the profile page sitting on its
   // loading state for several seconds.
   findByUserIdWithDetails(userId: string) {
-    const MAX_NESTED_ITEMS = 100;
     return this.prisma.client.profile.findFirst({
       where: { userId, deletedAt: null },
       include: {
         user: { select: { role: true } },
         avatarMedia: { select: { objectKey: true, status: true } },
-        portfolioItems: {
-          where: { deletedAt: null },
-          include: {
-            images: { include: { media: { select: { objectKey: true, status: true } } } },
-          },
-          take: MAX_NESTED_ITEMS,
-        },
-        experiences: { take: MAX_NESTED_ITEMS },
-        educations: { take: MAX_NESTED_ITEMS },
-        certifications: { take: MAX_NESTED_ITEMS },
-        skills: { include: { skill: true }, take: MAX_NESTED_ITEMS },
-        languages: { take: MAX_NESTED_ITEMS },
+        ...nestedCollectionsInclude({ deletedAt: null }),
       },
     });
   }
@@ -109,26 +119,12 @@ export class ProfilesRepository {
   // hiding a provider's private work from their own editor would leave them
   // unable to see or undo the setting.
   withDetails(profileId: string, viewerIsOwner: boolean) {
-    const MAX_NESTED_ITEMS = 100;
     return this.prisma.client.profile.findUnique({
       where: { id: profileId },
-      include: {
-        portfolioItems: {
-          where: {
-            deletedAt: null,
-            ...(viewerIsOwner ? {} : { visibility: 'PUBLIC' as const }),
-          },
-          include: {
-            images: { include: { media: { select: { objectKey: true, status: true } } } },
-          },
-          take: MAX_NESTED_ITEMS,
-        },
-        experiences: { take: MAX_NESTED_ITEMS },
-        educations: { take: MAX_NESTED_ITEMS },
-        certifications: { take: MAX_NESTED_ITEMS },
-        skills: { include: { skill: true }, take: MAX_NESTED_ITEMS },
-        languages: { take: MAX_NESTED_ITEMS },
-      },
+      include: nestedCollectionsInclude({
+        deletedAt: null,
+        ...(viewerIsOwner ? {} : { visibility: 'PUBLIC' as const }),
+      }),
     });
   }
 }

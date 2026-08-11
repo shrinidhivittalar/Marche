@@ -16,7 +16,16 @@ export class CertificationService {
     const profile = await this.getOwnProfile(userId);
     assertProviderRole(profile.user.role);
 
-    return this.certificationRepository.create({ profileId: profile.id, ...dto });
+    // Fields are enumerated rather than spread, matching Service.create: a
+    // field added to the DTO later reaches the database only when someone
+    // adds it here deliberately.
+    return this.certificationRepository.create({
+      profileId: profile.id,
+      name: dto.name,
+      issuingOrganization: dto.issuingOrganization,
+      issueDate: dto.issueDate,
+      expiryDate: dto.expiryDate,
+    });
   }
 
   async update(
