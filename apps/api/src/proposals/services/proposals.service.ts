@@ -12,6 +12,7 @@ import { JobsService } from '../../jobs/services/jobs.service';
 import { MediaService } from '../../media/media.service';
 import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { ProposalsRepository } from '../repositories/proposals.repository';
 import { ConnectionsRepository } from '../repositories/connections.repository';
 import type { CreateProposalDto } from '../dto/proposal.dto';
@@ -45,6 +46,7 @@ export class ProposalsService {
     private readonly jobsRepository: JobsRepository,
     private readonly jobsService: JobsService,
     private readonly mediaService: MediaService,
+    private readonly notificationsService: NotificationsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -78,13 +80,25 @@ export class ProposalsService {
       // carry providerProfileId or status past the ValidationPipe, but
       // listing them means a field added to the DTO later reaches the
       // database only when someone adds it here deliberately.
-      return await this.proposalsRepository.create({
+      const proposal = await this.proposalsRepository.create({
         jobId: job.id,
         providerProfileId: profile.id,
         coverMessage: dto.coverMessage,
         proposedPrice: dto.proposedPrice,
         deliveryDays: dto.deliveryDays,
       });
+
+      // After the write commits, not before — a notification for a proposal
+      // that failed to save would tell the client about an offer that
+      // doesn't exist.
+      await this.notifyRecipient(job.clientProfileId, (recipientUserId) =>
+        this.notificationsService.proposalSubmitted(recipientUserId, {
+          jobId: job.id,
+          proposalId: proposal.id,
+        }),
+      );
+
+      return proposal;
     } catch (error) {
       // The check above handles the ordinary sequential case and gives a
       // better message. This handles the real one: two simultaneous
@@ -113,6 +127,16 @@ export class ProposalsService {
     if (moved === 0) {
       throw new ConflictException(await this.decidedMessage(proposal.id));
     }
+
+    const job = await this.jobsRepository.findById(proposal.jobId);
+    if (job) {
+      await this.notifyRecipient(job.clientProfileId, (recipientUserId) =>
+        this.notificationsService.proposalWithdrawn(recipientUserId, {
+          jobId: proposal.jobId,
+          proposalId: proposal.id,
+        }),
+      );
+    }
   }
 
   // ---------- client decisions ----------
@@ -134,7 +158,7 @@ export class ProposalsService {
   async accept(userId: string, proposalId: string) {
     const { proposal, job, profile } = await this.getProposalOnOwnJob(userId, proposalId);
 
-    return this.prisma.client.$transaction(async (tx) => {
+    const connection = await this.prisma.client.$transaction(async (tx) => {
       // Throws 409 if the requirement is no longer claimable. The rule about
       // which statuses may become FILLED lives in JobsService, which owns
       // the Job lifecycle.
@@ -163,6 +187,25 @@ export class ProposalsService {
         providerProfileId: proposal.providerProfileId,
       });
     });
+
+    // After commit, not before (module6.md, "Transaction Boundary"). Two
+    // distinct events, deliberately not collapsed into one: ProposalAccepted
+    // is the decision, ConnectionEstablished is the channel it opens, and the
+    // provider is the recipient of both.
+    const providerUserId = await this.profilesRepository.findUserIdById(proposal.providerProfileId);
+    if (providerUserId) {
+      await this.notificationsService.proposalAccepted(providerUserId, {
+        jobId: job.id,
+        proposalId: proposal.id,
+      });
+      await this.notificationsService.connectionEstablished([profile.userId, providerUserId], {
+        connectionId: connection.id,
+        jobId: job.id,
+        proposalId: proposal.id,
+      });
+    }
+
+    return connection;
   }
 
   async reject(userId: string, proposalId: string): Promise<void> {
@@ -177,6 +220,13 @@ export class ProposalsService {
     if (moved === 0) {
       throw new ConflictException(await this.decidedMessage(proposal.id));
     }
+
+    await this.notifyRecipient(proposal.providerProfileId, (recipientUserId) =>
+      this.notificationsService.proposalRejected(recipientUserId, {
+        jobId: proposal.jobId,
+        proposalId: proposal.id,
+      }),
+    );
   }
 
   // ---------- reads ----------
@@ -302,6 +352,21 @@ export class ProposalsService {
   }
 
   // ---------- helpers ----------
+
+  // Resolves a Profile to the User behind it and fires the given
+  // notification at them. A profile with no resolvable user (shouldn't
+  // happen — Profile.userId is a required FK) is skipped rather than
+  // thrown on: a missing recipient is not a reason to fail the business
+  // operation that already succeeded.
+  private async notifyRecipient(
+    profileId: string,
+    notify: (recipientUserId: string) => Promise<void>,
+  ): Promise<void> {
+    const recipientUserId = await this.profilesRepository.findUserIdById(profileId);
+    if (recipientUserId) {
+      await notify(recipientUserId);
+    }
+  }
 
   /**
    * The single definition of "this requirement is accepting proposals".

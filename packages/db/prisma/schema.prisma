@@ -42,6 +42,7 @@ model User {
   passwordResets     PasswordReset[]
   profile            Profile?
   media              Media[]
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -910,4 +911,48 @@ model Media {
   // Serves the orphan sweep: stale PENDING rows, oldest first.
   @@index([status, createdAt])
   @@map("media")
+}
+
+// Phase 1 event types only (docs/module6.md). Not client-writable — a
+// notification's type is always chosen by the server-side code path that
+// creates it, never accepted as API input.
+enum NotificationType {
+  PROPOSAL_SUBMITTED
+  PROPOSAL_WITHDRAWN
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  CONNECTION_ESTABLISHED
+  JOB_CANCELLED
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  // Cascade: a notification with no user behind it is not a record worth
+  // keeping. Unlike Media, nothing else can still reference this row once
+  // the user is gone.
+  recipientUserId String
+  recipient       User   @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  type NotificationType
+
+  title   String
+  message String
+
+  // Safe navigation metadata only (ids), never tokens, secrets, or private
+  // URLs. See docs/module6.md's "Important Rule" — the endpoint a deep link
+  // points to must still enforce its own authorization on read.
+  data Json?
+
+  // Null = unread. A timestamp, not a boolean, so read state also records
+  // when.
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // Serves the notification list, newest first, for one recipient.
+  @@index([recipientUserId, createdAt])
+  // Serves the unread-count query.
+  @@index([recipientUserId, readAt])
+  @@map("notifications")
 }

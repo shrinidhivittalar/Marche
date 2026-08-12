@@ -12,6 +12,7 @@ import { MediaService } from '../../media/media.service';
 import { assertClientRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
@@ -58,6 +59,7 @@ export class JobsService {
     private readonly categoriesRepository: CategoriesRepository,
     private readonly categoriesService: CategoriesService,
     private readonly mediaService: MediaService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ---------- client-owned writes ----------
@@ -152,10 +154,18 @@ export class JobsService {
 
     this.assertTransition(job.status, 'CANCELLED');
 
-    return this.jobsRepository.update(job.id, {
+    const cancelled = await this.jobsRepository.update(job.id, {
       status: 'CANCELLED',
       cancelledAt: new Date(),
     });
+
+    // After commit, not before. Recipients are resolved inside
+    // NotificationsService, not here — Jobs has no dependency on Proposals
+    // and this module doesn't either, deliberately (see
+    // NotificationsRepository.listSubmittedProviderUserIds).
+    await this.notificationsService.jobCancelled(cancelled.id);
+
+    return cancelled;
   }
 
   /**

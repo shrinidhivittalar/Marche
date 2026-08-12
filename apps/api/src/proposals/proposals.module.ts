@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { MediaModule } from '../media/media.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ProposalsController } from './controllers/proposals.controller';
 import { JobProposalsController } from './controllers/job-proposals.controller';
 import { ConnectionsController } from './controllers/connections.controller';
@@ -24,7 +25,7 @@ import { ConnectionsService } from './services/connections.service';
 // Marketplace is deliberately absent. A proposal never resolves a category
 // or a service — it reads a requirement, which already did.
 @Module({
-  imports: [ProfilesModule, JobsModule, MediaModule],
+  imports: [ProfilesModule, JobsModule, MediaModule, NotificationsModule],
   controllers: [ProposalsController, JobProposalsController, ConnectionsController],
   providers: [ProposalsRepository, ConnectionsRepository, ProposalsService, ConnectionsService],
 })

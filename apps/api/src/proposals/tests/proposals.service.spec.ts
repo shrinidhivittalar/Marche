@@ -53,7 +53,17 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const connections = {
     create: jest.fn().mockResolvedValue({ id: 'connection_1' }),
   };
-  const profiles = { findByUserId: jest.fn().mockResolvedValue(PROVIDER) };
+  const profiles = {
+    findByUserId: jest.fn().mockResolvedValue(PROVIDER),
+    // Maps a profileId back to the User behind it, the way the real
+    // ProfilesRepository does — used by ProposalsService to resolve
+    // notification recipients.
+    findUserIdById: jest.fn().mockImplementation((profileId: string) => {
+      if (profileId === PROVIDER.id) return Promise.resolve(PROVIDER.userId);
+      if (profileId === CLIENT.id) return Promise.resolve(CLIENT.userId);
+      return Promise.resolve(null);
+    }),
+  };
   const jobs = { findById: jest.fn().mockResolvedValue(job) };
   const jobsService = {
     claimFilled: jest.fn().mockResolvedValue(undefined),
@@ -81,6 +91,13 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const prisma = {
     client: { $transaction: jest.fn().mockImplementation((fn) => fn(TX)) },
   };
+  const notificationsService = {
+    proposalSubmitted: jest.fn().mockResolvedValue(undefined),
+    proposalWithdrawn: jest.fn().mockResolvedValue(undefined),
+    proposalAccepted: jest.fn().mockResolvedValue(undefined),
+    proposalRejected: jest.fn().mockResolvedValue(undefined),
+    connectionEstablished: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new ProposalsService(
     proposals as never,
@@ -89,10 +106,21 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
     jobs as never,
     jobsService as never,
     mediaService as never,
+    notificationsService as never,
     prisma as never,
   );
 
-  return { service, proposals, connections, profiles, jobs, jobsService, mediaService, prisma };
+  return {
+    service,
+    proposals,
+    connections,
+    profiles,
+    jobs,
+    jobsService,
+    mediaService,
+    notificationsService,
+    prisma,
+  };
 }
 
 const dto: CreateProposalDto = {

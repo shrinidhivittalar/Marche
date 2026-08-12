@@ -51,6 +51,7 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     markPrivate: jest.fn().mockResolvedValue(undefined),
     signViewUrl: jest.fn().mockResolvedValue('https://signed.example/file'),
   };
+  const notificationsService = { jobCancelled: jest.fn().mockResolvedValue(undefined) };
 
   const service = new JobsService(
     jobs as unknown as JobsRepository,
@@ -58,8 +59,17 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     categories as unknown as CategoriesRepository,
     categoriesService as unknown as CategoriesService,
     mediaService as never,
+    notificationsService as never,
   );
-  return { service, jobs, profiles, categories, categoriesService, mediaService };
+  return {
+    service,
+    jobs,
+    profiles,
+    categories,
+    categoriesService,
+    mediaService,
+    notificationsService,
+  };
 }
 
 const searchDto = (over: Partial<SearchJobsDto> = {}): SearchJobsDto =>

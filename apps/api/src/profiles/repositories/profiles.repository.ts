@@ -49,6 +49,16 @@ export class ProfilesRepository {
     });
   }
 
+  // The one fact Notifications needs and nothing else: which User a Profile
+  // belongs to, so a recipient can be resolved from a providerProfileId or
+  // clientProfileId without pulling in the rest of ProfilesRepository's
+  // heavier reads.
+  findUserIdById(profileId: string): Promise<string | null> {
+    return this.prisma.client.profile
+      .findUnique({ where: { id: profileId }, select: { userId: true } })
+      .then((profile) => profile?.userId ?? null);
+  }
+
   // The owner's own profile, nested collections included, in one round trip.
   // getMyProfile previously called findByUserId and then withDetails, which
   // meant two sequential queries plus their nested reads — enough latency

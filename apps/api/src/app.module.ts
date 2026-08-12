@@ -12,6 +12,7 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
 import { MediaModule } from './media/media.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ProposalsModule } from './proposals/proposals.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ProposalsModule } from './proposals/proposals.module';
     MediaModule,
     JobsModule,
     ProposalsModule,
+    NotificationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
