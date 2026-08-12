@@ -30,6 +30,7 @@ export const NotificationsPage: React.FC = () => {
 
   const isVendor = currentUser.role === 'vendor';
   const [activeTab, setActiveTab] = useState<'activity' | 'alerts'>('activity');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const availableCategories = Array.from(new Set(jobs.map((job) => job.category))).sort();
 
@@ -63,18 +64,31 @@ export const NotificationsPage: React.FC = () => {
           </p>
         </div>
 
-        {notifications.length > 0 && (
+        {activeTab === 'activity' && notifications.length > 0 && (
           <Button
             size="sm"
             variant="outline"
             icon={CheckCheck}
-            onClick={markAllRead}
+            onClick={async () => {
+              setActionError(null);
+              try {
+                await markAllRead();
+              } catch {
+                setActionError("Couldn't mark all as read. Try again.");
+              }
+            }}
             data-testid="mark-all-read"
           >
             Mark All as Read
           </Button>
         )}
       </div>
+
+      {actionError && (
+        <div className="p-4 rounded-2xl border border-destructive/40 bg-destructive/5">
+          <p className="text-xs font-semibold text-destructive">{actionError}</p>
+        </div>
+      )}
 
       {/* Activity / Job Alerts Tabs (vendor only) */}
       {isVendor && (
@@ -235,7 +249,14 @@ export const NotificationsPage: React.FC = () => {
                 data-type={n.type}
                 data-unread={unread}
                 onClick={() => {
-                  if (unread) markAsRead(n.id);
+                  // Not awaited: navigation shouldn't wait on it. Caught so
+                  // a failure surfaces here instead of becoming an unhandled
+                  // rejection — see the Mark All as Read handler above.
+                  if (unread) {
+                    markAsRead(n.id).catch(() => {
+                      setActionError("Couldn't mark that notification as read. Try again.");
+                    });
+                  }
                   if (route) navigate(route);
                 }}
                 className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${

@@ -67,6 +67,8 @@ export const Sidebar: React.FC = () => {
   const { currentUser, route, navigate, contracts, messages } = useApp();
   const {
     notifications,
+    loading: notificationsLoading,
+    error: notificationsError,
     unreadCount,
     markAsRead: markNotificationRead,
     markAllRead: markAllNotificationsRead,
@@ -265,7 +267,19 @@ export const Sidebar: React.FC = () => {
                       {unreadCount > 0 && (
                         <button
                           data-testid="mark-all-read-dropdown"
-                          onClick={markAllNotificationsRead}
+                          onClick={async () => {
+                            // Caught, not surfaced: a failure here leaves the
+                            // real unread state untouched (no optimistic
+                            // update happened), so the worst case is that
+                            // nothing changes — not that the UI lies. The
+                            // full activity page is where a failed action
+                            // gets a visible message.
+                            try {
+                              await markAllNotificationsRead();
+                            } catch (error) {
+                              console.error('Failed to mark all notifications read', error);
+                            }
+                          }}
                           className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
@@ -274,7 +288,13 @@ export const Sidebar: React.FC = () => {
                       )}
                     </div>
 
-                    {recentNotifs.length === 0 ? (
+                    {notificationsLoading ? (
+                      <div className="px-4 py-8 text-center text-xs text-ink-muted">Loading…</div>
+                    ) : notificationsError ? (
+                      <div className="px-4 py-8 text-center text-xs text-destructive">
+                        {notificationsError}
+                      </div>
+                    ) : recentNotifs.length === 0 ? (
                       <div
                         data-testid="notifications-dropdown-empty"
                         className="px-4 py-8 text-center text-xs text-ink-muted"
@@ -294,7 +314,16 @@ export const Sidebar: React.FC = () => {
                                 data-type={n.type}
                                 data-unread={unread}
                                 onClick={() => {
-                                  if (unread) markNotificationRead(n.id);
+                                  // Not awaited: navigation shouldn't wait on
+                                  // it. Caught so a failure can't become an
+                                  // unhandled rejection — see the mark-all
+                                  // handler above for why nothing further is
+                                  // needed here.
+                                  if (unread) {
+                                    markNotificationRead(n.id).catch((error) => {
+                                      console.error('Failed to mark notification read', error);
+                                    });
+                                  }
                                   if (route) navigate(route);
                                 }}
                                 className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-0 transition-colors cursor-pointer hover:bg-bg ${

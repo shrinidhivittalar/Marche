@@ -118,4 +118,13 @@
   [data-slot='dialog-body']:has(.print-area) {
     overflow: visible;
   }
+
+  /* The title/description above the invoice (Modal.tsx always renders a
+     DialogHeader, even when the caller passes no footer). `body *` above
+     only hides its content — visibility, unlike display, still reserves
+     the box's space — so without this a blank gap the height of the
+     header prints above the invoice. */
+  [data-slot='dialog-content']:has(.print-area) [data-slot='dialog-header'] {
+    display: none;
+  }
 }
