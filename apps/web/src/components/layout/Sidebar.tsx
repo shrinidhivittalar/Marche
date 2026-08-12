@@ -16,10 +16,7 @@ import {
   BarChart3,
   IndianRupee,
   FileSignature,
-  FileText,
-  ShieldCheck,
   CheckCheck,
-  Megaphone,
   TrendingUp,
   Search,
 } from 'lucide-react';
@@ -32,6 +29,9 @@ import {
   ThemeToggle,
 } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
+import { useNotifications } from '../../hooks/useNotifications';
+import { notificationRoute, formatNotificationTime } from '../../lib/formatNotification';
+import { NotificationIcon } from '../notifications/NotificationIcon';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
 
@@ -58,16 +58,15 @@ const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
 };
 
 export const Sidebar: React.FC = () => {
+  const { currentUser, route, navigate, contracts, messages } = useApp();
   const {
-    currentUser,
-    route,
-    navigate,
     notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    contracts,
-    messages,
-  } = useApp();
+    loading: notificationsLoading,
+    error: notificationsError,
+    unreadCount,
+    markAsRead: markNotificationRead,
+    markAllRead: markAllNotificationsRead,
+  } = useNotifications();
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
@@ -91,9 +90,8 @@ export const Sidebar: React.FC = () => {
     });
   };
 
-  const userNotifs = notifications.filter((n) => n.userId === currentUser.id);
-  const unreadCount = userNotifs.filter((n) => !n.read).length;
-  const recentNotifs = userNotifs.slice(0, 5);
+  // Already scoped to the caller by the API — no client-side filter needed.
+  const recentNotifs = notifications.slice(0, 5);
 
   const myContractIds = new Set(
     contracts
@@ -235,7 +233,12 @@ export const Sidebar: React.FC = () => {
                   ) : null}
                 </div>
                 {!collapsed && item.badge && item.badge > 0 ? (
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
+                  <span
+                    data-testid={
+                      item.label === 'Notifications' ? 'notifications-unread-badge' : undefined
+                    }
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground"
+                  >
                     {item.badge}
                   </span>
                 ) : null}
@@ -248,15 +251,29 @@ export const Sidebar: React.FC = () => {
                   <PopoverTrigger
                     title={collapsed ? item.label : undefined}
                     className={navButtonClass}
+                    data-testid="notifications-bell"
                   >
                     {navButtonContent}
                   </PopoverTrigger>
                   <PopoverContent side="right" align="start" className="w-80 p-0">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                       <span className="text-xs font-bold text-ink">Notifications</span>
-                      {userNotifs.some((n) => !n.read) && (
+                      {unreadCount > 0 && (
                         <button
-                          onClick={markAllNotificationsRead}
+                          data-testid="mark-all-read-dropdown"
+                          onClick={async () => {
+                            // Caught, not surfaced: a failure here leaves the
+                            // real unread state untouched (no optimistic
+                            // update happened), so the worst case is that
+                            // nothing changes — not that the UI lies. The
+                            // full activity page is where a failed action
+                            // gets a visible message.
+                            try {
+                              await markAllNotificationsRead();
+                            } catch (error) {
+                              console.error('Failed to mark all notifications read', error);
+                            }
+                          }}
                           className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
@@ -265,53 +282,63 @@ export const Sidebar: React.FC = () => {
                       )}
                     </div>
 
-                    {recentNotifs.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-xs text-ink-muted">
+                    {notificationsLoading ? (
+                      <div className="px-4 py-8 text-center text-xs text-ink-muted">Loading…</div>
+                    ) : notificationsError ? (
+                      <div className="px-4 py-8 text-center text-xs text-destructive">
+                        {notificationsError}
+                      </div>
+                    ) : recentNotifs.length === 0 ? (
+                      <div
+                        data-testid="notifications-dropdown-empty"
+                        className="px-4 py-8 text-center text-xs text-ink-muted"
+                      >
                         You're all caught up.
                       </div>
                     ) : (
                       <div className="max-h-80 overflow-y-auto">
-                        {recentNotifs.map((n) => (
-                          <PopoverClose asChild key={n.id}>
-                            <button
-                              onClick={() => {
-                                markNotificationRead(n.id);
-                                if (n.linkRoute) navigate(n.linkRoute);
-                              }}
-                              className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-0 transition-colors cursor-pointer hover:bg-bg ${
-                                !n.read ? 'bg-surface-subtle' : ''
-                              }`}
-                            >
-                              <div
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                  n.type === 'proposal'
-                                    ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
-                                    : n.type === 'contract'
-                                      ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
-                                      : n.type === 'job_alert'
-                                        ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-400'
-                                        : 'bg-surface-subtle text-ink'
+                        {recentNotifs.map((n) => {
+                          const route = notificationRoute(n, currentUser.role);
+                          const unread = n.readAt === null;
+                          return (
+                            <PopoverClose asChild key={n.id}>
+                              <button
+                                data-testid="notification-dropdown-item"
+                                data-type={n.type}
+                                data-unread={unread}
+                                onClick={() => {
+                                  // Not awaited: navigation shouldn't wait on
+                                  // it. Caught so a failure can't become an
+                                  // unhandled rejection — see the mark-all
+                                  // handler above for why nothing further is
+                                  // needed here.
+                                  if (unread) {
+                                    markNotificationRead(n.id).catch((error) => {
+                                      console.error('Failed to mark notification read', error);
+                                    });
+                                  }
+                                  if (route) navigate(route);
+                                }}
+                                className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-0 transition-colors cursor-pointer hover:bg-bg ${
+                                  unread ? 'bg-surface-subtle' : ''
                                 }`}
                               >
-                                {n.type === 'proposal' ? (
-                                  <FileText className="w-3.5 h-3.5" />
-                                ) : n.type === 'contract' ? (
-                                  <ShieldCheck className="w-3.5 h-3.5" />
-                                ) : n.type === 'job_alert' ? (
-                                  <Megaphone className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Bell className="w-3.5 h-3.5" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-ink truncate">{n.title}</p>
-                                <p className="text-[11px] text-ink-muted line-clamp-2 leading-relaxed">
-                                  {n.message}
-                                </p>
-                              </div>
-                            </button>
-                          </PopoverClose>
-                        ))}
+                                <NotificationIcon type={n.type} size="sm" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-bold text-ink truncate">{n.title}</p>
+                                    <span className="text-[10px] font-mono text-ink-muted shrink-0">
+                                      {formatNotificationTime(n)}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-ink-muted line-clamp-2 leading-relaxed">
+                                    {n.message}
+                                  </p>
+                                </div>
+                              </button>
+                            </PopoverClose>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -322,6 +349,7 @@ export const Sidebar: React.FC = () => {
                           variant="ghost"
                           className="w-full justify-center"
                           onClick={() => navigate('/notifications')}
+                          data-testid="view-all-notifications"
                         >
                           View All Notifications
                         </Button>

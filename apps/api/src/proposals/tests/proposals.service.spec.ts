@@ -53,7 +53,17 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const connections = {
     create: jest.fn().mockResolvedValue({ id: 'connection_1' }),
   };
-  const profiles = { findByUserId: jest.fn().mockResolvedValue(PROVIDER) };
+  const profiles = {
+    findByUserId: jest.fn().mockResolvedValue(PROVIDER),
+    // Maps a profileId back to the User behind it, the way the real
+    // ProfilesRepository does — used by ProposalsService to resolve
+    // notification recipients.
+    findUserIdById: jest.fn().mockImplementation((profileId: string) => {
+      if (profileId === PROVIDER.id) return Promise.resolve(PROVIDER.userId);
+      if (profileId === CLIENT.id) return Promise.resolve(CLIENT.userId);
+      return Promise.resolve(null);
+    }),
+  };
   const jobs = { findById: jest.fn().mockResolvedValue(job) };
   const jobsService = {
     claimFilled: jest.fn().mockResolvedValue(undefined),
@@ -81,6 +91,13 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const prisma = {
     client: { $transaction: jest.fn().mockImplementation((fn) => fn(TX)) },
   };
+  const notificationsService = {
+    proposalSubmitted: jest.fn().mockResolvedValue(undefined),
+    proposalWithdrawn: jest.fn().mockResolvedValue(undefined),
+    proposalAccepted: jest.fn().mockResolvedValue(undefined),
+    proposalRejected: jest.fn().mockResolvedValue(undefined),
+    connectionEstablished: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new ProposalsService(
     proposals as never,
@@ -89,10 +106,21 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
     jobs as never,
     jobsService as never,
     mediaService as never,
+    notificationsService as never,
     prisma as never,
   );
 
-  return { service, proposals, connections, profiles, jobs, jobsService, mediaService, prisma };
+  return {
+    service,
+    proposals,
+    connections,
+    profiles,
+    jobs,
+    jobsService,
+    mediaService,
+    notificationsService,
+    prisma,
+  };
 }
 
 const dto: CreateProposalDto = {
@@ -224,6 +252,29 @@ describe('ProposalsService', () => {
 
       await expect(service.submit('user_1', dto)).rejects.toThrow('connection lost');
     });
+
+    it('notifies the client who owns the requirement, not the submitting provider', async () => {
+      const { service, notificationsService } = build();
+
+      await service.submit('user_1', dto);
+
+      // CLIENT.userId ('user_2'), resolved from job.clientProfileId — not
+      // PROVIDER.userId ('user_1'), the caller. A regression that swapped
+      // these would tell the wrong person a proposal exists.
+      expect(notificationsService.proposalSubmitted).toHaveBeenCalledWith('user_2', {
+        jobId: 'job_1',
+        proposalId: 'proposal_1',
+      });
+    });
+
+    it('does not notify anyone if the write itself fails', async () => {
+      const { service, proposals, notificationsService } = build();
+      proposals.create.mockRejectedValue(new Error('connection lost'));
+
+      await expect(service.submit('user_1', dto)).rejects.toThrow('connection lost');
+
+      expect(notificationsService.proposalSubmitted).not.toHaveBeenCalled();
+    });
   });
 
   describe('accept', () => {
@@ -328,6 +379,39 @@ describe('ProposalsService', () => {
       // The deadline gates providers submitting, not the client deciding.
       expect(connections.create).toHaveBeenCalled();
     });
+
+    it('notifies the provider of the decision, and both parties of the connection', async () => {
+      const { service, notificationsService } = asClient();
+
+      await service.accept('user_2', 'proposal_1');
+
+      // PROVIDER.userId ('user_1'), resolved from proposal.providerProfileId
+      // — the party being told the news, not CLIENT.userId, who made the
+      // decision.
+      expect(notificationsService.proposalAccepted).toHaveBeenCalledWith('user_1', {
+        jobId: 'job_1',
+        proposalId: 'proposal_1',
+      });
+      // Both sides, client first: profile.userId (the caller who accepted)
+      // then the provider resolved above — see proposals.service.ts's
+      // accept().
+      expect(notificationsService.connectionEstablished).toHaveBeenCalledWith(
+        ['user_2', 'user_1'],
+        { connectionId: 'connection_1', jobId: 'job_1', proposalId: 'proposal_1' },
+      );
+    });
+
+    it('does not notify anyone if the requirement could not be claimed', async () => {
+      const { service, jobsService, notificationsService } = asClient();
+      jobsService.claimFilled.mockRejectedValue(new ConflictException('already filled'));
+
+      await expect(service.accept('user_2', 'proposal_1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(notificationsService.proposalAccepted).not.toHaveBeenCalled();
+      expect(notificationsService.connectionEstablished).not.toHaveBeenCalled();
+    });
   });
 
   describe('reject', () => {
@@ -365,6 +449,18 @@ describe('ProposalsService', () => {
       await expect(service.reject('user_9', 'proposal_1')).rejects.toBeInstanceOf(
         ForbiddenException,
       );
+    });
+
+    it('notifies the provider who was turned down, not the client who decided', async () => {
+      const { service, profiles, notificationsService } = build();
+      profiles.findByUserId.mockResolvedValue(CLIENT);
+
+      await service.reject('user_2', 'proposal_1');
+
+      expect(notificationsService.proposalRejected).toHaveBeenCalledWith('user_1', {
+        jobId: 'job_1',
+        proposalId: 'proposal_1',
+      });
     });
   });
 
@@ -405,6 +501,17 @@ describe('ProposalsService', () => {
         ForbiddenException,
       );
       expect(proposals.transitionFromSubmitted).not.toHaveBeenCalled();
+    });
+
+    it('notifies the client who owns the requirement, not the withdrawing provider', async () => {
+      const { service, notificationsService } = build();
+
+      await service.withdraw('user_1', 'proposal_1');
+
+      expect(notificationsService.proposalWithdrawn).toHaveBeenCalledWith('user_2', {
+        jobId: 'job_1',
+        proposalId: 'proposal_1',
+      });
     });
   });
 

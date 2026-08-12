@@ -1,30 +1,29 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, FileText, MapPin, Megaphone, Settings2, ShieldCheck, Tags } from 'lucide-react';
+import { CheckCheck, MapPin, Megaphone, Settings2, Tags } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useNotifications } from '../hooks/useNotifications';
 import { Button } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
+import { notificationRoute, formatNotificationTime } from '../lib/formatNotification';
+import { NotificationIcon } from '../components/notifications/NotificationIcon';
 
+// The "activity" feed (real proposal/job events) now comes from Module 6's
+// API. "Job Alerts" stays on AppContext's mock jobAlertSettings — that
+// feature has no backend yet, and is a different notion of "notification"
+// entirely (a saved-preference match, not an event about something that
+// happened), so it isn't part of this rewire.
 export const NotificationsPage: React.FC = () => {
-  const {
-    notifications,
-    currentUser,
-    markNotificationRead,
-    markAllNotificationsRead,
-    navigate,
-    jobs,
-    jobAlertSettings,
-    updateJobAlertSettings,
-  } = useApp();
+  const { currentUser, navigate, jobs, jobAlertSettings, updateJobAlertSettings } = useApp();
+  const { notifications, loading, error, hasMore, loadMore, markAsRead, markAllRead } =
+    useNotifications();
 
   const isVendor = currentUser.role === 'vendor';
   const [activeTab, setActiveTab] = useState<'activity' | 'alerts'>('activity');
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const userNotifs = notifications.filter((n) => n.userId === currentUser.id);
-  const activityNotifs = userNotifs.filter((n) => n.type !== 'job_alert');
-  const alertNotifs = userNotifs.filter((n) => n.type === 'job_alert');
   const availableCategories = Array.from(new Set(jobs.map((job) => job.category))).sort();
 
-  const toggleAlertCategory = (category: typeof availableCategories[number]) => {
+  const toggleAlertCategory = (category: (typeof availableCategories)[number]) => {
     const selected = jobAlertSettings.categories.includes(category);
     updateJobAlertSettings({
       categories: selected
@@ -33,7 +32,9 @@ export const NotificationsPage: React.FC = () => {
     });
   };
 
-  const visibleNotifs = !isVendor ? userNotifs : activeTab === 'alerts' ? alertNotifs : activityNotifs;
+  // "alerts" is always empty: job alerts have no backend yet (see the note
+  // above the component), so there is nothing real to show there.
+  const visibleNotifs = !isVendor || activeTab === 'activity' ? notifications : [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -52,17 +53,31 @@ export const NotificationsPage: React.FC = () => {
           </p>
         </div>
 
-        {userNotifs.length > 0 && (
+        {activeTab === 'activity' && notifications.length > 0 && (
           <Button
             size="sm"
             variant="outline"
             icon={CheckCheck}
-            onClick={markAllNotificationsRead}
+            onClick={async () => {
+              setActionError(null);
+              try {
+                await markAllRead();
+              } catch {
+                setActionError("Couldn't mark all as read. Try again.");
+              }
+            }}
+            data-testid="mark-all-read"
           >
             Mark All as Read
           </Button>
         )}
       </div>
+
+      {actionError && (
+        <div className="p-4 rounded-2xl border border-destructive/40 bg-destructive/5">
+          <p className="text-xs font-semibold text-destructive">{actionError}</p>
+        </div>
+      )}
 
       {/* Activity / Job Alerts Tabs (vendor only) */}
       {isVendor && (
@@ -155,11 +170,16 @@ export const NotificationsPage: React.FC = () => {
                 Location
               </div>
               <div className="space-y-2">
-                {([
-                  ['anywhere', 'Anywhere'],
-                  ['profile_location', 'Near my profile location'],
-                ] as const).map(([mode, label]) => (
-                  <label key={mode} className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                {(
+                  [
+                    ['anywhere', 'Anywhere'],
+                    ['profile_location', 'Near my profile location'],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <label
+                    key={mode}
+                    className="flex items-center gap-2 text-xs text-ink cursor-pointer"
+                  >
                     <input
                       type="radio"
                       name="job-alert-location"
@@ -177,7 +197,13 @@ export const NotificationsPage: React.FC = () => {
       )}
 
       {/* Notifications List */}
-      {visibleNotifs.length === 0 ? (
+      {activeTab === 'activity' && loading ? (
+        <p className="text-xs text-ink-muted py-12 text-center">Loading notifications…</p>
+      ) : activeTab === 'activity' && error ? (
+        <div className="p-5 rounded-2xl border border-destructive/40 bg-destructive/5">
+          <p className="text-xs font-semibold text-destructive">{error}</p>
+        </div>
+      ) : visibleNotifs.length === 0 ? (
         isVendor && activeTab === 'alerts' ? (
           <div className="bg-bg border border-border rounded-3xl py-16 px-8 flex flex-col items-center text-center gap-4">
             <div className="w-20 h-20 rounded-2xl bg-sky-100 text-sky-800 flex items-center justify-center">
@@ -201,55 +227,54 @@ export const NotificationsPage: React.FC = () => {
         )
       ) : (
         <div className="space-y-3">
-          {visibleNotifs.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => {
-                markNotificationRead(n.id);
-                if (n.linkRoute) navigate(n.linkRoute);
-              }}
-              className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
-                !n.read
-                  ? 'bg-white border-primary/30 shadow-xs ring-1 ring-primary/10'
-                  : 'bg-bg border-border opacity-80'
-              }`}
-            >
+          {visibleNotifs.map((n) => {
+            const route = notificationRoute(n, currentUser.role);
+            const unread = n.readAt === null;
+            return (
               <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                  n.type === 'proposal'
-                    ? 'bg-amber-100 text-amber-800'
-                    : n.type === 'contract'
-                    ? 'bg-emerald-100 text-primary'
-                    : n.type === 'job_alert'
-                    ? 'bg-sky-100 text-sky-800'
-                    : 'bg-zinc-200 text-zinc-700'
+                key={n.id}
+                data-testid="notification-row"
+                data-type={n.type}
+                data-unread={unread}
+                onClick={() => {
+                  // Not awaited: navigation shouldn't wait on it. Caught so
+                  // a failure surfaces here instead of becoming an unhandled
+                  // rejection — see the Mark All as Read handler above.
+                  if (unread) {
+                    markAsRead(n.id).catch(() => {
+                      setActionError("Couldn't mark that notification as read. Try again.");
+                    });
+                  }
+                  if (route) navigate(route);
+                }}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
+                  unread
+                    ? 'bg-white border-primary/30 shadow-xs ring-1 ring-primary/10'
+                    : 'bg-bg border-border opacity-80'
                 }`}
               >
-                {n.type === 'proposal' ? (
-                  <FileText className="w-4 h-4" />
-                ) : n.type === 'contract' ? (
-                  <ShieldCheck className="w-4 h-4" />
-                ) : n.type === 'job_alert' ? (
-                  <Megaphone className="w-4 h-4" />
-                ) : (
-                  <Bell className="w-4 h-4" />
-                )}
-              </div>
+                <NotificationIcon type={n.type} />
 
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-ink">{n.title}</h4>
-                  <span className="text-[10px] font-mono text-ink-muted">
-                    {new Date(n.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-ink">{n.title}</h4>
+                    <span className="text-[10px] font-mono text-ink-muted">
+                      {formatNotificationTime(n)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-muted leading-relaxed">{n.message}</p>
                 </div>
-                <p className="text-xs text-ink-muted leading-relaxed">{n.message}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === 'activity' && hasMore && (
+        <div className="flex justify-center">
+          <Button size="sm" variant="outline" onClick={loadMore} disabled={loading}>
+            {loading ? 'Loading…' : 'Load more'}
+          </Button>
         </div>
       )}
     </div>

@@ -39,7 +39,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     goBack,
   } = useApp();
 
-  const [acknowledgementOpen, setAcknowledgementOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -169,12 +169,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           >
             Agreement Snapshot
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            icon={FileCheck}
-            onClick={() => setAcknowledgementOpen(true)}
-          >
+          <Button size="sm" variant="outline" icon={FileCheck} onClick={() => setInvoiceOpen(true)}>
             View Invoice
           </Button>
         </div>
@@ -811,8 +806,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           not the sidebar, the page behind it, or the modal's own
           Print/Close buttons (marked `.no-print`). */}
       <Modal
-        isOpen={acknowledgementOpen}
-        onClose={() => setAcknowledgementOpen(false)}
+        isOpen={invoiceOpen}
+        onClose={() => setInvoiceOpen(false)}
         title="Invoice"
         description="A summary of this booking, for your records."
         maxWidth="xl"
@@ -889,6 +884,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                 </div>
                 <div className="flex justify-between text-ink-muted">
                   <span>Marché fee</span>
+                  {/* Not a stub — the platform charges 0% commission in
+                      Phase 1. There is no fee to compute. */}
                   <span className="font-mono">₹0</span>
                 </div>
                 <div className="flex justify-between font-bold text-sm pt-1.5 border-t border-border">
@@ -914,7 +911,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             <Button variant="outline" size="sm" icon={Printer} onClick={() => window.print()}>
               Print / Save as PDF
             </Button>
-            <Button size="sm" onClick={() => setAcknowledgementOpen(false)}>
+            <Button size="sm" onClick={() => setInvoiceOpen(false)}>
               Close View
             </Button>
           </div>

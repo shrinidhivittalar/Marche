@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { useApiResource } from '../hooks/useApiResource';
+import { notificationsApi, type ApiNotification } from '../lib/notifications-api';
 import {
   User,
   UserRole,
@@ -104,6 +106,17 @@ interface AppContextType {
   contracts: Contract[];
   auditLogs: AuditLogEntry[];
   notifications: Notification[];
+  // Module 6's real notifications — separate from the mock `notifications`
+  // above, which still serves job alerts, contracts, disputes and reviews:
+  // modules with no backend yet. See the comment above apiNotificationsList.
+  apiNotifications: ApiNotification[];
+  apiNotificationsLoading: boolean;
+  apiNotificationsError: string | null;
+  apiNotificationsHasMore: boolean;
+  loadMoreNotifications: () => void;
+  apiUnreadCount: number;
+  markApiNotificationRead: (id: string) => Promise<void>;
+  markAllApiNotificationsRead: () => Promise<void>;
   messages: ChatMessage[];
   reviews: Review[];
   talentProfiles: TalentProfile[];
@@ -323,6 +336,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelled = true;
     };
   }, []);
+
+  // Module 6's real notifications — a single shared fetch here rather than
+  // one per consumer (Sidebar's bell, NotificationsPage), so marking one
+  // read updates every badge at once. This app has no query client (see
+  // useApiResource.ts), so "shared" means "lives in the one context both
+  // already read", not a cache.
+  //
+  // "Load more" grows this limit and refetches page 1 again, rather than
+  // fetching page 2 and appending — a second, disjoint list would need its
+  // own read-state bookkeeping after every mark-as-read. Wasteful past a
+  // few thousand notifications, which is not this app's scale yet.
+  const [notificationsLimit, setNotificationsLimit] = useState(50);
+  const apiNotificationsList = useApiResource(
+    () => notificationsApi.list(accessToken as string, 1, notificationsLimit),
+    [accessToken, notificationsLimit],
+    { enabled: Boolean(accessToken) },
+  );
+  const loadMoreNotifications = () => setNotificationsLimit((prev) => prev + 50);
+  const apiNotificationsUnread = useApiResource(
+    () => notificationsApi.unreadCount(accessToken as string),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
+
+  const markApiNotificationRead = async (id: string) => {
+    if (!accessToken) return;
+    await notificationsApi.markAsRead(accessToken, id);
+    await Promise.all([apiNotificationsList.refetch(), apiNotificationsUnread.refetch()]);
+  };
+
+  const markAllApiNotificationsRead = async () => {
+    if (!accessToken) return;
+    await notificationsApi.markAllRead(accessToken);
+    await Promise.all([apiNotificationsList.refetch(), apiNotificationsUnread.refetch()]);
+  };
 
   const [route, setRoute] = useState<string>(() => {
     return window.location.pathname && window.location.pathname !== '/'
@@ -1508,6 +1556,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         contracts,
         auditLogs,
         notifications,
+        apiNotifications: apiNotificationsList.data?.items ?? [],
+        apiNotificationsLoading: apiNotificationsList.loading,
+        apiNotificationsError: apiNotificationsList.error,
+        apiNotificationsHasMore: apiNotificationsList.data?.hasNext ?? false,
+        loadMoreNotifications,
+        apiUnreadCount: apiNotificationsUnread.data?.count ?? 0,
+        markApiNotificationRead,
+        markAllApiNotificationsRead,
         messages,
         reviews,
         talentProfiles,

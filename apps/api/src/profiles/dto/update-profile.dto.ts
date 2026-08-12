@@ -6,6 +6,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   Matches,
   MaxLength,
@@ -130,8 +131,9 @@ export class UpdateProfileDto {
   @IsIn(['PUBLIC', 'PRIVATE'])
   visibility?: 'PUBLIC' | 'PRIVATE';
 
-  // Onboarding-wizard answers. See profiles.repository.ts / schema.prisma
-  // for why these exist but nothing reads them back yet.
+  // Onboarding-wizard answers (ClientOnboardingPage / ProviderOnboardingPage).
+  // Saved so the wizard's questions aren't discarded, but nothing reads them
+  // back yet.
   @ApiPropertyOptional({ enum: EXPERIENCE_LEVELS })
   @IsOptional()
   @IsIn(EXPERIENCE_LEVELS)
@@ -158,5 +160,6 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(300)
+  @IsUrl({ protocols: ['https'], require_protocol: true })
   website?: string;
 }
