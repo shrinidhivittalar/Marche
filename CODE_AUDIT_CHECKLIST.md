@@ -4,6 +4,8 @@ Scope: everything landed since the last full audit (`04a168e`, PR #10) — onboa
 
 **Summary:** Broken 4 · Wrongly wired 0 · Misplaced 0 · Could be better 14 · Should be removed 0
 
+**Status: closed.** All 4 Broken items and 12 of 14 Could-be-better items fixed and verified (live browser checks where behavior could change, unit/e2e tests plus reasoning where it provably couldn't). 2 items skipped by explicit user decision (marginal backend efficiency, self-flagged by the audit as not worth the diff). 1 item closed with no fix needed (index.css reformatting turned out to be the repo's own pre-commit hook, not a real defect).
+
 ---
 
 ## Broken
@@ -54,9 +56,12 @@ Scope: everything landed since the last full audit (`04a168e`, PR #10) — onboa
   **Fix:** added a "module 6 — edge cases" describe block with 4 tests: dropdown loading state (delayed response), dropdown error state (500 response), a notification with `data: null` on every row (confirms the row still renders and clicking it doesn't navigate, doesn't throw), and the Job Alerts tab hiding real notifications/the Mark All button without touching their read state — this last one is permanent regression coverage for the Broken #3 finding fixed earlier in this audit. Along the way, found and fixed a real bug in the test file itself: Playwright glob route patterns treat `?` as "match any single character," not a literal query-string separator, so the existing `'**/notifications?*'` pattern (used by two other tests already in this file) was silently also matching `/notifications/unread-count` and `/notifications/{id}/read` — harmless for tests that only needed the list endpoint mocked, but it made the new malformed-data test's interceptor crash on the wrong response shape and hang. Replaced all 6 occurrences with the regex `/\/notifications\?/`, which only matches the list endpoint. **Verified:** all 10 tests in the file pass together (8.2m), including the 6 pre-existing ones — confirms the glob fix didn't change behavior for tests that were passing before, and the malformed-data test genuinely exercises the code path that used to hang.
 
 **Real invoice / contracts**
-- [ ] `apps/web/src/pages/client/ContractDetailPage.tsx:892` — `₹0` "Marché fee" is a bare hardcoded literal representing the platform's stated 0% commission, but that reasoning isn't captured in the code (no constant, no comment) — reads as a stub to a future reader.
-- [ ] `apps/web/src/index.css:1-70` — this commit's diff reformats unrelated pre-existing CSS (quote style, multi-line `box-shadow`) with nothing to do with the print/invoice feature — scope creep, harmless but against this repo's own "don't improve adjacent code" convention.
-- [ ] `apps/web/src/pages/client/ContractDetailPage.tsx:42` — state variable still named `acknowledgementOpen`/`setAcknowledgementOpen` even though the user-facing concept was renamed "Booking Acknowledgement" → "Invoice" throughout this diff. Cosmetic naming drift only.
+- [x] `apps/web/src/pages/client/ContractDetailPage.tsx:892` — `₹0` "Marché fee" is a bare hardcoded literal representing the platform's stated 0% commission, but that reasoning isn't captured in the code (no constant, no comment) — reads as a stub to a future reader.
+  **Fix:** added a one-line comment ("Not a stub — the platform charges 0% commission in Phase 1"). A named constant was considered and skipped — it's a single-use literal, and a constant for one call site is exactly the kind of abstraction this repo's YAGNI rule (CLAUDE.md §6) says not to add.
+- [x] `apps/web/src/index.css:1-70` — this commit's diff reformats unrelated pre-existing CSS (quote style, multi-line `box-shadow`) with nothing to do with the print/invoice feature — scope creep, harmless but against this repo's own "don't improve adjacent code" convention.
+  **Closed, not fixed** — checked the diff directly: it's Prettier's own pre-commit hook (lint-staged) reformatting the whole file because any part of it changed, not a manual reformat. Reverting it would fight the repo's own enforced formatting and get reformatted right back on the next commit touching this file — nothing to actually do here.
+- [x] `apps/web/src/pages/client/ContractDetailPage.tsx:42` — state variable still named `acknowledgementOpen`/`setAcknowledgementOpen` even though the user-facing concept was renamed "Booking Acknowledgement" → "Invoice" throughout this diff. Cosmetic naming drift only.
+  **Fix:** renamed to `invoiceOpen`/`setInvoiceOpen` across all 5 usages. **Verified:** typecheck + lint clean; no live browser check needed — a state-variable rename and a JSX comment addition are provably behavior-neutral by inspection (JSX comments don't render, and the rename doesn't touch any logic), which is the "pure refactor" case this skill's Phase 3 exempts from live verification.
 
 ## Should be removed
 
