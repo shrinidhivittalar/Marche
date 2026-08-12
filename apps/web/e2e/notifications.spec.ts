@@ -219,6 +219,126 @@ test.describe('module 6 — the right person gets notified', () => {
   });
 });
 
+test.describe('module 6 — edge cases', () => {
+  test('the bell dropdown shows a loading state, not a false empty state', async ({
+    page,
+    users,
+  }) => {
+    await signIn(page, users.client);
+
+    // Delayed rather than failed: proves the in-flight state specifically,
+    // not just "not empty". See Sidebar.tsx — before this was fixed,
+    // recentNotifs defaulted to [] while loading, which rendered exactly
+    // the same "You're all caught up" the empty state does.
+    await page.route(/\/notifications\?/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.continue().catch(() => {});
+    });
+
+    await page.reload();
+    await page.getByTestId('notifications-bell').click();
+    await expect(page.getByText('Loading…')).toBeVisible({ timeout: 1500 });
+    await expect(page.getByTestId('notifications-dropdown-empty')).toHaveCount(0);
+
+    await page.unroute(/\/notifications\?/);
+  });
+
+  test('the bell dropdown shows an error, not a false empty state, on a failed fetch', async ({
+    page,
+    users,
+  }) => {
+    await signIn(page, users.client);
+
+    await page.route(/\/notifications\?/, (route) => route.fulfill({ status: 500, body: '{}' }));
+
+    await page.reload();
+    await page.getByTestId('notifications-bell').click();
+    await page.waitForTimeout(500);
+    // The exact wording is a network-layer message, not fixed copy — what
+    // matters is that a fetch failure never reads as "nothing to show".
+    await expect(page.getByTestId('notifications-dropdown-empty')).toHaveCount(0);
+
+    await page.unroute(/\/notifications\?/);
+  });
+
+  test('a notification with no navigable data still renders, just without navigation', async ({
+    page,
+    browser,
+    users,
+  }) => {
+    const title = uniqueTitle('notif-malformed-data');
+    await signIn(page, users.client);
+    const jobId = await publishAsClient(page, title);
+
+    const provider = await pageAs(browser, users.provider);
+    await submitProposal(provider, jobId);
+
+    // Strips `data` from every row in the response — module6.md's
+    // "Malformed notification data" case. notificationRoute() returns null
+    // when the id it needs is missing, and the row must still render.
+    await page.route(/\/notifications\?/, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.data = body.data.map((notification: Record<string, unknown>) => ({
+        ...notification,
+        data: null,
+      }));
+      await route.fulfill({ response, json: body });
+    });
+
+    await page.goto('/notifications');
+    const row = page.getByTestId('notification-row').first();
+    await expect(row).toBeVisible({ timeout: 40_000 });
+    await expect(row).toContainText('New proposal received');
+
+    await row.click();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(/\/notifications$/);
+
+    await page.unroute(/\/notifications\?/);
+    await provider.context().close();
+  });
+
+  test('the Job Alerts tab hides real notifications without touching their read state', async ({
+    page,
+    browser,
+    users,
+  }) => {
+    const title = uniqueTitle('notif-job-alerts-tab');
+    await signIn(page, users.client);
+    const jobId = await publishAsClient(page, title);
+
+    const provider = await pageAs(browser, users.provider);
+    await submitProposal(provider, jobId);
+
+    await page.goto(`/client/jobs/${jobId}`);
+    await page.getByTestId('proposal-row').first().click();
+    await page.getByTestId('hire-provider').click();
+    await page.getByTestId('confirm-hire').click();
+    await expect(page.getByTestId('proposal-status')).toHaveAttribute('data-status', 'ACCEPTED', {
+      timeout: 40_000,
+    });
+
+    // The provider now has real unread notifications (accepted + connected).
+    await provider.goto('/notifications');
+    await provider.getByTestId('mark-all-read').waitFor({ state: 'visible', timeout: 15_000 });
+    const row = provider.getByTestId('notification-row').first();
+    await expect(row).toHaveAttribute('data-unread', 'true');
+
+    await provider.getByRole('button', { name: 'Job Alerts' }).click();
+    // Not just "the button is gone" — the real notifications themselves
+    // must not render as if they were job alerts.
+    await expect(provider.getByTestId('mark-all-read')).toHaveCount(0);
+    await expect(provider.getByTestId('notification-row')).toHaveCount(0);
+
+    await provider.getByRole('button', { name: 'Activity' }).click();
+    await expect(provider.getByTestId('mark-all-read')).toBeVisible({ timeout: 15_000 });
+    await expect(row).toHaveAttribute('data-unread', 'true');
+
+    await provider.context().close();
+  });
+});
+
 test.describe('module 6 — read state', () => {
   test('the bell and the page agree after Mark All as Read', async ({ page, browser, users }) => {
     const title = uniqueTitle('notif-read-state');
