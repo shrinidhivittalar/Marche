@@ -64,7 +64,13 @@ export const NotificationsPage: React.FC = () => {
         </div>
 
         {notifications.length > 0 && (
-          <Button size="sm" variant="outline" icon={CheckCheck} onClick={markAllRead}>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={CheckCheck}
+            onClick={markAllRead}
+            data-testid="mark-all-read"
+          >
             Mark All as Read
           </Button>
         )}
@@ -225,6 +231,9 @@ export const NotificationsPage: React.FC = () => {
             return (
               <div
                 key={n.id}
+                data-testid="notification-row"
+                data-type={n.type}
+                data-unread={unread}
                 onClick={() => {
                   if (unread) markAsRead(n.id);
                   if (route) navigate(route);

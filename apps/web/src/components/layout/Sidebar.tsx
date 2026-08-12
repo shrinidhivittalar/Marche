@@ -237,7 +237,12 @@ export const Sidebar: React.FC = () => {
                   ) : null}
                 </div>
                 {!collapsed && item.badge && item.badge > 0 ? (
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
+                  <span
+                    data-testid={
+                      item.label === 'Notifications' ? 'notifications-unread-badge' : undefined
+                    }
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground"
+                  >
                     {item.badge}
                   </span>
                 ) : null}
@@ -250,6 +255,7 @@ export const Sidebar: React.FC = () => {
                   <PopoverTrigger
                     title={collapsed ? item.label : undefined}
                     className={navButtonClass}
+                    data-testid="notifications-bell"
                   >
                     {navButtonContent}
                   </PopoverTrigger>
@@ -258,6 +264,7 @@ export const Sidebar: React.FC = () => {
                       <span className="text-xs font-bold text-ink">Notifications</span>
                       {unreadCount > 0 && (
                         <button
+                          data-testid="mark-all-read-dropdown"
                           onClick={markAllNotificationsRead}
                           className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
                         >
@@ -268,7 +275,10 @@ export const Sidebar: React.FC = () => {
                     </div>
 
                     {recentNotifs.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-xs text-ink-muted">
+                      <div
+                        data-testid="notifications-dropdown-empty"
+                        className="px-4 py-8 text-center text-xs text-ink-muted"
+                      >
                         You're all caught up.
                       </div>
                     ) : (
@@ -280,6 +290,9 @@ export const Sidebar: React.FC = () => {
                           return (
                             <PopoverClose asChild key={n.id}>
                               <button
+                                data-testid="notification-dropdown-item"
+                                data-type={n.type}
+                                data-unread={unread}
                                 onClick={() => {
                                   if (unread) markNotificationRead(n.id);
                                   if (route) navigate(route);
@@ -330,6 +343,7 @@ export const Sidebar: React.FC = () => {
                           variant="ghost"
                           className="w-full justify-center"
                           onClick={() => navigate('/notifications')}
+                          data-testid="view-all-notifications"
                         >
                           View All Notifications
                         </Button>
