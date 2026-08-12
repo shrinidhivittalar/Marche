@@ -192,6 +192,25 @@ describe('JobsService', () => {
       expect(data.cancelledAt).toBeInstanceOf(Date);
     });
 
+    it('notifies providers with a submitted proposal, by the cancelled job id', async () => {
+      const { service, notificationsService } = build({ status: 'PUBLISHED' });
+
+      await service.cancel('user_1', 'job_1');
+
+      // Recipients are resolved inside NotificationsService, not here — see
+      // NotificationsRepository.listSubmittedProviderUserIds. This only
+      // proves Jobs actually hands it the id of the job that was cancelled.
+      expect(notificationsService.jobCancelled).toHaveBeenCalledWith('job_1');
+    });
+
+    it('does not notify anyone if the cancellation itself fails', async () => {
+      const { service, notificationsService } = build({ status: 'FILLED' });
+
+      await expect(service.cancel('user_1', 'job_1')).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(notificationsService.jobCancelled).not.toHaveBeenCalled();
+    });
+
     it('refuses to cancel a filled requirement', async () => {
       const { service, jobs } = build({ status: 'FILLED' });
 
