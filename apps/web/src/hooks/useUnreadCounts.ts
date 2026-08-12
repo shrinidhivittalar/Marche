@@ -1,11 +1,11 @@
 import { useApp } from '../context/AppContext';
 
+// Messaging has no backend yet, so unreadMessages stays mock-derived from
+// AppContext. unreadNotifications reads the same shared Module 6 state
+// Sidebar and NotificationsPage use — see the comment above
+// apiNotificationsList in AppContext.tsx.
 export function useUnreadCounts() {
-  const { currentUser, notifications, contracts, messages } = useApp();
-
-  const unreadNotifications = notifications.filter(
-    (n) => n.userId === currentUser.id && !n.read,
-  ).length;
+  const { currentUser, contracts, messages, apiUnreadCount } = useApp();
 
   const myContractIds = new Set(
     contracts
@@ -16,5 +16,5 @@ export function useUnreadCounts() {
     (m) => myContractIds.has(m.contractId) && m.senderId !== currentUser.id && !m.read,
   ).length;
 
-  return { unreadNotifications, unreadMessages };
+  return { unreadNotifications: apiUnreadCount, unreadMessages };
 }

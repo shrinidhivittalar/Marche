@@ -19,7 +19,7 @@ import {
   FileText,
   ShieldCheck,
   CheckCheck,
-  Megaphone,
+  Ban,
   TrendingUp,
   Search,
 } from 'lucide-react';
@@ -32,6 +32,12 @@ import {
   ThemeToggle,
 } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
+import { useNotifications } from '../../hooks/useNotifications';
+import {
+  notificationCategory,
+  notificationRoute,
+  formatNotificationTime,
+} from '../../lib/formatNotification';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
 
@@ -58,16 +64,13 @@ const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
 };
 
 export const Sidebar: React.FC = () => {
+  const { currentUser, route, navigate, contracts, messages } = useApp();
   const {
-    currentUser,
-    route,
-    navigate,
     notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    contracts,
-    messages,
-  } = useApp();
+    unreadCount,
+    markAsRead: markNotificationRead,
+    markAllRead: markAllNotificationsRead,
+  } = useNotifications();
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
@@ -91,9 +94,8 @@ export const Sidebar: React.FC = () => {
     });
   };
 
-  const userNotifs = notifications.filter((n) => n.userId === currentUser.id);
-  const unreadCount = userNotifs.filter((n) => !n.read).length;
-  const recentNotifs = userNotifs.slice(0, 5);
+  // Already scoped to the caller by the API — no client-side filter needed.
+  const recentNotifs = notifications.slice(0, 5);
 
   const myContractIds = new Set(
     contracts
@@ -254,7 +256,7 @@ export const Sidebar: React.FC = () => {
                   <PopoverContent side="right" align="start" className="w-80 p-0">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                       <span className="text-xs font-bold text-ink">Notifications</span>
-                      {userNotifs.some((n) => !n.read) && (
+                      {unreadCount > 0 && (
                         <button
                           onClick={markAllNotificationsRead}
                           className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
@@ -271,47 +273,53 @@ export const Sidebar: React.FC = () => {
                       </div>
                     ) : (
                       <div className="max-h-80 overflow-y-auto">
-                        {recentNotifs.map((n) => (
-                          <PopoverClose asChild key={n.id}>
-                            <button
-                              onClick={() => {
-                                markNotificationRead(n.id);
-                                if (n.linkRoute) navigate(n.linkRoute);
-                              }}
-                              className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-0 transition-colors cursor-pointer hover:bg-bg ${
-                                !n.read ? 'bg-surface-subtle' : ''
-                              }`}
-                            >
-                              <div
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                  n.type === 'proposal'
-                                    ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
-                                    : n.type === 'contract'
-                                      ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
-                                      : n.type === 'job_alert'
-                                        ? 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-400'
-                                        : 'bg-surface-subtle text-ink'
+                        {recentNotifs.map((n) => {
+                          const category = notificationCategory(n.type);
+                          const route = notificationRoute(n, currentUser.role);
+                          const unread = n.readAt === null;
+                          return (
+                            <PopoverClose asChild key={n.id}>
+                              <button
+                                onClick={() => {
+                                  if (unread) markNotificationRead(n.id);
+                                  if (route) navigate(route);
+                                }}
+                                className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-0 transition-colors cursor-pointer hover:bg-bg ${
+                                  unread ? 'bg-surface-subtle' : ''
                                 }`}
                               >
-                                {n.type === 'proposal' ? (
-                                  <FileText className="w-3.5 h-3.5" />
-                                ) : n.type === 'contract' ? (
-                                  <ShieldCheck className="w-3.5 h-3.5" />
-                                ) : n.type === 'job_alert' ? (
-                                  <Megaphone className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Bell className="w-3.5 h-3.5" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-ink truncate">{n.title}</p>
-                                <p className="text-[11px] text-ink-muted line-clamp-2 leading-relaxed">
-                                  {n.message}
-                                </p>
-                              </div>
-                            </button>
-                          </PopoverClose>
-                        ))}
+                                <div
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                    category === 'proposal'
+                                      ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
+                                      : category === 'connection'
+                                        ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
+                                        : 'bg-surface-subtle text-ink'
+                                  }`}
+                                >
+                                  {category === 'proposal' ? (
+                                    <FileText className="w-3.5 h-3.5" />
+                                  ) : category === 'connection' ? (
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Ban className="w-3.5 h-3.5" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-bold text-ink truncate">{n.title}</p>
+                                    <span className="text-[10px] font-mono text-ink-muted shrink-0">
+                                      {formatNotificationTime(n)}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-ink-muted line-clamp-2 leading-relaxed">
+                                    {n.message}
+                                  </p>
+                                </div>
+                              </button>
+                            </PopoverClose>
+                          );
+                        })}
                       </div>
                     )}
 
