@@ -112,6 +112,8 @@ interface AppContextType {
   apiNotifications: ApiNotification[];
   apiNotificationsLoading: boolean;
   apiNotificationsError: string | null;
+  apiNotificationsHasMore: boolean;
+  loadMoreNotifications: () => void;
   apiUnreadCount: number;
   markApiNotificationRead: (id: string) => Promise<void>;
   markAllApiNotificationsRead: () => Promise<void>;
@@ -340,11 +342,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // read updates every badge at once. This app has no query client (see
   // useApiResource.ts), so "shared" means "lives in the one context both
   // already read", not a cache.
+  //
+  // "Load more" grows this limit and refetches page 1 again, rather than
+  // fetching page 2 and appending — a second, disjoint list would need its
+  // own read-state bookkeeping after every mark-as-read. Wasteful past a
+  // few thousand notifications, which is not this app's scale yet.
+  const [notificationsLimit, setNotificationsLimit] = useState(50);
   const apiNotificationsList = useApiResource(
-    () => notificationsApi.list(accessToken as string, 1, 50),
-    [accessToken],
+    () => notificationsApi.list(accessToken as string, 1, notificationsLimit),
+    [accessToken, notificationsLimit],
     { enabled: Boolean(accessToken) },
   );
+  const loadMoreNotifications = () => setNotificationsLimit((prev) => prev + 50);
   const apiNotificationsUnread = useApiResource(
     () => notificationsApi.unreadCount(accessToken as string),
     [accessToken],
@@ -1550,6 +1559,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         apiNotifications: apiNotificationsList.data?.items ?? [],
         apiNotificationsLoading: apiNotificationsList.loading,
         apiNotificationsError: apiNotificationsList.error,
+        apiNotificationsHasMore: apiNotificationsList.data?.hasNext ?? false,
+        loadMoreNotifications,
         apiUnreadCount: apiNotificationsUnread.data?.count ?? 0,
         markApiNotificationRead,
         markAllApiNotificationsRead,

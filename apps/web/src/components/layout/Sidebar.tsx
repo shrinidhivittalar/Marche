@@ -16,10 +16,7 @@ import {
   BarChart3,
   IndianRupee,
   FileSignature,
-  FileText,
-  ShieldCheck,
   CheckCheck,
-  Ban,
   TrendingUp,
   Search,
 } from 'lucide-react';
@@ -33,11 +30,8 @@ import {
 } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useNotifications } from '../../hooks/useNotifications';
-import {
-  notificationCategory,
-  notificationRoute,
-  formatNotificationTime,
-} from '../../lib/formatNotification';
+import { notificationRoute, formatNotificationTime } from '../../lib/formatNotification';
+import { NotificationIcon } from '../notifications/NotificationIcon';
 
 const SIDEBAR_COLLAPSED_KEY = 'marche_sidebar_collapsed';
 
@@ -304,7 +298,6 @@ export const Sidebar: React.FC = () => {
                     ) : (
                       <div className="max-h-80 overflow-y-auto">
                         {recentNotifs.map((n) => {
-                          const category = notificationCategory(n.type);
                           const route = notificationRoute(n, currentUser.role);
                           const unread = n.readAt === null;
                           return (
@@ -330,23 +323,7 @@ export const Sidebar: React.FC = () => {
                                   unread ? 'bg-surface-subtle' : ''
                                 }`}
                               >
-                                <div
-                                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                    category === 'proposal'
-                                      ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
-                                      : category === 'connection'
-                                        ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
-                                        : 'bg-surface-subtle text-ink'
-                                  }`}
-                                >
-                                  {category === 'proposal' ? (
-                                    <FileText className="w-3.5 h-3.5" />
-                                  ) : category === 'connection' ? (
-                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                  ) : (
-                                    <Ban className="w-3.5 h-3.5" />
-                                  )}
-                                </div>
+                                <NotificationIcon type={n.type} size="sm" />
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center justify-between gap-2">
                                     <p className="text-xs font-bold text-ink truncate">{n.title}</p>

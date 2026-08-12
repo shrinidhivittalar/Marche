@@ -69,7 +69,13 @@ export function notificationRoute(
 }
 
 const timeFormat = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit' });
+const dateFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' });
 
+// Time-only reads fine for something from an hour ago; it's ambiguous once
+// the list has any real history — "14:32" alone doesn't say which day. Only
+// today's notifications get the bare time; anything older gets a date.
 export function formatNotificationTime(notification: ApiNotification): string {
-  return timeFormat.format(new Date(notification.createdAt));
+  const createdAt = new Date(notification.createdAt);
+  const isToday = createdAt.toDateString() === new Date().toDateString();
+  return isToday ? timeFormat.format(createdAt) : dateFormat.format(createdAt);
 }

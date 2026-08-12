@@ -1,23 +1,11 @@
 import React, { useState } from 'react';
-import {
-  Ban,
-  CheckCheck,
-  FileText,
-  MapPin,
-  Megaphone,
-  Settings2,
-  ShieldCheck,
-  Tags,
-} from 'lucide-react';
+import { CheckCheck, MapPin, Megaphone, Settings2, Tags } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { Button } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
-import {
-  notificationCategory,
-  notificationRoute,
-  formatNotificationTime,
-} from '../lib/formatNotification';
+import { notificationRoute, formatNotificationTime } from '../lib/formatNotification';
+import { NotificationIcon } from '../components/notifications/NotificationIcon';
 
 // The "activity" feed (real proposal/job events) now comes from Module 6's
 // API. "Job Alerts" stays on AppContext's mock jobAlertSettings — that
@@ -26,7 +14,8 @@ import {
 // happened), so it isn't part of this rewire.
 export const NotificationsPage: React.FC = () => {
   const { currentUser, navigate, jobs, jobAlertSettings, updateJobAlertSettings } = useApp();
-  const { notifications, loading, error, markAsRead, markAllRead } = useNotifications();
+  const { notifications, loading, error, hasMore, loadMore, markAsRead, markAllRead } =
+    useNotifications();
 
   const isVendor = currentUser.role === 'vendor';
   const [activeTab, setActiveTab] = useState<'activity' | 'alerts'>('activity');
@@ -239,7 +228,6 @@ export const NotificationsPage: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {visibleNotifs.map((n) => {
-            const category = notificationCategory(n.type);
             const route = notificationRoute(n, currentUser.role);
             const unread = n.readAt === null;
             return (
@@ -265,23 +253,7 @@ export const NotificationsPage: React.FC = () => {
                     : 'bg-bg border-border opacity-80'
                 }`}
               >
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    category === 'proposal'
-                      ? 'bg-amber-100 text-amber-800'
-                      : category === 'connection'
-                        ? 'bg-emerald-100 text-primary'
-                        : 'bg-zinc-200 text-zinc-700'
-                  }`}
-                >
-                  {category === 'proposal' ? (
-                    <FileText className="w-4 h-4" />
-                  ) : category === 'connection' ? (
-                    <ShieldCheck className="w-4 h-4" />
-                  ) : (
-                    <Ban className="w-4 h-4" />
-                  )}
-                </div>
+                <NotificationIcon type={n.type} />
 
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between">
@@ -295,6 +267,14 @@ export const NotificationsPage: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {activeTab === 'activity' && hasMore && (
+        <div className="flex justify-center">
+          <Button size="sm" variant="outline" onClick={loadMore} disabled={loading}>
+            {loading ? 'Loading…' : 'Load more'}
+          </Button>
         </div>
       )}
     </div>
