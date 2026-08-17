@@ -111,7 +111,16 @@ test.describe('marketplace — public browsing', () => {
   });
 });
 
+// The tests below sign in, create a listing, and walk it through publish and
+// unpublish with a marketplace search after each — a dozen round trips to a
+// hosted database inside one test. The lifecycle test measured 57.8s against
+// the default 60s budget, which is not a passing test so much as a race it
+// happened to win; it lost that race the moment it ran against a different
+// database at the same latency. Same reasoning, and the same number, as
+// proposals.spec.ts and notifications.spec.ts.
 test.describe('marketplace — as a provider', () => {
+  test.describe.configure({ timeout: 180_000 });
+
   test.beforeEach(async ({ page, users }) => {
     await signIn(page, users.provider);
   });

@@ -158,35 +158,53 @@ export class ProposalsService {
   async accept(userId: string, proposalId: string) {
     const { proposal, job, profile } = await this.getProposalOnOwnJob(userId, proposalId);
 
-    const connection = await this.prisma.client.$transaction(async (tx) => {
-      // Throws 409 if the requirement is no longer claimable. The rule about
-      // which statuses may become FILLED lives in JobsService, which owns
-      // the Job lifecycle.
-      await this.jobsService.claimFilled(tx, job.id);
+    const connection = await this.prisma.client.$transaction(
+      async (tx) => {
+        // Throws 409 if the requirement is no longer claimable. The rule about
+        // which statuses may become FILLED lives in JobsService, which owns
+        // the Job lifecycle.
+        await this.jobsService.claimFilled(tx, job.id);
 
-      const moved = await this.proposalsRepository.transitionFromSubmitted(
-        tx,
-        proposal.id,
-        'ACCEPTED',
-      );
-      // The requirement was claimable but this proposal was not: the
-      // provider withdrew it between the read and this write. Rolling back
-      // leaves the requirement open, which is correct — nothing was agreed.
-      if (moved === 0) {
-        throw new ConflictException(
-          'That proposal is no longer available. It may have been withdrawn.',
+        const moved = await this.proposalsRepository.transitionFromSubmitted(
+          tx,
+          proposal.id,
+          'ACCEPTED',
         );
-      }
+        // The requirement was claimable but this proposal was not: the
+        // provider withdrew it between the read and this write. Rolling back
+        // leaves the requirement open, which is correct — nothing was agreed.
+        if (moved === 0) {
+          throw new ConflictException(
+            'That proposal is no longer available. It may have been withdrawn.',
+          );
+        }
 
-      await this.proposalsRepository.rejectCompeting(tx, job.id, proposal.id);
+        await this.proposalsRepository.rejectCompeting(tx, job.id, proposal.id);
 
-      return this.connectionsRepository.create(tx, {
-        jobId: job.id,
-        proposalId: proposal.id,
-        clientProfileId: profile.id,
-        providerProfileId: proposal.providerProfileId,
-      });
-    });
+        return this.connectionsRepository.create(tx, {
+          jobId: job.id,
+          proposalId: proposal.id,
+          clientProfileId: profile.id,
+          providerProfileId: proposal.providerProfileId,
+        });
+        // Prisma's default interactive-transaction timeout is 5 seconds, and
+        // this body was measured at ~5.2 against the hosted database — four
+        // writes at roughly 275ms of round trip each, plus commit. It fits
+        // under the default often enough to look fine and fails as a 500 on
+        // the single most important write in the product when it does not.
+        //
+        // Raised rather than papered over with a retry: nothing here is
+        // unsafe to wait for. The correctness of a concurrent accept comes
+        // from the conditional UPDATEs inside (see claimFilled and
+        // transitionFromSubmitted, and the concurrency spec that proves it),
+        // not from how long the transaction is allowed to take.
+        //
+        // The lasting fix is fewer round trips in here, which is a change to
+        // how these three writes are expressed and does not belong in the
+        // commit that found the problem.
+      },
+      { timeout: 15_000, maxWait: 5_000 },
+    );
 
     // After commit, not before (module6.md, "Transaction Boundary"). Two
     // distinct events, deliberately not collapsed into one: ProposalAccepted

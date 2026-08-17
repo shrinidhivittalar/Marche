@@ -8,8 +8,9 @@
     "start": "node dist/main.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest",
-    "test:integration": "jest --testRegex \".*\\.integration-spec\\.ts$\" --runInBand"
+    "test": "jest && jest -c jest.integration.config.js",
+    "test:unit": "jest",
+    "test:integration": "jest -c jest.integration.config.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
