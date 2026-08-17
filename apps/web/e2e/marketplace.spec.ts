@@ -1,4 +1,5 @@
 import { test, expect, signIn } from './fixtures';
+import { chooseServiceCategory } from './journeys';
 import type { Page } from '@playwright/test';
 
 // Module 3 (Marketplace) through the browser against the real API.
@@ -20,7 +21,7 @@ async function createService(page: Page, title: string) {
   await page
     .getByTestId('service-description')
     .fill('A listing created by the end-to-end suite, long enough to pass validation.');
-  await page.getByTestId('service-category').selectOption({ index: 1 });
+  await chooseServiceCategory(page);
   await page.getByTestId('service-price').fill('25000');
   await page.getByTestId('service-delivery').fill('7');
   await page.getByTestId('create-service').click();
@@ -187,7 +188,7 @@ test.describe('marketplace — as a provider', () => {
     await expect(page.getByTestId('create-service-card')).toBeVisible({ timeout: 40_000 });
 
     await page.getByTestId('service-description').fill('Long enough description to be valid here.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('1000');
     await page.getByTestId('service-delivery').fill('3');
     await page.getByTestId('create-service').click();
@@ -201,7 +202,7 @@ test.describe('marketplace — as a provider', () => {
 
     await page.getByTestId('service-title').fill(uniqueTitle('negative-price'));
     await page.getByTestId('service-description').fill('Long enough description to be valid here.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('-500');
     await page.getByTestId('service-delivery').fill('3');
     await page.getByTestId('create-service').click();

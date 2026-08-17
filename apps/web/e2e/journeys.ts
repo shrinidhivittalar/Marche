@@ -72,3 +72,33 @@ export function requirementIdFrom(page: Page): string {
   if (!id) throw new Error(`No requirement id in ${page.url()}`);
   return id;
 }
+
+/**
+ * Picks a category on the service form.
+ *
+ * The control is a ShadCN/Radix select, not a native one (it became a
+ * `<button role="combobox">` in e663e32, which replaced the native form
+ * controls on the provider screens), so selectOption cannot drive it.
+ *
+ * Keyboard rather than clicking the option: the field sits low on the form,
+ * so the popover opens upward and its earlier options are positioned off the
+ * top of the viewport — Playwright retries the click until it times out on an
+ * element it can see but not reach. Arrow-and-enter is also what a keyboard
+ * user does, and it moves the list itself rather than the page.
+ *
+ * Which category is not something these tests care about — they need a valid
+ * one, from the seeded taxonomy, the same way the old `{ index: 1 }` did.
+ */
+export async function chooseServiceCategory(page: Page) {
+  const trigger = page.getByTestId('service-category');
+  await trigger.click();
+  await expect(page.getByRole('option').first()).toBeVisible({ timeout: 30_000 });
+
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+
+  // The placeholder is still the trigger's text if nothing was taken, and a
+  // silently empty category fails later as a confusing validation error
+  // instead of here.
+  await expect(trigger).not.toHaveText(/Choose a category/, { timeout: 10_000 });
+}

@@ -1,4 +1,5 @@
 import { test, expect, signIn } from './fixtures';
+import { chooseServiceCategory } from './journeys';
 
 // Fields and endpoints that existed in the database and API but had no UI,
 // so the features were built and unreachable. The visibility test is the
@@ -44,7 +45,7 @@ test.describe('profile visibility', () => {
     await page
       .getByTestId('service-description')
       .fill('A listing used to prove profile visibility reaches marketplace search.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('30000');
     await page.getByTestId('service-delivery').fill('5');
     await page.getByTestId('create-service').click();
@@ -196,7 +197,7 @@ test.describe('service editing', () => {
     await expect(page.getByTestId('create-service-card')).toBeVisible({ timeout: 40_000 });
     await page.getByTestId('service-title').fill(original);
     await page.getByTestId('service-description').fill('An initial description that will change.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('10000');
     await page.getByTestId('service-delivery').fill('4');
     await page.getByTestId('create-service').click();
@@ -225,7 +226,7 @@ test.describe('service editing', () => {
     await expect(page.getByTestId('create-service-card')).toBeVisible({ timeout: 40_000 });
     await page.getByTestId('service-title').fill(title);
     await page.getByTestId('service-description').fill('A description that must survive a cancel.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('8000');
     await page.getByTestId('service-delivery').fill('2');
     await page.getByTestId('create-service').click();
@@ -249,7 +250,7 @@ test.describe('service editing', () => {
     await expect(page.getByTestId('create-service-card')).toBeVisible({ timeout: 40_000 });
     await page.getByTestId('service-title').fill(title);
     await page.getByTestId('service-description').fill('A description long enough to be valid.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('9000');
     await page.getByTestId('service-delivery').fill('3');
     await page.getByTestId('create-service').click();
