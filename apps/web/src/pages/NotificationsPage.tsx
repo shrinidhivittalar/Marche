@@ -197,7 +197,11 @@ export const NotificationsPage: React.FC = () => {
       )}
 
       {/* Notifications List */}
-      {activeTab === 'activity' && loading ? (
+      {/* `loading` is true for refetches too, not only the first load — every
+          mark-as-read triggers one (see AppContext's markAllApiNotificationsRead).
+          The list we already have stays on screen through those; the loading
+          text is only for having nothing to show yet. */}
+      {activeTab === 'activity' && loading && notifications.length === 0 ? (
         <p className="text-xs text-ink-muted py-12 text-center">Loading notifications…</p>
       ) : activeTab === 'activity' && error ? (
         <div className="p-5 rounded-2xl border border-destructive/40 bg-destructive/5">

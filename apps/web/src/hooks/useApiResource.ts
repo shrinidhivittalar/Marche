@@ -11,6 +11,13 @@ export interface AsyncState<T> {
    * lands will briefly claim success while still displaying the old value.
    */
   refetch: () => Promise<void>;
+  /**
+   * Applies a local update to the held data without a request, for a caller
+   * that already knows what the server is about to say — see
+   * markApiNotificationRead in AppContext. The next refetch overwrites it,
+   * so the caller owes one whether its mutation succeeded or failed.
+   */
+  mutate: (update: (current: T) => T) => void;
 }
 
 // Small fetch-on-mount hook. TanStack Query would be the usual answer, but
@@ -82,5 +89,12 @@ export function useApiResource<T>(
   // Derived rather than assigned in the effect. A disabled resource is
   // never loading by definition, so expressing that as a computed value
   // avoids an extra render pass and a setState the effect does not need.
-  return { data, loading: enabled && loading, error, refetch: load };
+  // Skipped when there is nothing loaded yet: an update derived from data
+  // the caller never saw would be a guess, and the fetch in flight is about
+  // to supply the real thing anyway.
+  const mutate = useCallback((update: (current: T) => T) => {
+    setData((current) => (current === null ? null : update(current)));
+  }, []);
+
+  return { data, loading: enabled && loading, error, refetch: load, mutate };
 }

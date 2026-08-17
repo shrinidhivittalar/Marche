@@ -282,7 +282,11 @@ export const Sidebar: React.FC = () => {
                       )}
                     </div>
 
-                    {notificationsLoading ? (
+                    {/* Same rule as NotificationsPage: `loading` covers
+                        refetches, and "Mark all read" fires one while the
+                        dropdown is open — the list must not blank out under
+                        the click that caused it. */}
+                    {notificationsLoading && recentNotifs.length === 0 ? (
                       <div className="px-4 py-8 text-center text-xs text-ink-muted">Loading…</div>
                     ) : notificationsError ? (
                       <div className="px-4 py-8 text-center text-xs text-destructive">

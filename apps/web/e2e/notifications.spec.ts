@@ -299,6 +299,60 @@ test.describe('module 6 — edge cases', () => {
     await provider.context().close();
   });
 
+  test('the list stays on screen while a mark-all-read refetch is in flight', async ({
+    page,
+    browser,
+    users,
+  }) => {
+    const title = uniqueTitle('notif-refetch-flicker');
+    await signIn(page, users.client);
+    const jobId = await publishAsClient(page, title);
+
+    const provider = await pageAs(browser, users.provider);
+    await submitProposal(provider, jobId);
+
+    // `loading` is true for refetches, not just the first load, and marking
+    // read triggers one (AppContext's markAllApiNotificationsRead). Rendering
+    // the loading branch on that emptied the list mid-click — the rows we
+    // already had, replaced by "Loading notifications…" for the length of a
+    // round trip. Delayed rather than merely fast so the in-flight window is
+    // observable at all; without the delay this passes either way.
+    await page.goto('/notifications');
+    await expect(page.getByTestId('notification-row').first()).toBeVisible({ timeout: 40_000 });
+    const rowsBefore = await page.getByTestId('notification-row').count();
+
+    await page.route(/\/notifications\?/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await route.continue().catch(() => {});
+    });
+
+    // Waiting for the refetch to actually start, not a fixed delay after the
+    // click: the mark-all PATCH round trip runs first and takes about a
+    // second against the hosted database, so a timer short enough to land
+    // inside the refetch window is also short enough to land before it — and
+    // reads the settled list, passing whether or not the bug is present.
+    const refetch = page.waitForRequest(/\/notifications\?/);
+    await page.getByTestId('mark-all-read').click();
+    await refetch;
+    await page.waitForTimeout(500);
+
+    // Counted, not expect(locator).toHaveCount() — web-first assertions retry
+    // until they pass, which here means waiting out the very refetch whose
+    // in-flight rendering is the thing under test. A blanked list would come
+    // back before the retry budget ran out and the assertion would pass. This
+    // is a snapshot of one moment, and that is the point.
+    expect(await page.getByTestId('notification-row').count()).toBe(rowsBefore);
+    expect(await page.getByText('Loading notifications').count()).toBe(0);
+
+    // Same rule on the bell's dropdown, which has its own copy of the branch.
+    await page.getByTestId('notifications-bell').click();
+    expect(await page.getByTestId('notification-dropdown-item').count()).toBeGreaterThan(0);
+    expect(await page.getByTestId('notifications-dropdown-empty').count()).toBe(0);
+
+    await page.unroute(/\/notifications\?/);
+    await provider.context().close();
+  });
+
   test('the Job Alerts tab hides real notifications without touching their read state', async ({
     page,
     browser,
@@ -415,6 +469,59 @@ test.describe('module 6 — read state', () => {
     await expect(page.getByTestId('notifications-unread-badge')).toHaveText(String(before + 1), {
       timeout: 40_000,
     });
+
+    await provider.context().close();
+  });
+
+  test('the badge drops the moment a notification is clicked, before the server answers', async ({
+    page,
+    browser,
+    users,
+  }) => {
+    const title = uniqueTitle('notif-optimistic');
+    await signIn(page, users.client);
+    const before = await unreadBadgeCount(page);
+    const jobId = await publishAsClient(page, title);
+
+    const provider = await pageAs(browser, users.provider);
+    await submitProposal(provider, jobId);
+
+    await page.reload();
+    await expect(page.getByTestId('notifications-unread-badge')).toHaveText(String(before + 1), {
+      timeout: 40_000,
+    });
+
+    await page.goto('/notifications');
+    await expect(page.getByTestId('notification-row').first()).toBeVisible({ timeout: 40_000 });
+
+    // Clicking a notification navigates away in the same tick, so the badge
+    // on the destination screen has to be right before the mark-read round
+    // trip finishes — held open here for five seconds to make "before" mean
+    // something. The two-second budget below is what separates an optimistic
+    // update from one that merely looks fast against a quick database.
+    await page.route(/\/notifications\/[^/]+\/read$/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await route.continue().catch(() => {});
+    });
+
+    // The badge is not rendered at all at zero (see unreadBadgeCount), so
+    // "back to `before`" is two different assertions depending on the number
+    // this shared account happened to start on.
+    const expectBadge = async (timeout: number) => {
+      const badge = page.getByTestId('notifications-unread-badge');
+      if (before === 0) return expect(badge).toHaveCount(0, { timeout });
+      return expect(badge).toHaveText(String(before), { timeout });
+    };
+
+    await page.getByTestId('notification-row').first().click();
+    await expectBadge(2000);
+
+    // And the server's own answer agrees once it lands — an optimistic update
+    // that the reconciling refetch then contradicts is a worse bug than the
+    // lag it replaced.
+    await page.unroute(/\/notifications\/[^/]+\/read$/);
+    await page.waitForTimeout(6000);
+    await expectBadge(40_000);
 
     await provider.context().close();
   });

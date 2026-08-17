@@ -1,4 +1,5 @@
 import { test, expect, signIn } from './fixtures';
+import { chooseServiceCategory } from './journeys';
 
 // The journey that decides whether the marketplace works at all: a client
 // searches, opens a listing, and looks at who is behind it. Both
@@ -12,7 +13,7 @@ async function publishService(page: import('@playwright/test').Page, title: stri
   await page
     .getByTestId('service-description')
     .fill('Full-day coverage with edited photographs delivered within a week.');
-  await page.getByTestId('service-category').selectOption({ index: 1 });
+  await chooseServiceCategory(page);
   await page.getByTestId('service-price').fill('42000');
   await page.getByTestId('service-delivery').fill('6');
   await page.getByTestId('service-tags').fill('candid, destination');
@@ -94,7 +95,7 @@ test.describe('service detail — negative', () => {
     await page
       .getByTestId('service-description')
       .fill('A draft that must not be publicly linkable.');
-    await page.getByTestId('service-category').selectOption({ index: 1 });
+    await chooseServiceCategory(page);
     await page.getByTestId('service-price').fill('5000');
     await page.getByTestId('service-delivery').fill('3');
     await page.getByTestId('create-service').click();
