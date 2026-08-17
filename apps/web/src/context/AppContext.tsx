@@ -360,16 +360,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { enabled: Boolean(accessToken) },
   );
 
+  // Both of these mark read locally before the request goes out. Clicking a
+  // notification navigates away in the same tick, so waiting for the round
+  // trip left the badge showing its old count on the destination screen for
+  // as long as the hosted database took to answer — the one number the user
+  // is watching, wrong, on the screen they just asked for.
+  //
+  // The optimistic state is never the last word: the refetch runs either way
+  // in the finally, so a rejected request corrects the display rather than
+  // leaving it lying. Failure is still surfaced by rethrowing — callers show
+  // their own message (see NotificationsPage's actionError).
+  const reconcileNotifications = () =>
+    Promise.all([apiNotificationsList.refetch(), apiNotificationsUnread.refetch()]);
+
   const markApiNotificationRead = async (id: string) => {
     if (!accessToken) return;
-    await notificationsApi.markAsRead(accessToken, id);
-    await Promise.all([apiNotificationsList.refetch(), apiNotificationsUnread.refetch()]);
+
+    // Only an unread one changes the count, and marking read is idempotent
+    // on the API — clicking an already-read notification must not decrement.
+    const wasUnread = apiNotificationsList.data?.items.some(
+      (item) => item.id === id && item.readAt === null,
+    );
+
+    const readAt = new Date().toISOString();
+    apiNotificationsList.mutate((current) => ({
+      ...current,
+      items: current.items.map((item) => (item.id === id ? { ...item, readAt } : item)),
+    }));
+    if (wasUnread) {
+      apiNotificationsUnread.mutate((current) => ({ count: Math.max(0, current.count - 1) }));
+    }
+
+    try {
+      await notificationsApi.markAsRead(accessToken, id);
+    } finally {
+      await reconcileNotifications();
+    }
   };
 
   const markAllApiNotificationsRead = async () => {
     if (!accessToken) return;
-    await notificationsApi.markAllRead(accessToken);
-    await Promise.all([apiNotificationsList.refetch(), apiNotificationsUnread.refetch()]);
+
+    const readAt = new Date().toISOString();
+    apiNotificationsList.mutate((current) => ({
+      ...current,
+      items: current.items.map((item) => (item.readAt === null ? { ...item, readAt } : item)),
+    }));
+    // Zero, not a subtraction: read-all covers notifications past the page
+    // this client is holding, so the local list is not a count of what
+    // changed.
+    apiNotificationsUnread.mutate(() => ({ count: 0 }));
+
+    try {
+      await notificationsApi.markAllRead(accessToken);
+    } finally {
+      await reconcileNotifications();
+    }
   };
 
   const [route, setRoute] = useState<string>(() => {

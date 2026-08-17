@@ -472,4 +472,57 @@ test.describe('module 6 — read state', () => {
 
     await provider.context().close();
   });
+
+  test('the badge drops the moment a notification is clicked, before the server answers', async ({
+    page,
+    browser,
+    users,
+  }) => {
+    const title = uniqueTitle('notif-optimistic');
+    await signIn(page, users.client);
+    const before = await unreadBadgeCount(page);
+    const jobId = await publishAsClient(page, title);
+
+    const provider = await pageAs(browser, users.provider);
+    await submitProposal(provider, jobId);
+
+    await page.reload();
+    await expect(page.getByTestId('notifications-unread-badge')).toHaveText(String(before + 1), {
+      timeout: 40_000,
+    });
+
+    await page.goto('/notifications');
+    await expect(page.getByTestId('notification-row').first()).toBeVisible({ timeout: 40_000 });
+
+    // Clicking a notification navigates away in the same tick, so the badge
+    // on the destination screen has to be right before the mark-read round
+    // trip finishes — held open here for five seconds to make "before" mean
+    // something. The two-second budget below is what separates an optimistic
+    // update from one that merely looks fast against a quick database.
+    await page.route(/\/notifications\/[^/]+\/read$/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await route.continue().catch(() => {});
+    });
+
+    // The badge is not rendered at all at zero (see unreadBadgeCount), so
+    // "back to `before`" is two different assertions depending on the number
+    // this shared account happened to start on.
+    const expectBadge = async (timeout: number) => {
+      const badge = page.getByTestId('notifications-unread-badge');
+      if (before === 0) return expect(badge).toHaveCount(0, { timeout });
+      return expect(badge).toHaveText(String(before), { timeout });
+    };
+
+    await page.getByTestId('notification-row').first().click();
+    await expectBadge(2000);
+
+    // And the server's own answer agrees once it lands — an optimistic update
+    // that the reconciling refetch then contradicts is a worse bug than the
+    // lag it replaced.
+    await page.unroute(/\/notifications\/[^/]+\/read$/);
+    await page.waitForTimeout(6000);
+    await expectBadge(40_000);
+
+    await provider.context().close();
+  });
 });
