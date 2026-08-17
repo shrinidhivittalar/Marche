@@ -13,8 +13,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // emailVerifiedAt is stamped here because no mailbox exists to click.
 //
 // Every account carries the RUN_TAG prefix so teardown can identify exactly
-// what this run created and delete nothing else. There is no shared test
-// database yet, so precision matters more than convenience.
+// what this run created and delete nothing else. The suite runs against its
+// own database (TEST_DATABASE_URL — see playwright.config.ts), which is what
+// keeps a failed teardown out of real data; the tagging is what keeps one
+// run out of another's way in a database that is not wiped between them.
 
 export const RUN_TAG = `e2e-${Date.now()}`;
 const STATE_FILE = join(HERE, '.test-users.json');

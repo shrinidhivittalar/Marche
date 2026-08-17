@@ -25,6 +25,7 @@
     "db:deploy": "npm run migrate:deploy -w @marche/db",
     "db:studio": "npm run studio -w @marche/db",
     "db:seed": "npm run seed -w @marche/db",
+    "db:test:prepare": "npm run test:prepare -w @marche/db",
     "prepare": "husky"
   },
   "lint-staged": {

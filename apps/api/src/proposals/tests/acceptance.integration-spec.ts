@@ -16,9 +16,10 @@ import { ProposalsService } from '../services/proposals.service';
  * So this runs against the real database, in real transactions, with real
  * concurrency.
  *
- * NOT part of the default suite. The file is named `.integration-spec.ts`
- * rather than `.spec.ts` so `npm test` cannot pick it up: there is no test
- * database, and the default run must never write to the hosted one.
+ * Part of the default suite. It was excluded while the hosted application
+ * database was the only one available — a run that writes had no safe place
+ * to write. TEST_DATABASE_URL is that place, so this now runs with
+ * everything else, under jest.integration.config.js. To run it alone:
  *
  *   npm --workspace @marche/api run test:integration
  *

@@ -1,10 +1,48 @@
 import { defineConfig, devices } from '@playwright/test';
+import { config as loadEnv } from 'dotenv';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// End-to-end tests run the real API against the real database. There is no
-// separate test database yet (recorded as a known gap in module3.md), so
-// every fixture creates its own uniquely-named users and deletes them in
-// teardown — see e2e/global-setup.ts and e2e/global-teardown.ts.
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+// End-to-end tests run the real API against a real Postgres database — but
+// its own, never the one the deployed app uses. TEST_DATABASE_URL lives
+// beside DATABASE_URL in packages/db/.env (see .env.example there for how to
+// create it).
 //
+// Read here rather than left to each process's own .env because two
+// processes need it: the API server started below, and this Playwright
+// process, whose fixtures talk to the database directly (see
+// e2e/test-users.ts). Assigning DATABASE_URL for our own process is what
+// points PrismaClient at the test database — @nestjs/config and Prisma both
+// leave an already-set process.env variable alone, so the value passed to
+// the server wins over the DATABASE_URL in apps/api/.env.
+const fileEnv = loadEnv({ path: join(REPO_ROOT, 'packages', 'db', '.env') }).parsed ?? {};
+
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? fileEnv.TEST_DATABASE_URL;
+if (!TEST_DATABASE_URL) {
+  throw new Error(
+    'TEST_DATABASE_URL is not set. The e2e suite creates and deletes accounts, ' +
+      'so it must never point at the application database. Add TEST_DATABASE_URL ' +
+      'to packages/db/.env, then run `npm run db:test:prepare`.',
+  );
+}
+// The whole point of the variable, so it is worth checking rather than
+// trusting: a copy-paste that leaves both pointing at the same database
+// would put every run's fixtures back into real data, silently.
+//
+// Compared against the file rather than process.env.DATABASE_URL, because
+// the assignment below makes those two identical by design — and Playwright
+// re-evaluates this config in every worker process, which inherits it. Read
+// from the environment, the check passes in the parent and then fails the
+// whole run in the first worker it starts.
+if (TEST_DATABASE_URL === fileEnv.DATABASE_URL) {
+  throw new Error(
+    'TEST_DATABASE_URL is identical to DATABASE_URL. The e2e suite needs its own database.',
+  );
+}
+process.env.DATABASE_URL = TEST_DATABASE_URL;
+
 // Ports are deliberately not the dev defaults: a developer's own `npm run
 // dev` should not collide with a test run, and a test run must never
 // accidentally drive a server someone is using.
@@ -56,6 +94,9 @@ export default defineConfig({
         PORT: String(API_PORT),
         NODE_ENV: 'development',
         FRONTEND_ORIGIN: WEB_URL,
+        // The server under test writes to the test database, not the one in
+        // apps/api/.env.
+        DATABASE_URL: TEST_DATABASE_URL,
         // Auth routes are limited to 5/min in production, which a suite
         // that signs in per test trips almost immediately. Sessions cannot
         // be shared instead: refresh tokens are single-use and rotating, so

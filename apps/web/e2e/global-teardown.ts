@@ -1,7 +1,10 @@
 import { clearState, deleteRunUsers, loadState, prisma } from './test-users';
 
-// Runs even when tests fail. Leaving accounts and listings behind would
-// pollute a shared database that the deployed app also reads.
+// Runs even when tests fail. The suite has its own database now, so a
+// leftover account is no longer a production problem — but the test database
+// is long-lived rather than recreated per run, and rows nobody deletes still
+// accumulate into slower queries and confusing "why are there forty
+// providers" moments.
 export default async function globalTeardown() {
   const db = prisma();
   try {
