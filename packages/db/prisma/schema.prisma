@@ -43,6 +43,7 @@ model User {
   profile            Profile?
   media              Media[]
   notifications      Notification[]
+  reviewsWritten     Review[]
 
   @@map("users")
 }
@@ -235,6 +236,7 @@ model Profile {
   proposals           Proposal[]
   clientConnections   Connection[] @relation("ClientConnections")
   providerConnections Connection[] @relation("ProviderConnections")
+  reviewsReceived     Review[]
 
   @@map("profiles")
 }
@@ -852,6 +854,8 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  reviews Review[]
+
   // Serve "my connections" from either side.
   @@index([clientProfileId])
   @@index([providerProfileId])
@@ -975,4 +979,53 @@ model Notification {
   // Serves the unread-count query.
   @@index([recipientUserId, readAt])
   @@map("notifications")
+}
+
+// module5-reviews.md. Two-way: both parties to a COMPLETED Connection may
+// review the other, once each. Eligibility (COMPLETED + is a party + not
+// already reviewed) lives in ReviewsService, not here — same split as every
+// other module in this schema.
+//
+// Blind until both sides have reviewed, or a window elapses — Fiverr's rule,
+// adopted because the alternative (reviews visible immediately) lets a
+// reviewer copy or retaliate against the other side's review before writing
+// their own, which defeats the point of asking both sides independently.
+// Computed at read time (ReviewsService), not stored: whether a review is
+// visible depends on whether its sibling exists yet, which can change after
+// the row is written, and a stored flag would need the same lazy sweep
+// pattern as Connection.status for the window half of the rule anyway.
+model Review {
+  id String @id @default(uuid())
+
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // Cascade: a review with no author behind it is not a record worth
+  // keeping, same reasoning as Notification.recipient and Message.sender.
+  reviewerUserId String
+  reviewer       User   @relation(fields: [reviewerUserId], references: [id], onDelete: Cascade)
+
+  // The profile being reviewed — not a User, because a review is about the
+  // public reputation a profile carries, which is what PublicProfilePage
+  // reads. SetNull rather than cascade: a review is evidence about a
+  // completed transaction and must survive the reviewee deleting their
+  // account, the same way Media.ownerUserId is deliberately not a cascade.
+  revieweeProfileId String?
+  revieweeProfile   Profile? @relation(fields: [revieweeProfileId], references: [id], onDelete: SetNull)
+
+  rating  Int
+  comment String
+
+  createdAt DateTime @default(now())
+
+  // One review per reviewer per connection — the eligibility check
+  // (ReviewsService) enforces "not already reviewed" in application code,
+  // but a unique constraint is what makes a race between two concurrent
+  // submissions from the same party impossible rather than merely unlikely.
+  @@unique([connectionId, reviewerUserId])
+  // Serves "reviews for this connection" (mutual-visibility check) and
+  // "reviews for this profile" (public listing), newest first.
+  @@index([connectionId])
+  @@index([revieweeProfileId, createdAt])
+  @@map("reviews")
 }

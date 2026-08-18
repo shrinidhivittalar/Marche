@@ -19,8 +19,6 @@ import { ConnectionsService } from './services/connections.service';
 // Jobs is the only module Proposals writes to, and only through
 // JobsService.claimFilled, which takes this module's transaction client so
 // the FILLED transition stays defined where the Job lifecycle lives.
-// Nothing here is exported: Contracts and Messaging will read the
-// Connection, and that is a decision for whichever module arrives first.
 //
 // Marketplace is deliberately absent. A proposal never resolves a category
 // or a service — it reads a requirement, which already did.
@@ -28,5 +26,10 @@ import { ConnectionsService } from './services/connections.service';
   imports: [ProfilesModule, JobsModule, MediaModule, NotificationsModule],
   controllers: [ProposalsController, JobProposalsController, ConnectionsController],
   providers: [ProposalsRepository, ConnectionsRepository, ProposalsService, ConnectionsService],
+  // ConnectionsService (party-checked single-connection read, including its
+  // status) and ConnectionsRepository are exported for ReviewsModule —
+  // review eligibility is COMPLETED + is a party + not already reviewed, and
+  // the first two-thirds of that already live here.
+  exports: [ConnectionsService, ConnectionsRepository],
 })
 export class ProposalsModule {}
