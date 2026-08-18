@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate } from '../marketplace/pagination';
+import type { AuditLogQueryDto } from './dto/audit-log-query.dto';
+import type { Prisma } from '@marche/db';
 
 export interface AuditEventInput {
   /** Namespaced, e.g. "auth.login.success" — see each module's own event-name constants. */
@@ -37,5 +40,37 @@ export class AuditService {
       // Swallow — audit logging is observability, not business logic. A DB
       // hiccup here must never fail a login/register/etc. request.
     }
+  }
+
+  // Admin-only read side. There is no controller route for anyone else —
+  // this is a security trail, not a per-user activity feed.
+  async list(role: string, query: AuditLogQueryDto) {
+    if (role !== 'ADMIN') {
+      throw new ForbiddenException('This is only available to admins');
+    }
+
+    const { page, limit, search } = query;
+    const where: Prisma.AuditLogWhereInput = search
+      ? {
+          OR: [
+            { eventType: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
+    const [data, total] = await Promise.all([
+      this.prisma.client.auditLog.findMany({
+        where,
+        // Newest first, id as a tiebreaker — same rule as every other list
+        // in this codebase.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.client.auditLog.count({ where }),
+    ]);
+
+    return paginate(data, total, page, limit);
   }
 }
