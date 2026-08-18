@@ -340,6 +340,48 @@ export const ProviderHomePage: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Deliverables and full client identity — the two things the
+                    card doesn't have room for, so this overview earns its
+                    place between the card and the full detail page instead
+                    of just repeating the card at a larger size. */}
+                {selectedJob.deliverables.length > 0 && (
+                  <div>
+                    <span className="block text-[10px] text-ink-muted uppercase font-mono mb-1.5">
+                      Expected Deliverables
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedJob.deliverables.map((deliverable) => (
+                        <span
+                          key={deliverable}
+                          className="px-2.5 py-1 rounded-full bg-bg border border-border text-[11px] text-ink"
+                        >
+                          {deliverable}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2.5 text-xs">
+                  <span className="w-8 h-8 rounded-full bg-surface-subtle ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-ink shrink-0">
+                    {selectedJob.clientProfile.displayName.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block font-bold text-ink truncate">
+                      {selectedJob.clientProfile.displayName}
+                    </span>
+                    <span className="block text-[10px] text-ink-muted truncate">
+                      {selectedJob.clientProfile.location ?? 'Location not stated'}
+                    </span>
+                  </div>
+                  {selectedJob.clientProfile.verifiedAt && (
+                    <span className="flex items-center gap-1 text-primary font-semibold text-[11px] shrink-0">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Verified
+                    </span>
+                  )}
+                </div>
               </DialogBody>
 
               <DialogFooter>
