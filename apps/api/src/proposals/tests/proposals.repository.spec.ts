@@ -25,6 +25,8 @@ function build() {
     findMany: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   };
   const prisma = {
     client: { proposal, proposalAttachment, connection },
@@ -226,6 +228,32 @@ describe('ConnectionsRepository', () => {
     expect(connection.count.mock.calls[0][0].where).toEqual(
       connection.findMany.mock.calls[0][0].where,
     );
+  });
+
+  it('marks a connection completed with a timestamp, not just a status flip', async () => {
+    const { connections, connection } = build();
+
+    await connections.markCompleted('connection_1');
+
+    expect(connection.update.mock.calls[0][0]).toMatchObject({
+      where: { id: 'connection_1' },
+      data: { status: 'COMPLETED' },
+    });
+    expect(connection.update.mock.calls[0][0].data.completedAt).toBeInstanceOf(Date);
+  });
+
+  it('sweeps only ACTIVE connections whose event happened before the grace cutoff', async () => {
+    const { connections, connection } = build();
+
+    await connections.sweepAutoComplete();
+
+    const { where, data } = connection.updateMany.mock.calls[0][0];
+    expect(where.status).toBe('ACTIVE');
+    expect(where.job.eventDate.lt).toBeInstanceOf(Date);
+    // The cutoff must be in the past — anything else would auto-complete
+    // connections whose event hasn't even happened yet.
+    expect(where.job.eventDate.lt.getTime()).toBeLessThan(Date.now());
+    expect(data.status).toBe('COMPLETED');
   });
 
   it('returns both party ids on a single read, so ownership can be checked', async () => {
