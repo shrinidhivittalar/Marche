@@ -295,6 +295,7 @@ export const MessagesPage: React.FC = () => {
                 return (
                   <div
                     key={conv.id}
+                    data-testid="conversation-row"
                     onClick={() => openConversation(conv.id)}
                     className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${
                       isActive
@@ -428,6 +429,7 @@ export const MessagesPage: React.FC = () => {
                       </div>
 
                       <div
+                        data-testid="message-bubble"
                         className={`max-w-md px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-xs ${
                           isMe
                             ? 'bg-primary text-primary-foreground rounded-br-xs'
@@ -458,6 +460,7 @@ export const MessagesPage: React.FC = () => {
 
               <Input
                 type="text"
+                data-testid="message-input"
                 placeholder={`Message ${activeConv?.contactName.split(' ')[0]}...`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
@@ -470,6 +473,7 @@ export const MessagesPage: React.FC = () => {
                 icon={Send}
                 disabled={!inputText.trim() || sending}
                 className="rounded-2xl"
+                data-testid="send-message"
               >
                 Send
               </Button>
