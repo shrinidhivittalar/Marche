@@ -5,11 +5,12 @@ import { UsersRepository } from '../repositories/users.repository';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import { PasswordResetsRepository } from '../repositories/password-resets.repository';
-import { EmailService } from '../email/email.service';
+import { EmailService } from '../../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
 import { AuditService } from '../../audit/audit.service';
 import { AUTH_EVENTS } from '../audit-events';
 import { ProfilesService } from '../../profiles/services/profiles.service';
+import { ReferralsService } from '../../referrals/services/referrals.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
@@ -88,6 +89,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
     private readonly profilesService: ProfilesService,
+    private readonly referralsService: ReferralsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -137,6 +139,11 @@ export class AuthService {
       email: user.email,
       metadata: { role: user.role },
     });
+
+    // After commit, not before — same rule as every other post-transaction
+    // side effect here. Swallows its own failure (ReferralsService), so a
+    // bookkeeping miss can never turn a successful registration into one.
+    await this.referralsService.handleUserJoined(user.email);
 
     return REGISTER_ACKNOWLEDGEMENT;
   }

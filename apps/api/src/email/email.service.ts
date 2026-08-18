@@ -1,6 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 
+// Every other email here builds its HTML from server-controlled strings and
+// ids. The referral invite is the first to interpolate user-authored text
+// (a display name, a free-text note) into an email actually read by a third
+// party, so it is the first place that text needs escaping before it can go
+// anywhere near the markup.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Falls back to logging the link when SMTP_HOST isn't set, so local dev
 // never needs a real mail account. Set SMTP_HOST/PORT/USER/PASSWORD +
 // EMAIL_FROM to send for real (see apps/api/.env.example).
@@ -63,6 +77,31 @@ export class EmailService {
       'Reset your Marché password',
       `<p>We received a request to reset your Marché password. Click the link below to choose a new one:</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, you can safely ignore this email. This link expires in 1 hour.</p>`,
       `[dev] Password reset link for ${email}: ${link}`,
+    );
+  }
+
+  // No token, unlike verification/reset — a referral is matched to its
+  // invitee by email address at registration time (ReferralsService), not
+  // by a link the recipient clicks through. The link just gets them to the
+  // ordinary sign-up form.
+  async sendReferralInviteEmail(
+    email: string,
+    referrerName: string,
+    note: string | null,
+  ): Promise<void> {
+    const link = `${this.frontendOrigin}/auth/signup`;
+    // Header value — stripped of newlines so a crafted display name can't
+    // inject extra headers into the message.
+    const subjectSafeName = referrerName.replace(/[\r\n]/g, ' ');
+    const safeName = escapeHtml(referrerName);
+    const noteHtml = note ? `<p>Their note to you: "${escapeHtml(note)}"</p>` : '';
+    await this.send(
+      email,
+      `${subjectSafeName} invited you to join Marché`,
+      `<p>${safeName} thinks you'd be a great fit for Marché, a marketplace for event ` +
+        `services.</p>${noteHtml}<p><a href="${link}">Sign up</a> using this email address to ` +
+        `join.</p>`,
+      `[dev] Referral invite for ${email} from ${referrerName}: ${link}`,
     );
   }
 

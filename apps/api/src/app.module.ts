@@ -17,6 +17,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { MessagesModule } from './messages/messages.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { SavedProvidersModule } from './saved-providers/saved-providers.module';
+import { ReferralsModule } from './referrals/referrals.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { SavedProvidersModule } from './saved-providers/saved-providers.module';
     MessagesModule,
     DisputesModule,
     SavedProvidersModule,
+    ReferralsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
