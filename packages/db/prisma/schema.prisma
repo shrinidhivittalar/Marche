@@ -805,6 +805,16 @@ model ProposalAttachment {
 // is what "active" means; a one-member enum is a column whose value is
 // already implied by the primary key. Closing arrives with the module that
 // needs a second state, and brings its own migration either way.
+// module5-completion.md. COMPLETED only ever means "the client confirmed, or
+// the event happened and enough time passed that a stalled confirmation
+// stopped blocking the parties from reviewing each other" — never a payment
+// or escrow state, since neither exists yet. See ConnectionsService for the
+// two ways a row gets here.
+enum ConnectionStatus {
+  ACTIVE
+  COMPLETED
+}
+
 model Connection {
   id String @id @default(uuid())
 
@@ -831,12 +841,22 @@ model Connection {
   providerProfileId String
   providerProfile   Profile @relation("ProviderConnections", fields: [providerProfileId], references: [id], onDelete: Cascade)
 
+  // Defaults ACTIVE. Client-confirmed or auto-completed — see
+  // ConnectionsService.confirmComplete and .autoCompleteEligibleWhere.
+  // completedAt is null until either happens; once set, it never moves,
+  // even though which of the two paths set it is not itself recorded (the
+  // distinction has no consumer — Reviews eligibility only needs COMPLETED).
+  status      ConnectionStatus @default(ACTIVE)
+  completedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
   @@index([providerProfileId])
+  // Serves the auto-complete sweep: every ACTIVE row, cheaply.
+  @@index([status])
   @@map("connections")
 }
 

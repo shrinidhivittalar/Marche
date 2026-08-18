@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
 import { CurrentUser } from '../../identity/current-user.decorator';
@@ -7,13 +7,14 @@ import { ConnectionsService } from '../services/connections.service';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 
 /**
- * Reads only, and that is the design.
+ * Reads, plus one lifecycle write.
  *
  * There is no POST. A connection is created inside the proposal-acceptance
  * transaction and nowhere else, so nobody — client or provider — can
  * manufacture a hiring relationship that no proposal produced. There is no
- * PATCH or DELETE either: Phase 1 has one state, and the row existing is
- * what it means.
+ * DELETE: a connection, once it exists, exists permanently. The one PATCH
+ * that does exist moves status from ACTIVE to COMPLETED and nothing else —
+ * see ConnectionsService.confirmComplete.
  */
 @ApiTags('connections')
 @Controller('connections')
@@ -39,5 +40,17 @@ export class ConnectionsController {
   @ApiOperation({ summary: 'One connection, readable by either party to it' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.connectionsService.findById(user.id, id);
+  }
+
+  @Patch(':id/complete')
+  @ApiOperation({
+    summary: 'The client confirms the connection complete (Client only, after the event date)',
+    description:
+      'Idempotent — confirming an already-completed connection just returns it unchanged. ' +
+      'A connection whose event happened long enough ago completes on its own; this is what ' +
+      'lets the client do it sooner.',
+  })
+  confirmComplete(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.connectionsService.confirmComplete(user.id, id);
   }
 }

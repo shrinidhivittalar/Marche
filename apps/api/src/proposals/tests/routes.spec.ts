@@ -111,10 +111,21 @@ describe('connections route registration', () => {
     expect(gets.indexOf('me')).toBeLessThan(gets.indexOf(':id'));
   });
 
-  // The most important assertion in this file. A connection is created
-  // inside the acceptance transaction and nowhere else; a POST here would be
-  // a way to manufacture a hiring relationship no proposal produced.
-  it('exposes no way to create, change or delete a connection', () => {
-    expect(routes.every((r) => r.method === RequestMethod.GET)).toBe(true);
+  // A connection is created inside the acceptance transaction and nowhere
+  // else; a POST here would be a way to manufacture a hiring relationship no
+  // proposal produced. No DELETE either — a connection, once it exists,
+  // exists permanently.
+  it('exposes no way to create or delete a connection', () => {
+    expect(
+      routes.every((r) => r.method === RequestMethod.GET || r.method === RequestMethod.PATCH),
+    ).toBe(true);
+  });
+
+  // The one write this controller has, and the only thing it may ever do —
+  // move status from ACTIVE to COMPLETED. See ConnectionsService.confirmComplete.
+  it('exposes exactly one PATCH, and only on :id/complete', () => {
+    const patches = routes.filter((r) => r.method === RequestMethod.PATCH);
+    expect(patches).toHaveLength(1);
+    expect(patches[0].path).toBe(':id/complete');
   });
 });
