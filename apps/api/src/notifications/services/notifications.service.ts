@@ -98,6 +98,27 @@ export class NotificationsService {
     }
   }
 
+  // A client publishing a requirement notifies every provider with a live
+  // service in the same category — Job Alerts. Recipients are resolved here
+  // rather than passed in, for the same reason as jobCancelled: Jobs has no
+  // dependency on Marketplace's Service table, and this module already
+  // reads across module boundaries for recipient resolution.
+  async jobMatched(jobId: string, categoryId: string, jobTitle: string): Promise<void> {
+    try {
+      const recipientUserIds =
+        await this.notificationsRepository.listProviderUserIdsForCategory(categoryId);
+      await this.createManySafely(
+        recipientUserIds,
+        'JOB_MATCHED',
+        'New job matching your services',
+        `A new requirement was posted in a category you offer services in: "${jobTitle}"`,
+        { jobId },
+      );
+    } catch (error) {
+      this.logger.error('Failed to notify providers of a matching job', error as Error);
+    }
+  }
+
   // ---------- reads ----------
 
   async list(userId: string, pagination: PaginationQueryDto) {

@@ -923,6 +923,7 @@ enum NotificationType {
   PROPOSAL_REJECTED
   CONNECTION_ESTABLISHED
   JOB_CANCELLED
+  JOB_MATCHED
 }
 
 model Notification {
