@@ -1,43 +1,28 @@
 import React, { useState } from 'react';
-import {
-  ShieldAlert,
-  AlertTriangle,
-  Search,
-} from 'lucide-react';
+import { ShieldAlert, Search } from 'lucide-react';
+import { Card, Input } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Input, Textarea } from '@marche/ui';
-import { Modal } from '../../components/common/Modal';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { BookingState } from '../../types';
+import { useApiResource } from '../../hooks/useApiResource';
+import { auditApi } from '../../lib/audit-api';
+import { ComingSoonPage } from '../ComingSoonPage';
 
+// The real security audit trail (module1.md's AuditLog — login/logout/
+// register/password-reset/email-verified events), not the fabricated
+// booking-lifecycle trail this replaced. That mock version also offered a
+// "governed override" tool that force-transitioned a booking's state; there
+// is no real backend capability for that on Jobs or Connections, so rather
+// than keep a control that does nothing real, it's a Coming Soon state like
+// every other unbuilt surface in the product.
 export const AdminAuditDashboard: React.FC = () => {
-  const {
-    jobs,
-    contracts,
-    auditLogs,
-    adminOverrideBookingState,
-  } = useApp();
+  const { accessToken } = useApp();
+  const token = accessToken as string;
 
-  const [selectedBookingId, setSelectedBookingId] = useState<string>('job_101');
-  const [overrideTargetState, setOverrideTargetState] = useState<BookingState>('Cancelled');
-  const [overrideReason, setOverrideReason] = useState<string>('');
-  const [overrideModalOpen, setOverrideModalOpen] = useState<boolean>(false);
-  const [filterQuery, setFilterQuery] = useState<string>('');
-
-  const filteredAuditLogs = auditLogs.filter(
-    (log) =>
-      log.action.toLowerCase().includes(filterQuery.toLowerCase()) ||
-      log.actorName.toLowerCase().includes(filterQuery.toLowerCase()) ||
-      log.targetEntity.toLowerCase().includes(filterQuery.toLowerCase())
+  const [search, setSearch] = useState('');
+  const logs = useApiResource(
+    () => auditApi.list(token, 1, 50, search || undefined),
+    [token, search],
+    { enabled: Boolean(token) },
   );
-
-  const handleApplyOverride = () => {
-    if (!overrideReason.trim()) return;
-
-    adminOverrideBookingState(selectedBookingId, overrideTargetState, overrideReason.trim());
-    setOverrideModalOpen(false);
-    setOverrideReason('');
-  };
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -45,87 +30,38 @@ export const AdminAuditDashboard: React.FC = () => {
       <div className="pb-6 border-b border-border">
         <div className="flex items-center gap-2 text-xs font-mono uppercase font-semibold text-amber-700 mb-1">
           <ShieldAlert className="w-4 h-4 text-amber-700" />
-          <span>Platform Operator & State Inspector</span>
+          <span>Platform Operator</span>
         </div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-          Booking Audit & State Machine Inspector
+          Security Audit Trail
         </h1>
         <p className="text-xs text-ink-muted mt-1">
-          PRD Section 8.6 & 16.5: Constrained admin state machine overrides & append-only immutable audit trail.
+          Authentication events — sign-ins, registrations, password resets. Append-only.
         </p>
       </div>
 
-      {/* Admin Quick Action Card */}
-      <Card className="p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-          <div>
-            <span className="text-xs font-mono uppercase font-bold text-primary">
-              PRD Section 16.5 Permitted Override Set
-            </span>
-            <h2 className="text-lg font-bold text-ink">
-              Apply Governed Booking Override
-            </h2>
-          </div>
+      <ComingSoonPage
+        title="Booking overrides"
+        description="Forcing a booking or connection into a different state isn't available yet — there's no admin override capability on the backend."
+      />
 
-          <Button
-            size="sm"
-            variant="danger"
-            icon={AlertTriangle}
-            onClick={() => setOverrideModalOpen(true)}
-            className="self-start sm:self-auto"
-          >
-            Launch Override Tool
-          </Button>
-        </div>
-
-        {/* Permitted Rules Summary Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
-            <span className="font-bold text-ink">Force-Expire Request</span>
-            <p className="text-[11px] text-ink-muted">
-              Open / Pending → Expired. Clear inactive vendor requests.
-            </p>
-          </div>
-          <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
-            <span className="font-bold text-ink">Force-Cancel Booking</span>
-            <p className="text-[11px] text-ink-muted">
-              Any active state → Cancelled. Unblocks stuck disputes.
-            </p>
-          </div>
-          <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
-            <span className="font-bold text-ink">Force-Close Booking</span>
-            <p className="text-[11px] text-ink-muted">
-              Completed → Closed. Resolves unconfirmed completions.
-            </p>
-          </div>
-          <div className="p-3 bg-bg border border-border rounded-xl space-y-1">
-            <span className="font-bold text-ink">Forbidden Overrides</span>
-            <p className="text-[11px] text-rose-700 font-semibold">
-              Reviving a terminal (Closed/Cancelled) state is REJECTED.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Append-Only Audit Log Table */}
+      {/* Audit Log Table */}
       <Card className="p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-ink">
-              Immutable System Audit Trail ({auditLogs.length})
+              Audit Trail{logs.data ? ` (${logs.data.total})` : ''}
             </h2>
-            <p className="text-xs text-ink-muted mt-0.5">
-              100% append-only coverage capturing actor, action, timestamp, and before/after states.
-            </p>
+            <p className="text-xs text-ink-muted mt-0.5">Newest first.</p>
           </div>
 
           <div className="relative w-64">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
             <Input
               type="text"
-              placeholder="Search audit trail..."
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder="Search event type or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary"
             />
           </div>
@@ -136,125 +72,43 @@ export const AdminAuditDashboard: React.FC = () => {
             <thead>
               <tr className="bg-bg border-b border-border text-ink-muted uppercase font-mono text-[10px]">
                 <th className="p-3.5 pl-4 font-bold">Timestamp</th>
-                <th className="p-3.5 font-bold">Actor</th>
-                <th className="p-3.5 font-bold">Action</th>
-                <th className="p-3.5 font-bold">Target Entity</th>
-                <th className="p-3.5 font-bold">State Transition</th>
-                <th className="p-3.5 font-bold pr-4">Reason / Notes</th>
+                <th className="p-3.5 font-bold">Event</th>
+                <th className="p-3.5 font-bold">Email</th>
+                <th className="p-3.5 font-bold">IP address</th>
+                <th className="p-3.5 font-bold pr-4">User agent</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredAuditLogs.map((log) => (
+              {(logs.data?.items ?? []).map((log) => (
                 <tr key={log.id} className="hover:bg-bg transition-colors">
                   <td className="p-3.5 pl-4 font-mono text-ink-muted whitespace-nowrap">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </td>
-                  <td className="p-3.5 whitespace-nowrap">
-                    <span className="font-bold text-ink">{log.actorName}</span>
-                    <span className="ml-1.5 text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 font-mono">
-                      {log.actorRole}
-                    </span>
+                    {new Date(log.createdAt).toLocaleString()}
                   </td>
                   <td className="p-3.5 font-bold text-primary whitespace-nowrap">
-                    {log.action}
+                    {log.eventType}
                   </td>
-                  <td className="p-3.5 font-mono text-ink max-w-[200px] truncate">
-                    {log.targetEntity}
+                  <td className="p-3.5 font-mono text-ink max-w-[220px] truncate">
+                    {log.email ?? '—'}
                   </td>
-                  <td className="p-3.5 font-mono text-[11px] whitespace-nowrap">
-                    {log.beforeState && log.afterState ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <StatusBadge status={log.beforeState} />
-                        <span className="text-zinc-400">→</span>
-                        <StatusBadge status={log.afterState} />
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
+                  <td className="p-3.5 font-mono text-ink-muted whitespace-nowrap">
+                    {log.ipAddress ?? '—'}
                   </td>
-                  <td className="p-3.5 pr-4 text-ink-muted max-w-[220px] truncate">
-                    {log.reason || 'System state change'}
+                  <td className="p-3.5 pr-4 text-ink-muted max-w-[240px] truncate">
+                    {log.userAgent ?? '—'}
                   </td>
                 </tr>
               ))}
+              {logs.data?.items.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-ink-muted">
+                    No audit events match this search.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </Card>
-
-      {/* Admin Override Modal */}
-      <Modal
-        isOpen={overrideModalOpen}
-        onClose={() => setOverrideModalOpen(false)}
-        title="Apply Governed Admin Override"
-        description="PRD Section 16.5: State changes are audited with before/after state and required operator reason."
-      >
-        <div className="space-y-4 pt-2 text-xs">
-          <div>
-            <label className="block font-semibold text-ink mb-1">
-              Select Booking / Contract ID
-            </label>
-            <select
-              value={selectedBookingId}
-              onChange={(e) => setSelectedBookingId(e.target.value)}
-              className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
-            >
-              {jobs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  Job {r.id}: {r.title} ({r.status})
-                </option>
-              ))}
-              {contracts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  Contract {c.id}: {c.jobTitle} ({c.bookingState})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-ink mb-1">
-              Target State (Permitted Set)
-            </label>
-            <select
-              value={overrideTargetState}
-              onChange={(e) => setOverrideTargetState(e.target.value as BookingState)}
-              className="w-full bg-bg border border-border rounded-xl px-3 py-2 text-xs text-ink"
-            >
-              <option value="Expired">Force-Expire Request</option>
-              <option value="Cancelled">Force-Cancel Booking</option>
-              <option value="Closed">Force-Close Booking</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-ink mb-1">
-              Mandatory Operator Audit Reason
-            </label>
-            <Textarea
-              rows={3}
-              placeholder="e.g. Unresponsive vendor beyond 72h window, manual phone verification completed."
-              value={overrideReason}
-              onChange={(e) => setOverrideReason(e.target.value)}
-              className="w-full bg-bg border border-border rounded-xl p-3 text-xs text-ink"
-              required
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <Button variant="outline" onClick={() => setOverrideModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              disabled={!overrideReason.trim()}
-              onClick={handleApplyOverride}
-            >
-              Execute Governed Override
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };
