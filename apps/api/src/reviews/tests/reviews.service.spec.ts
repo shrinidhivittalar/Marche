@@ -78,6 +78,24 @@ describe('ReviewsService', () => {
       );
     });
 
+    it('translates a unique-constraint race into a clean 409, not a raw 500', async () => {
+      // The pre-check (findByConnectionAndReviewer) is check-then-write, not
+      // atomic — two concurrent requests from the same reviewer can both
+      // pass it before either commits. This is what the database's own
+      // unique constraint on [connectionId, reviewerUserId] catches, and
+      // what this test proves gets translated into a ConflictException
+      // rather than surfacing Prisma's raw P2002 as an unhandled 500.
+      const { service, reviewsRepository, connectionsService } = build();
+      connectionsService.findById.mockResolvedValue(completedConnection);
+      reviewsRepository.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+
+      await expect(service.submit('user_client', 'connection_1', 5, 'x')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
     it('refuses to review a connection that is not COMPLETED', async () => {
       const { service, reviewsRepository, connectionsService } = build();
       connectionsService.findById.mockResolvedValue({ ...completedConnection, status: 'ACTIVE' });

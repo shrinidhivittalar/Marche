@@ -16,6 +16,24 @@ import type { Review } from '@marche/db';
 // one is about how long a one-sided review stays hidden once eligible.
 const REVEAL_WINDOW_DAYS = 14;
 
+// Postgres' unique-violation code, surfaced by Prisma — same constant and
+// check as ProposalsService's, for the same reason: the pre-check below
+// (findByConnectionAndReviewer) is check-then-write, not atomic, so two
+// concurrent submissions from the same reviewer can both pass it before
+// either commits. The unique constraint on [connectionId, reviewerUserId]
+// is what actually stops the second one; this is what turns that into a
+// clean 409 instead of an unhandled 500.
+const UNIQUE_VIOLATION = 'P2002';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
+}
+
 @Injectable()
 export class ReviewsService {
   constructor(
@@ -53,7 +71,20 @@ export class ReviewsService {
         ? connection.providerProfileId
         : connection.clientProfileId;
 
-    return this.reviewsRepository.create(connectionId, userId, revieweeProfileId, rating, comment);
+    try {
+      return await this.reviewsRepository.create(
+        connectionId,
+        userId,
+        revieweeProfileId,
+        rating,
+        comment,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('You have already reviewed this connection');
+      }
+      throw error;
+    }
   }
 
   /** The caller's own review on this connection, if any — null otherwise. */
