@@ -243,6 +243,7 @@ model Profile {
   reviewsReceived     Review[]
   savedProviders      SavedProvider[] @relation("ClientSavedProviders")
   savedByClients      SavedProvider[] @relation("ProviderSavedByClients")
+  referralsSent       Referral[]
 
   @@map("profiles")
 }
@@ -1150,4 +1151,42 @@ model SavedProvider {
   @@index([clientProfileId])
   @@index([providerProfileId])
   @@map("saved_providers")
+}
+
+// A client inviting someone they already trust to join Marché as a
+// provider. JOINED is set automatically — see ReferralsService.markJoined,
+// called from AuthService.register — the moment someone registers with the
+// exact email address that was invited. There is no click-through referral
+// code: matching on email is the only signal Phase 1 needs, and it works
+// even if the invitee never opens the email and just signs up on their own.
+enum ReferralStatus {
+  INVITED
+  JOINED
+}
+
+model Referral {
+  id String @id @default(uuid())
+
+  referrerProfileId String
+  referrerProfile   Profile @relation(fields: [referrerProfileId], references: [id], onDelete: Cascade)
+
+  // The invitee has no account yet, so there is nothing to link to — this
+  // is the only record of them until (if) they register.
+  name      String
+  email     String
+  specialty String
+  note      String?
+
+  status   ReferralStatus @default(INVITED)
+  joinedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // One invite per (referrer, email) — resending is re-clicking, not a
+  // second row. Different clients may still both refer the same address.
+  @@unique([referrerProfileId, email])
+  // Serves "my referrals" (history) and the join-time lookup by email.
+  @@index([referrerProfileId])
+  @@index([email, status])
+  @@map("referrals")
 }

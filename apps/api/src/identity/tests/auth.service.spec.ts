@@ -6,9 +6,10 @@ import type { UsersRepository } from '../repositories/users.repository';
 import type { SessionsRepository } from '../repositories/sessions.repository';
 import type { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
-import type { EmailService } from '../email/email.service';
+import type { EmailService } from '../../email/email.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { ProfilesService } from '../../profiles/services/profiles.service';
+import type { ReferralsService } from '../../referrals/services/referrals.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { User } from '@marche/db';
 
@@ -36,6 +37,7 @@ describe('AuthService', () => {
   let emailService: jest.Mocked<EmailService>;
   let auditService: jest.Mocked<AuditService>;
   let profilesService: jest.Mocked<ProfilesService>;
+  let referralsService: jest.Mocked<ReferralsService>;
   let prismaService: jest.Mocked<PrismaService>;
   let authService: AuthService;
 
@@ -81,6 +83,10 @@ describe('AuthService', () => {
       createForNewUser: jest.fn(),
     } as unknown as jest.Mocked<ProfilesService>;
 
+    referralsService = {
+      handleUserJoined: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<ReferralsService>;
+
     prismaService = {
       client: {
         $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(undefined)),
@@ -96,6 +102,7 @@ describe('AuthService', () => {
       new JwtService({ secret: 'test-secret' }),
       auditService,
       profilesService,
+      referralsService,
       prismaService,
     );
   });
