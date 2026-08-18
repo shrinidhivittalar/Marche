@@ -1,9 +1,10 @@
 import React from 'react';
-import { ArrowLeft, BadgeCheck, MapPin } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, MapPin, Star } from 'lucide-react';
 import { Button, Card } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { profilesApi, type ApiProfile } from '../../lib/marketplace-api';
+import { reviewsApi } from '../../lib/reviews-api';
 
 // The page a client lands on after finding someone in the marketplace, and
 // the destination of the whole discovery journey. It previously rendered
@@ -30,6 +31,22 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
     () => profilesApi.byId(accessToken as string, id) as Promise<PublicProfile>,
     [accessToken, id],
     { enabled: !!accessToken },
+  );
+
+  // Public — no token, matching reviewsApi's own public endpoints. Keyed on
+  // the profile id (not the route's :id, which may be a username on the
+  // /u/ route this component doesn't serve, but the id here always resolves
+  // through profilesApi.byId first regardless).
+  const profileId = profile.data?.id;
+  const reviewStats = useApiResource(
+    () => reviewsApi.statsForProfile(profileId as string),
+    [profileId],
+    { enabled: Boolean(profileId) },
+  );
+  const reviews = useApiResource(
+    () => reviewsApi.forProfile(profileId as string, 1, 10),
+    [profileId],
+    { enabled: Boolean(profileId) },
   );
 
   if (authLoading) {
@@ -145,14 +162,48 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
           </p>
         )}
 
-        {/* Statistics are hardcoded zeros server-side until Jobs and Reviews
-            exist (recorded in module2.md). Showing "0 completed projects"
-            would read as a real signal about this provider rather than a
-            missing feature, so the section says what it actually is. */}
-        <p className="text-xs text-ink-muted" data-testid="public-stats-unavailable">
-          Ratings and completed-project counts aren&apos;t available yet.
-        </p>
+        {/* Completed-project counts still have no backend (Contracts hasn't
+            shipped). Ratings do now (module5-reviews.md) — a review not yet
+            revealed (see the API) is simply absent from these numbers,
+            which is correct: it isn't public trust yet either. */}
+        {reviewStats.data && reviewStats.data.reviewCount > 0 ? (
+          <p
+            className="text-xs text-ink flex items-center gap-1.5 font-semibold"
+            data-testid="public-rating"
+          >
+            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+            {reviewStats.data.averageRating?.toFixed(1)}
+            <span className="text-ink-muted font-normal">
+              ({reviewStats.data.reviewCount} review{reviewStats.data.reviewCount === 1 ? '' : 's'})
+            </span>
+          </p>
+        ) : (
+          <p className="text-xs text-ink-muted" data-testid="public-stats-unavailable">
+            No reviews yet.
+          </p>
+        )}
       </Card>
+
+      {reviews.data && reviews.data.items.length > 0 && (
+        <Card className="p-8 space-y-4" data-testid="public-reviews">
+          <h2 className="text-lg font-semibold text-ink">Reviews</h2>
+          <div className="divide-y divide-border">
+            {reviews.data.items.map((review) => (
+              <div key={review.id} className="py-3 space-y-1.5 first:pt-0 last:pb-0">
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <Star
+                      key={idx}
+                      className={`w-3.5 h-3.5 ${idx < review.rating ? 'fill-amber-500 text-amber-500' : 'text-ink-muted'}`}
+                    />
+                  ))}
+                </div>
+                <p className="text-sm text-ink leading-relaxed">{review.comment}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {skills.length > 0 && (
         <Card className="p-8 space-y-3" data-testid="public-skills">

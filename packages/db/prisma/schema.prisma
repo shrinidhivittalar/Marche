@@ -43,6 +43,7 @@ model User {
   profile            Profile?
   media              Media[]
   notifications      Notification[]
+  reviewsWritten     Review[]
   sentMessages       Message[]
 
   @@map("users")
@@ -236,6 +237,7 @@ model Profile {
   proposals           Proposal[]
   clientConnections   Connection[] @relation("ClientConnections")
   providerConnections Connection[] @relation("ProviderConnections")
+  reviewsReceived     Review[]
 
   @@map("profiles")
 }
@@ -806,6 +808,16 @@ model ProposalAttachment {
 // is what "active" means; a one-member enum is a column whose value is
 // already implied by the primary key. Closing arrives with the module that
 // needs a second state, and brings its own migration either way.
+// module5-completion.md. COMPLETED only ever means "the client confirmed, or
+// the event happened and enough time passed that a stalled confirmation
+// stopped blocking the parties from reviewing each other" — never a payment
+// or escrow state, since neither exists yet. See ConnectionsService for the
+// two ways a row gets here.
+enum ConnectionStatus {
+  ACTIVE
+  COMPLETED
+}
+
 model Connection {
   id String @id @default(uuid())
 
@@ -832,14 +844,25 @@ model Connection {
   providerProfileId String
   providerProfile   Profile @relation("ProviderConnections", fields: [providerProfileId], references: [id], onDelete: Cascade)
 
+  // Defaults ACTIVE. Client-confirmed or auto-completed — see
+  // ConnectionsService.confirmComplete and .autoCompleteEligibleWhere.
+  // completedAt is null until either happens; once set, it never moves,
+  // even though which of the two paths set it is not itself recorded (the
+  // distinction has no consumer — Reviews eligibility only needs COMPLETED).
+  status      ConnectionStatus @default(ACTIVE)
+  completedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  reviews  Review[]
   messages Message[]
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
   @@index([providerProfileId])
+  // Serves the auto-complete sweep: every ACTIVE row, cheaply.
+  @@index([status])
   @@map("connections")
 }
 
@@ -958,6 +981,55 @@ model Notification {
   // Serves the unread-count query.
   @@index([recipientUserId, readAt])
   @@map("notifications")
+}
+
+// module5-reviews.md. Two-way: both parties to a COMPLETED Connection may
+// review the other, once each. Eligibility (COMPLETED + is a party + not
+// already reviewed) lives in ReviewsService, not here — same split as every
+// other module in this schema.
+//
+// Blind until both sides have reviewed, or a window elapses — Fiverr's rule,
+// adopted because the alternative (reviews visible immediately) lets a
+// reviewer copy or retaliate against the other side's review before writing
+// their own, which defeats the point of asking both sides independently.
+// Computed at read time (ReviewsService), not stored: whether a review is
+// visible depends on whether its sibling exists yet, which can change after
+// the row is written, and a stored flag would need the same lazy sweep
+// pattern as Connection.status for the window half of the rule anyway.
+model Review {
+  id String @id @default(uuid())
+
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // Cascade: a review with no author behind it is not a record worth
+  // keeping, same reasoning as Notification.recipient and Message.sender.
+  reviewerUserId String
+  reviewer       User   @relation(fields: [reviewerUserId], references: [id], onDelete: Cascade)
+
+  // The profile being reviewed — not a User, because a review is about the
+  // public reputation a profile carries, which is what PublicProfilePage
+  // reads. SetNull rather than cascade: a review is evidence about a
+  // completed transaction and must survive the reviewee deleting their
+  // account, the same way Media.ownerUserId is deliberately not a cascade.
+  revieweeProfileId String?
+  revieweeProfile   Profile? @relation(fields: [revieweeProfileId], references: [id], onDelete: SetNull)
+
+  rating  Int
+  comment String
+
+  createdAt DateTime @default(now())
+
+  // One review per reviewer per connection — the eligibility check
+  // (ReviewsService) enforces "not already reviewed" in application code,
+  // but a unique constraint is what makes a race between two concurrent
+  // submissions from the same party impossible rather than merely unlikely.
+  @@unique([connectionId, reviewerUserId])
+  // Serves "reviews for this connection" (mutual-visibility check) and
+  // "reviews for this profile" (public listing), newest first.
+  @@index([connectionId])
+  @@index([revieweeProfileId, createdAt])
+  @@map("reviews")
 }
 
 // Chat between the two parties on a Connection (module5.md). There is no
