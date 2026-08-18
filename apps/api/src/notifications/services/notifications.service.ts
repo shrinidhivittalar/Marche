@@ -98,6 +98,16 @@ export class NotificationsService {
     }
   }
 
+  async disputeRaised(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'DISPUTE_RAISED',
+      title: 'A dispute was raised',
+      message: 'The other party on one of your connections raised a dispute.',
+      data,
+    });
+  }
+
   // ---------- reads ----------
 
   async list(userId: string, pagination: PaginationQueryDto) {

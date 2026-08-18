@@ -45,6 +45,9 @@ model User {
   notifications      Notification[]
   reviewsWritten     Review[]
   sentMessages       Message[]
+  disputesRaised     Dispute[] @relation("DisputesRaised")
+  disputesReceived   Dispute[] @relation("DisputesReceived")
+  disputesResolved   Dispute[] @relation("DisputesResolved")
 
   @@map("users")
 }
@@ -855,8 +858,9 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reviews  Review[]
-  messages Message[]
+  reviews   Review[]
+  messages  Message[]
+  disputes  Dispute[]
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
@@ -949,6 +953,7 @@ enum NotificationType {
   PROPOSAL_REJECTED
   CONNECTION_ESTABLISHED
   JOB_CANCELLED
+  DISPUTE_RAISED
 }
 
 model Notification {
@@ -1061,4 +1066,55 @@ model Message {
   // Serves the thread for one connection, oldest first.
   @@index([connectionId, createdAt])
   @@map("messages")
+}
+
+// A dispute either party on a Connection can raise, about that connection —
+// not gated on Connection.status (no restriction to before COMPLETED, the
+// way the old frontend mock had): "the work was bad" is a dispute that only
+// makes sense to raise after the fact, so there is no terminal state here
+// that would block it.
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+model Dispute {
+  id String @id @default(uuid())
+
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // Both are User, not Profile — a dispute is between two people, the same
+  // register Notification.recipientUserId and Message.senderUserId use,
+  // rather than Review's Profile-facing reputation register. "Against" is
+  // computed server-side as whichever side of the connection didn't raise
+  // it, same as Review's revieweeProfileId.
+  raisedByUserId String
+  raisedBy       User   @relation("DisputesRaised", fields: [raisedByUserId], references: [id], onDelete: Cascade)
+
+  raisedAgainstUserId String
+  raisedAgainst       User   @relation("DisputesReceived", fields: [raisedAgainstUserId], references: [id], onDelete: Cascade)
+
+  reason   String
+  evidence String
+
+  status DisputeStatus @default(OPEN)
+
+  // Admin-only write (DisputesService.resolve). SetNull rather than cascade:
+  // an admin's account going away must not erase which disputes they
+  // resolved or reopen them — the resolution itself is unaffected.
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  resolvedBy       User?     @relation("DisputesResolved", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolution       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Serves "disputes on this connection" (both parties + admin) and the
+  // admin queue (open ones, oldest first — the ones waiting longest).
+  @@index([connectionId])
+  @@index([status, createdAt])
+  @@map("disputes")
 }

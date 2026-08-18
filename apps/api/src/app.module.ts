@@ -15,6 +15,7 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { MessagesModule } from './messages/messages.module';
+import { DisputesModule } from './disputes/disputes.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { MessagesModule } from './messages/messages.module';
     NotificationsModule,
     ReviewsModule,
     MessagesModule,
+    DisputesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

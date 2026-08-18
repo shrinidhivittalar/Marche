@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, FileCheck, Printer, ShieldCheck, Star, User } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  FileCheck,
+  Gavel,
+  Printer,
+  ShieldCheck,
+  Star,
+  User,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card, Textarea } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -8,6 +18,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { connectionsApi } from '../../lib/proposals-api';
 import { reviewsApi } from '../../lib/reviews-api';
+import { disputesApi } from '../../lib/disputes-api';
 import { ApiError } from '../../lib/api';
 
 interface ContractDetailPageProps {
@@ -25,13 +36,14 @@ function formatDate(iso: string): string {
 // This is the real Connection lifecycle (module5-completion.md /
 // module5-reviews.md): ACTIVE -> COMPLETED, client confirms after the event
 // date (or it completes on its own after a grace period), either party may
-// then review the other once. It replaced a mock 10-state
-// Draft/Open/.../Closed machine with a vendor-then-client two-step confirm
-// that no backend ever backed — Work Diary, Disputes and the Agreement
-// Snapshot modal are not in this rewrite because no real module exists yet
-// for any of them; showing an elaborate fake version of those next to the
-// now-real completion/review flow would be exactly the inconsistency this
-// rewrite is fixing.
+// then review the other once, and either may raise a dispute at any point
+// (not gated on status — see the Dispute schema comment). It replaced a
+// mock 10-state Draft/Open/.../Closed machine with a vendor-then-client
+// two-step confirm that no backend ever backed. Work Diary and the
+// Agreement Snapshot modal still aren't here because no real module exists
+// yet for either; showing an elaborate fake version of those next to the
+// now-real completion/review/dispute flow would be exactly the
+// inconsistency this rewrite is fixing.
 export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) => {
   const { currentUser, accessToken, goBack } = useApp();
   const token = accessToken as string;
@@ -48,6 +60,10 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     { enabled: Boolean(token && isCompleted) },
   );
 
+  const disputes = useApiResource(() => disputesApi.forConnection(token, id), [token, id], {
+    enabled: Boolean(token),
+  });
+
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -55,6 +71,11 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   const [reviewComment, setReviewComment] = useState('');
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeEvidence, setDisputeEvidence] = useState('');
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
 
   if (connection.loading) {
     return <p className="text-xs text-ink-muted py-12 text-center">Loading contract…</p>;
@@ -111,6 +132,29 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       setSubmittingReview(false);
     }
   };
+
+  const handleRaiseDispute = async () => {
+    if (disputeReason.trim().length < 10 || disputeEvidence.trim().length < 10) {
+      setDisputeError('Add at least a couple of sentences for both the reason and the evidence.');
+      return;
+    }
+    setSubmittingDispute(true);
+    setDisputeError(null);
+    try {
+      await disputesApi.raise(token, id, disputeReason.trim(), disputeEvidence.trim());
+      await disputes.refetch();
+      setDisputeModalOpen(false);
+      setDisputeReason('');
+      setDisputeEvidence('');
+    } catch (error) {
+      setDisputeError(error instanceof ApiError ? error.message : 'Unable to raise dispute.');
+    } finally {
+      setSubmittingDispute(false);
+    }
+  };
+
+  const activeDispute = disputes.data?.find((d) => d.status !== 'RESOLVED');
+  const resolvedDisputes = disputes.data?.filter((d) => d.status === 'RESOLVED') ?? [];
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -324,6 +368,148 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           )}
         </Card>
       )}
+
+      {/* Dispute */}
+      <Card className="p-8 space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-base font-bold text-ink">Dispute</h3>
+            <p className="text-[11px] text-ink-muted mt-0.5">
+              Reviewed by a Marché admin — not automatically resolved by either party.
+            </p>
+          </div>
+          {!activeDispute && (
+            <Button
+              size="sm"
+              variant="outline"
+              icon={Gavel}
+              onClick={() => setDisputeModalOpen(true)}
+              data-testid="raise-dispute"
+            >
+              Raise Dispute
+            </Button>
+          )}
+        </div>
+
+        {disputes.loading ? (
+          <p className="text-xs text-ink-muted">Loading…</p>
+        ) : activeDispute ? (
+          <div
+            className="p-4 bg-red-50/80 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-950 dark:text-red-300 rounded-2xl space-y-3 text-xs"
+            data-testid="active-dispute"
+            data-status={activeDispute.status}
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertTriangle className="w-5 h-5" />
+                <span>{activeDispute.status.replace('_', ' ')}</span>
+              </div>
+              <span className="text-[11px] text-red-800 dark:text-red-300">
+                Raised by{' '}
+                {activeDispute.raisedByUserId === currentUser.id ? 'you' : otherParty.displayName}{' '}
+                on {formatDate(activeDispute.createdAt)}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-mono uppercase opacity-70">Reason</span>
+              <p className="leading-relaxed">{activeDispute.reason}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-mono uppercase opacity-70">Evidence</span>
+              <p className="leading-relaxed">{activeDispute.evidence}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-muted">No dispute has been raised on this booking.</p>
+        )}
+
+        {resolvedDisputes.length > 0 && (
+          <div className="pt-2 space-y-2">
+            <span className="text-[10px] font-mono uppercase text-ink-muted">Resolved</span>
+            {resolvedDisputes.map((dispute) => (
+              <div
+                key={dispute.id}
+                className="p-3 rounded-xl border border-border bg-bg text-xs space-y-1"
+              >
+                <p className="text-ink-muted">{dispute.reason}</p>
+                {dispute.resolution && (
+                  <p className="text-ink">
+                    <span className="font-semibold">Resolution: </span>
+                    {dispute.resolution}
+                  </p>
+                )}
+                {dispute.resolvedAt && (
+                  <p className="text-[11px] text-ink-muted">
+                    Resolved {formatDate(dispute.resolvedAt)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Modal
+        isOpen={disputeModalOpen}
+        onClose={() => setDisputeModalOpen(false)}
+        title="Raise a Dispute"
+        description="Send the issue and supporting evidence for admin review."
+        maxWidth="lg"
+      >
+        <div className="space-y-5 pt-2">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-ink" htmlFor="dispute-reason">
+              Reason
+            </label>
+            <Textarea
+              id="dispute-reason"
+              data-testid="dispute-reason-input"
+              rows={4}
+              value={disputeReason}
+              onChange={(event) => {
+                setDisputeReason(event.target.value);
+                setDisputeError(null);
+              }}
+              placeholder="What went wrong?"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-ink" htmlFor="dispute-evidence">
+              Evidence
+            </label>
+            <Textarea
+              id="dispute-evidence"
+              data-testid="dispute-evidence-input"
+              rows={5}
+              value={disputeEvidence}
+              onChange={(event) => {
+                setDisputeEvidence(event.target.value);
+                setDisputeError(null);
+              }}
+              placeholder="Add timelines, message summaries, deliverable notes, or payment context."
+            />
+            {disputeError && (
+              <p className="text-xs font-medium text-red-600" data-testid="dispute-error">
+                {disputeError}
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" size="sm" onClick={() => setDisputeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              icon={Gavel}
+              onClick={handleRaiseDispute}
+              disabled={submittingDispute}
+              data-testid="submit-dispute"
+            >
+              Submit Dispute
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Invoice modal. `.print-area` + the print stylesheet in index.css
           isolate this block so window.print() prints only the invoice —
