@@ -139,10 +139,16 @@ export class JobsService {
 
     // Stamped once, on first publish, and never rewritten. There is no
     // unpublish in Phase 1, but this keeps the rule true if one arrives.
-    return this.jobsRepository.update(job.id, {
+    const published = await this.jobsRepository.update(job.id, {
       status: 'PUBLISHED',
       ...(job.publishedAt === null ? { publishedAt: new Date() } : {}),
     });
+
+    // After commit, not before — same rule as cancel(). Job Alerts: every
+    // provider with a live service in this category gets told.
+    await this.notificationsService.jobMatched(published.id, job.categoryId, job.title);
+
+    return published;
   }
 
   async cancel(userId: string, jobId: string): Promise<Job> {

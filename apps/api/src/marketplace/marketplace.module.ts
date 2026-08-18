@@ -21,6 +21,11 @@ import { ServicesService } from './services/services.service';
   // exports its own: Jobs needs to check that a category exists before
   // accepting one, and re-registering the repository there would give the
   // two modules separate instances of the same thing.
-  exports: [CategoriesService, ServicesService, CategoriesRepository],
+  //
+  // ServicesRepository is exported for SavedProvidersModule, which reuses
+  // findProviderCards to render saved-provider cards in the same shape
+  // provider search results already use, rather than re-selecting the same
+  // fields a second time.
+  exports: [CategoriesService, ServicesService, CategoriesRepository, ServicesRepository],
 })
 export class MarketplaceModule {}

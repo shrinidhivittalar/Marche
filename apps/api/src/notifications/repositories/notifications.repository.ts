@@ -121,4 +121,21 @@ export class NotificationsRepository {
     });
     return proposals.map((proposal) => proposal.providerProfile.userId);
   }
+
+  // ---------- recipient resolution for JobMatched ----------
+
+  // The same cross-module read as listSubmittedProviderUserIds above, this
+  // time against Service: a provider "matches" a category by having a live
+  // listing in it, which is the only signal that exists — there is no
+  // separate alert-preferences table to build for Phase 1. distinct on
+  // profileId, since one provider can have several services in the same
+  // category and must only be notified once.
+  async listProviderUserIdsForCategory(categoryId: string): Promise<string[]> {
+    const services = await this.prisma.client.service.findMany({
+      where: { categoryId, status: 'PUBLISHED' },
+      distinct: ['profileId'],
+      select: { profile: { select: { userId: true } } },
+    });
+    return services.map((service) => service.profile.userId);
+  }
 }

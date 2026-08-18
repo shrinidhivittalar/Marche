@@ -1,5 +1,13 @@
+import { ForbiddenException } from '@nestjs/common';
 import { AuditService } from '../audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+
+function buildForList() {
+  const findMany = jest.fn().mockResolvedValue([]);
+  const count = jest.fn().mockResolvedValue(0);
+  const prisma = { client: { auditLog: { findMany, count } } } as unknown as PrismaService;
+  return { auditService: new AuditService(prisma), findMany, count };
+}
 
 describe('AuditService', () => {
   it('writes an audit_logs row with the given fields', async () => {
@@ -33,5 +41,41 @@ describe('AuditService', () => {
     const auditService = new AuditService(prisma);
 
     await expect(auditService.record({ eventType: 'auth.login.success' })).resolves.toBeUndefined();
+  });
+
+  describe('list', () => {
+    it('refuses anyone who is not an admin', async () => {
+      const { auditService } = buildForList();
+
+      await expect(auditService.list('CLIENT', { page: 1, limit: 20 })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('matches search against eventType or email, case-insensitively', async () => {
+      const { auditService, findMany, count } = buildForList();
+
+      await auditService.list('ADMIN', { page: 1, limit: 20, search: 'login' });
+
+      const expectedWhere = {
+        OR: [
+          { eventType: { contains: 'login', mode: 'insensitive' } },
+          { email: { contains: 'login', mode: 'insensitive' } },
+        ],
+      };
+      expect(findMany.mock.calls[0][0].where).toEqual(expectedWhere);
+      expect(count).toHaveBeenCalledWith({ where: expectedWhere });
+    });
+
+    it('orders newest first with a total order, and paginates', async () => {
+      const { auditService, findMany } = buildForList();
+
+      await auditService.list('ADMIN', { page: 2, limit: 10 });
+
+      expect(findMany.mock.calls[0][0].orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+      expect(findMany.mock.calls[0][0].skip).toBe(10);
+      expect(findMany.mock.calls[0][0].take).toBe(10);
+      expect(findMany.mock.calls[0][0].where).toEqual({});
+    });
   });
 });
