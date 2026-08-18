@@ -108,6 +108,31 @@ describe('ReviewsService', () => {
     });
   });
 
+  describe('myReview', () => {
+    it('checks connection membership, then returns the caller’s own review or null', async () => {
+      const { service, reviewsRepository, connectionsService } = build();
+      connectionsService.findById.mockResolvedValue(completedConnection);
+      reviewsRepository.findByConnectionAndReviewer.mockResolvedValue({ id: 'review_1' });
+
+      const result = await service.myReview('user_client', 'connection_1');
+
+      expect(connectionsService.findById).toHaveBeenCalledWith('user_client', 'connection_1');
+      expect(reviewsRepository.findByConnectionAndReviewer).toHaveBeenCalledWith(
+        'connection_1',
+        'user_client',
+      );
+      expect(result).toEqual({ id: 'review_1' });
+    });
+
+    it('propagates the party check — a stranger gets rejected before any review lookup', async () => {
+      const { service, reviewsRepository, connectionsService } = build();
+      connectionsService.findById.mockRejectedValue(new Error('not a party'));
+
+      await expect(service.myReview('user_stranger', 'connection_1')).rejects.toThrow();
+      expect(reviewsRepository.findByConnectionAndReviewer).not.toHaveBeenCalled();
+    });
+  });
+
   describe('visibility', () => {
     it('shows a review once both parties have reviewed the same connection', async () => {
       const { service, reviewsRepository } = build();

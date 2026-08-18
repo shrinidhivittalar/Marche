@@ -56,6 +56,12 @@ export class ReviewsService {
     return this.reviewsRepository.create(connectionId, userId, revieweeProfileId, rating, comment);
   }
 
+  /** The caller's own review on this connection, if any — null otherwise. */
+  async myReview(userId: string, connectionId: string): Promise<Review | null> {
+    await this.connectionsService.findById(userId, connectionId); // party check
+    return this.reviewsRepository.findByConnectionAndReviewer(connectionId, userId);
+  }
+
   /** The public reviews on a profile — visible ones only, newest first. */
   async listForProfile(profileId: string, pagination: PaginationQueryDto) {
     const visible = await this.visibleReviewsForProfile(profileId);

@@ -88,8 +88,12 @@ export type ApiProposalAttachment = ApiJobAttachment;
  * comparing against the caller's own profile id rather than needing two
  * different endpoints.
  */
+export type ConnectionStatus = 'ACTIVE' | 'COMPLETED';
+
 export interface ApiConnection {
   id: string;
+  status: ConnectionStatus;
+  completedAt: string | null;
   createdAt: string;
   job: {
     id: string;
@@ -198,4 +202,8 @@ export const connectionsApi = {
     ),
 
   byId: (token: string, id: string) => apiFetch<ApiConnection>(`/connections/${id}`, token),
+
+  /** Client-only, idempotent, only allowed once the job's eventDate has passed. */
+  complete: (token: string, id: string) =>
+    apiFetch<ApiConnection>(`/connections/${id}/complete`, token, { method: 'PATCH' }),
 };

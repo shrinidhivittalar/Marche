@@ -16,11 +16,10 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
-import { proposalsApi } from '../../lib/proposals-api';
+import { proposalsApi, connectionsApi } from '../../lib/proposals-api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen } from '../../lib/formatJob';
 import { TimeSlot } from '../../types';
-import { formatEventSchedule } from '../../lib/formatTime';
 import {
   DEFAULT_DAY_AVAILABILITY,
   getVendorAvailability,
@@ -52,12 +51,12 @@ function getMonthCells(monthDate: Date): (Date | null)[] {
 }
 
 export const MyWorkPage: React.FC = () => {
-  const { currentUser, contracts, navigate, accessToken } = useApp();
+  const { currentUser, navigate, accessToken } = useApp();
 
   const [activeTab, setActiveTab] = useState<'bids' | 'contracts' | 'calendar'>('bids');
 
-  // The proposals tab is on the real API as of Module 5. The contracts and
-  // calendar tabs below are still mock — those modules do not exist.
+  // The proposals tab is on the real API as of Module 5. The calendar tab
+  // below is still mock — availability has no backend yet.
   //
   // There is no longer a draft/submitted split: a proposal is submitted
   // complete, in one operation, so every row here is a real submission.
@@ -68,11 +67,20 @@ export const MyWorkPage: React.FC = () => {
   );
   const proposalItems = myProposals.data?.items ?? [];
 
-  // Vendor's active or completed contracts
-  const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
+  // Vendor's connections — the mock `contracts` array this replaced only
+  // ever held demo fixture data (see ClientDashboard.tsx for why).
+  const myConnections = useApiResource(
+    () => connectionsApi.mine(accessToken as string, 1, 50),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
+  const myContracts = myConnections.data?.items ?? [];
 
   // Total earnings won/held
-  const totalEarnings = myContracts.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalEarnings = myContracts.reduce(
+    (acc, curr) => acc + Number(curr.proposal.proposedPrice),
+    0,
+  );
 
   // Availability calendar state — keyed by ISO date, mock/in-memory only
   const today = new Date();
@@ -315,10 +323,12 @@ export const MyWorkPage: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <StatusBadge status={ctr.bookingState} />
+                        <StatusBadge status={ctr.status} />
                       </div>
-                      <h3 className="text-base font-bold text-ink">{ctr.jobTitle}</h3>
-                      <p className="text-xs text-ink-muted mt-0.5">Client: {ctr.clientName}</p>
+                      <h3 className="text-base font-bold text-ink">{ctr.job.title}</h3>
+                      <p className="text-xs text-ink-muted mt-0.5">
+                        Client: {ctr.clientProfile.displayName}
+                      </p>
                     </div>
 
                     <div className="text-right">
@@ -326,7 +336,7 @@ export const MyWorkPage: React.FC = () => {
                         Contract Value
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ₹{ctr.amount.toLocaleString('en-IN')}
+                        ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>
@@ -334,12 +344,13 @@ export const MyWorkPage: React.FC = () => {
                   <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
                     <span>
                       Event Date:{' '}
-                      {formatEventSchedule(
-                        ctr.eventDate,
-                        ctr.timingMode,
-                        ctr.eventStartTime,
-                        ctr.eventEndTime,
-                      )}
+                      {ctr.job.eventDate
+                        ? new Date(ctr.job.eventDate).toLocaleDateString('en-IN', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : 'Not set'}
                     </span>
                     <span className="text-primary font-bold hover:underline flex items-center gap-1">
                       Open Contract Room <ChevronRight className="w-4 h-4" />
