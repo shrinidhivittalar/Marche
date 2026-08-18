@@ -126,6 +126,14 @@ export interface ApiConnection {
   };
 }
 
+/** One date on the provider's own availability calendar. */
+export interface ApiCalendarEntry {
+  date: string;
+  status: 'PENDING' | 'CONFIRMED';
+  jobId: string;
+  jobTitle: string;
+}
+
 export interface ProposalBody {
   jobId: string;
   coverMessage: string;
@@ -206,4 +214,7 @@ export const connectionsApi = {
   /** Client-only, idempotent, only allowed once the job's eventDate has passed. */
   complete: (token: string, id: string) =>
     apiFetch<ApiConnection>(`/connections/${id}/complete`, token, { method: 'PATCH' }),
+
+  /** Provider-only. Dates from submitted proposals and active connections combined. */
+  myCalendar: (token: string) => apiFetch<ApiCalendarEntry[]>('/connections/me/calendar', token),
 };

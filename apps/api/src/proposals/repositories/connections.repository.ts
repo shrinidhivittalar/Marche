@@ -88,6 +88,19 @@ export class ConnectionsRepository {
     return this.prisma.client.connection.count({ where: ownedBy(profileId) });
   }
 
+  // Dates already committed, for the availability calendar: every active
+  // connection with an event date. COMPLETED ones are history, not a future
+  // slot to guard, so they're excluded.
+  listActiveDatesForProvider(providerProfileId: string) {
+    return this.prisma.client.connection.findMany({
+      where: { providerProfileId, status: 'ACTIVE', job: { eventDate: { not: null } } },
+      select: {
+        id: true,
+        job: { select: { id: true, title: true, eventDate: true } },
+      },
+    });
+  }
+
   // Client confirmation, or the sweep below — either is "complete" the same
   // way, so both call this rather than each writing the row independently.
   markCompleted(id: string) {

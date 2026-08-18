@@ -8,17 +8,22 @@ function build() {
     countByProfile: jest.fn().mockResolvedValue(0),
     markCompleted: jest.fn(),
     sweepAutoComplete: jest.fn().mockResolvedValue(undefined),
+    listActiveDatesForProvider: jest.fn().mockResolvedValue([]),
+  };
+  const proposalsRepository = {
+    listSubmittedDatesForProvider: jest.fn().mockResolvedValue([]),
   };
   const profilesRepository = {
-    findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
+    findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client', user: { role: 'CLIENT' } }),
   };
 
   const service = new ConnectionsService(
     connectionsRepository as never,
+    proposalsRepository as never,
     profilesRepository as never,
   );
 
-  return { service, connectionsRepository, profilesRepository };
+  return { service, connectionsRepository, proposalsRepository, profilesRepository };
 }
 
 const PAST_EVENT = new Date(Date.now() - 24 * 60 * 60 * 1000); // yesterday
@@ -125,6 +130,46 @@ describe('ConnectionsService', () => {
 
       expect(result).toBe(completed);
       expect(connectionsRepository.markCompleted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('myCalendar', () => {
+    it('rejects a client — the calendar is provider-only', async () => {
+      const { service, profilesRepository } = build();
+      profilesRepository.findByUserId.mockResolvedValue({
+        id: 'profile_client',
+        user: { role: 'CLIENT' },
+      });
+
+      await expect(service.myCalendar('user_1')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('marks a date CONFIRMED even if it also has a pending proposal, since a booked date wins', async () => {
+      const { service, connectionsRepository, proposalsRepository, profilesRepository } = build();
+      profilesRepository.findByUserId.mockResolvedValue({
+        id: 'profile_provider',
+        user: { role: 'PROVIDER' },
+      });
+      proposalsRepository.listSubmittedDatesForProvider.mockResolvedValue([
+        { id: 'proposal_1', job: { id: 'job_1', title: 'Same-day pitch', eventDate: PAST_EVENT } },
+        {
+          id: 'proposal_2',
+          job: { id: 'job_2', title: 'Pending only', eventDate: FUTURE_EVENT },
+        },
+      ]);
+      connectionsRepository.listActiveDatesForProvider.mockResolvedValue([
+        {
+          id: 'connection_1',
+          job: { id: 'job_3', title: 'Booked already', eventDate: PAST_EVENT },
+        },
+      ]);
+
+      const result = await service.myCalendar('user_1');
+
+      const past = result.find((entry) => entry.date === PAST_EVENT.toISOString().slice(0, 10));
+      const future = result.find((entry) => entry.date === FUTURE_EVENT.toISOString().slice(0, 10));
+      expect(past).toMatchObject({ status: 'CONFIRMED', jobId: 'job_3' });
+      expect(future).toMatchObject({ status: 'PENDING', jobId: 'job_2' });
     });
   });
 });
