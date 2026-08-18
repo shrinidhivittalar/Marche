@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Send, Sparkles, UserPlus, UsersRound } from 'lucide-react';
-import { Button, Card, Input, Textarea } from '@marche/ui';
+import { Button, Card, Input, Textarea, Skeleton } from '@marche/ui';
 import { useApp } from '../../../context/AppContext';
 import { useApiResource } from '../../../hooks/useApiResource';
 import { referralsApi } from '../../../lib/referrals-api';
@@ -171,7 +171,14 @@ export const ReferFreelancersPage: React.FC = () => {
           </div>
 
           {referrals.loading ? (
-            <p className="text-xs text-ink-muted py-6 text-center">Loading…</p>
+            <div className="divide-y divide-border">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="py-4 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              ))}
+            </div>
           ) : items.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-bg p-6 text-center text-xs text-ink-muted">
               No referrals yet.

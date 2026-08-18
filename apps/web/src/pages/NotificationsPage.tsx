@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CheckCheck, MapPin, Megaphone, Settings2, Tags } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNotifications } from '../hooks/useNotifications';
-import { Button } from '@marche/ui';
+import { Button, Skeleton } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
 import { notificationRoute, formatNotificationTime } from '../lib/formatNotification';
 import { NotificationIcon } from '../components/notifications/NotificationIcon';
@@ -202,7 +202,20 @@ export const NotificationsPage: React.FC = () => {
           The list we already have stays on screen through those; the loading
           text is only for having nothing to show yet. */}
       {activeTab === 'activity' && loading && notifications.length === 0 ? (
-        <p className="text-xs text-ink-muted py-12 text-center">Loading notifications…</p>
+        <div className="space-y-3" data-testid="notifications-loading">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="p-5 rounded-2xl border border-border bg-bg flex items-start gap-4"
+            >
+              <Skeleton className="w-9 h-9 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : activeTab === 'activity' && error ? (
         <div className="p-5 rounded-2xl border border-destructive/40 bg-destructive/5">
           <p className="text-xs font-semibold text-destructive">{error}</p>

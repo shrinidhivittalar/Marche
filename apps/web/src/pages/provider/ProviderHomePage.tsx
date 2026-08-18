@@ -23,6 +23,7 @@ import {
   DialogBody,
   DialogFooter,
   Checkbox,
+  Skeleton,
 } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import {
@@ -62,6 +63,29 @@ const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year
 // skew the server's page, exactly as on SearchJobsPage.
 
 const FEED_LIMIT = 12;
+
+// Mirrors the real card's layout — category pill, title, two description
+// lines, budget row — so the feed doesn't jump around once the real cards
+// replace these.
+function JobCardSkeleton() {
+  return (
+    <div className="bg-white border border-border rounded-2xl p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-5 w-24 rounded-full" />
+        <Skeleton className="h-4 w-4 rounded" />
+      </div>
+      <Skeleton className="h-4 w-3/4" />
+      <div className="space-y-1.5 flex-1">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-3 w-12" />
+      </div>
+    </div>
+  );
+}
 
 export const ProviderHomePage: React.FC = () => {
   const { currentUser, navigate, searchQuery, setSearchQuery, accessToken } = useApp();
@@ -235,6 +259,12 @@ export const ProviderHomePage: React.FC = () => {
             actionLabel="Try again"
             onAction={() => void jobs.refetch()}
           />
+        ) : jobs.loading && feedItems.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <JobCardSkeleton key={i} />
+            ))}
+          </div>
         ) : !jobs.loading && feedItems.length === 0 ? (
           <EmptyState
             title="No jobs match your filters"
