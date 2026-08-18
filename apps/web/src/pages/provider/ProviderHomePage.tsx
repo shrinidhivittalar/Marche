@@ -127,6 +127,16 @@ export const ProviderHomePage: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Header — every other page has a title; this one didn't, which read
+          as an unfinished screen on mobile where there's no Sidebar to
+          carry the page context instead. */}
+      <div className="space-y-0.5">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">Home</div>
+        <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
+          Good Morning, {currentUser.name.split(' ')[0]} 👋
+        </h1>
+      </div>
+
       {/* Account Notice Banner — goes away once the profile is actually complete */}
       {!isProfileComplete && !noticeDismissed && (
         <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl px-4 py-3 text-xs">

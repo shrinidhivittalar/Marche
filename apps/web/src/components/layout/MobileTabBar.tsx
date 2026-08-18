@@ -1,5 +1,12 @@
 import React from 'react';
-import { LayoutDashboard, Search, Briefcase, MessageSquare, FileSignature, Bell } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Search,
+  Briefcase,
+  MessageSquare,
+  FileSignature,
+  Bell,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 
@@ -16,10 +23,13 @@ export const MobileTabBar: React.FC = () => {
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessages },
   ];
 
+  // Home sits in the middle of the bar (third of five, with Menu fixed
+  // last) — the natural thumb position on a phone, and where Contracts
+  // used to sit before this reorder.
   const vendorTabs: Tab[] = [
-    { label: 'Home', path: '/provider/dashboard', icon: LayoutDashboard },
     { label: 'Search', path: '/provider/search', icon: Search },
     { label: 'Contracts', path: '/provider/contracts', icon: FileSignature },
+    { label: 'Home', path: '/provider/dashboard', icon: LayoutDashboard },
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessages },
   ];
 
@@ -29,12 +39,20 @@ export const MobileTabBar: React.FC = () => {
     { label: 'Alerts', path: '/notifications', icon: Bell, badge: unreadNotifications },
   ];
 
-  const tabs = currentUser.role === 'client' ? clientTabs : currentUser.role === 'vendor' ? vendorTabs : adminTabs;
+  const tabs =
+    currentUser.role === 'client'
+      ? clientTabs
+      : currentUser.role === 'vendor'
+        ? vendorTabs
+        : adminTabs;
   const isMenuActive = route === '/menu';
 
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-border pb-[env(safe-area-inset-bottom)]">
-      <div className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = route === tab.path;
