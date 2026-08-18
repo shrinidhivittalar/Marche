@@ -14,7 +14,10 @@ import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { jobsApi } from '../../lib/jobs-api';
+import { reviewsApi } from '../../lib/reviews-api';
 import { formatJobBudget, formatEventWhen, formatDeadline } from '../../lib/formatJob';
+
+const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
 
 // A published requirement as a provider sees it, on the real Jobs API.
 //
@@ -46,6 +49,18 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
     {
       enabled: Boolean(accessToken),
     },
+  );
+
+  const clientProfileId = job.data?.clientProfile.id;
+  const clientStats = useApiResource(
+    () => jobsApi.clientStats(clientProfileId as string),
+    [clientProfileId],
+    { enabled: Boolean(clientProfileId) },
+  );
+  const clientHistory = useApiResource(
+    () => reviewsApi.clientHistory(clientProfileId as string),
+    [clientProfileId],
+    { enabled: Boolean(clientProfileId) },
   );
 
   if (job.loading) {
@@ -95,6 +110,10 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
                 <span className="text-xs font-mono text-ink-muted">
                   Posted{' '}
                   {new Date(requirement.publishedAt ?? requirement.createdAt).toLocaleDateString()}
+                </span>
+                <span className="text-xs font-mono text-ink-muted">
+                  · {requirement.proposalCount} proposal
+                  {requirement.proposalCount === 1 ? '' : 's'}
                 </span>
               </div>
 
@@ -242,6 +261,31 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
                   Verified client
                 </span>
               )}
+
+              {/* Real hiring history — no spend or hourly-rate figures, since
+                  this app has no payment integration to back them. */}
+              {clientStats.data && (
+                <div className="pt-2 mt-1 border-t border-border space-y-1 text-[11px] text-ink-muted">
+                  <div className="flex justify-between">
+                    <span>Jobs posted</span>
+                    <span className="font-semibold text-ink">{clientStats.data.jobsPosted}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Hire rate</span>
+                    <span className="font-semibold text-ink">
+                      {clientStats.data.hireRate !== null
+                        ? `${Math.round(clientStats.data.hireRate * 100)}%`
+                        : 'Not yet hired'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Member since</span>
+                    <span className="font-semibold text-ink">
+                      {memberSinceFormat.format(new Date(clientStats.data.memberSince))}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Button
@@ -254,6 +298,39 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
               Submit Proposal Now
             </Button>
           </Card>
+
+          {/* What this client has hired for before, and how it went — only
+              reviews visible to the public (see ReviewsService.clientHistory).
+              Absent entirely rather than an empty state: a client with no
+              revealed history yet is the common case, not a broken one. */}
+          {clientHistory.data && clientHistory.data.length > 0 && (
+            <Card className="p-6 space-y-4">
+              <span className="block text-[10px] font-mono uppercase font-bold text-ink-muted">
+                Client&rsquo;s Recent History
+              </span>
+              <div className="space-y-3">
+                {clientHistory.data.map((entry) => (
+                  <div
+                    key={entry.jobId}
+                    className="text-xs border-t border-border pt-3 first:border-t-0 first:pt-0"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-ink truncate">{entry.jobTitle}</span>
+                      <span className="flex items-center gap-1 text-primary font-bold shrink-0">
+                        {entry.rating}★
+                      </span>
+                    </div>
+                    {entry.providerDisplayName && (
+                      <span className="block text-[10px] text-ink-muted mt-0.5">
+                        Hired {entry.providerDisplayName}
+                      </span>
+                    )}
+                    <p className="text-ink-muted mt-1 line-clamp-2">{entry.comment}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>

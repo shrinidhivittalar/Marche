@@ -380,7 +380,32 @@ export class JobsService {
       // there, which is exactly what hiding it is meant to prevent.
       throw new NotFoundException('Requirement not found');
     }
-    return job;
+    return withProposalCount(job);
+  }
+
+  /**
+   * "About the client" stats a provider sees before bidding — real numbers
+   * only. No spend or hourly-rate figures: this app has no payment
+   * integration (see the mock-payments decision), so there is nothing
+   * honest to report there. hireRate is null rather than 0 for a client
+   * with no posted requirements yet — 0% would read as a bad signal for
+   * someone who simply hasn't posted anything.
+   */
+  async clientStats(clientProfileId: string) {
+    const profile = await this.profilesRepository.findById(clientProfileId);
+    if (!profile) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    const counts = await this.jobsRepository.countPostedByStatus(clientProfileId);
+    const jobsPosted = counts.PUBLISHED + counts.FILLED + counts.CANCELLED;
+
+    return {
+      memberSince: profile.createdAt.toISOString(),
+      jobsPosted,
+      openJobs: counts.PUBLISHED,
+      hireRate: jobsPosted > 0 ? counts.FILLED / jobsPosted : null,
+    };
   }
 
   async search(dto: SearchJobsDto) {
@@ -392,7 +417,7 @@ export class JobsService {
       this.jobsRepository.countSearch(filters),
     ]);
 
-    return paginate(data, total, page, limit);
+    return paginate(data.map(withProposalCount), total, page, limit);
   }
 
   // ---------- helpers ----------

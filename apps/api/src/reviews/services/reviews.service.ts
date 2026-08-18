@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ReviewsRepository } from '../repositories/reviews.repository';
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
@@ -111,6 +111,39 @@ export class ReviewsService {
     }
     const total = visible.reduce((sum, review) => sum + review.rating, 0);
     return { averageRating: total / visible.length, reviewCount: visible.length };
+  }
+
+  /**
+   * "Client's recent history" — the reviews this client has written about
+   * past hires, visible ones only. Same blind-reveal rule as
+   * visibleReviewsForProfile, applied to the other side of the Review row:
+   * that method asks "what has been said about this profile", this one
+   * asks "what has this profile said about others". Showing a not-yet-
+   * visible review here would leak it to a browsing provider before its
+   * subject (a different, past provider) has had the chance to see or
+   * reciprocate it — the exact thing the blind window exists to prevent.
+   */
+  async clientHistory(clientProfileId: string, limit = 5) {
+    const profile = await this.profilesRepository.findById(clientProfileId);
+    if (!profile) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    const reviews = await this.reviewsRepository.listByReviewer(profile.userId);
+    const connectionIds = [...new Set(reviews.map((review) => review.connectionId))];
+    const siblingCounts = await this.reviewsRepository.countByConnectionIds(connectionIds);
+
+    return reviews
+      .filter((review) => this.isVisible(review, siblingCounts.get(review.connectionId) ?? 1))
+      .slice(0, limit)
+      .map((review) => ({
+        jobId: review.connection.job.id,
+        jobTitle: review.connection.job.title,
+        providerDisplayName: review.revieweeProfile?.displayName ?? null,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt,
+      }));
   }
 
   private async visibleReviewsForProfile(profileId: string): Promise<Review[]> {

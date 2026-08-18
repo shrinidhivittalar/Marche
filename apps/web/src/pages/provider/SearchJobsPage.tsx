@@ -378,6 +378,10 @@ function JobCard({
             <span>{postedAgo(job.publishedAt ?? job.createdAt)}</span>
             <span>•</span>
             <span>{job.clientProfile.displayName}</span>
+            <span>•</span>
+            <span>
+              {job.proposalCount} proposal{job.proposalCount === 1 ? '' : 's'}
+            </span>
           </div>
           <h3 className="text-sm font-bold text-ink break-words">{job.title}</h3>
         </div>

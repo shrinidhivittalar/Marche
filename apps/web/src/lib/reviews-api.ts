@@ -38,6 +38,16 @@ export interface ReviewStats {
   reviewCount: number;
 }
 
+/** One entry in a client's "recent history" — a review they wrote about a past hire. */
+export interface ApiClientHistoryEntry {
+  jobId: string;
+  jobTitle: string;
+  providerDisplayName: string | null;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
 export const reviewsApi = {
   /** Either party, once, only after the connection is COMPLETED. */
   submit: (token: string, connectionId: string, rating: number, comment: string) =>
@@ -59,4 +69,11 @@ export const reviewsApi = {
 
   statsForProfile: (profileId: string) =>
     apiFetch<ReviewStats>(`/profiles/${profileId}/reviews/stats`, null),
+
+  /** Public — a client's own visible reviews of past hires, newest first. */
+  clientHistory: (profileId: string, limit = 5) =>
+    apiFetch<ApiClientHistoryEntry[]>(
+      `/profiles/${profileId}/client-history${toQuery({ limit })}`,
+      null,
+    ),
 };

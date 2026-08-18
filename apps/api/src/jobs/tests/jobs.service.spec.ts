@@ -16,7 +16,10 @@ import type { JobStatus } from '@marche/db';
 const OWNER = { id: 'profile_1', userId: 'user_1', user: { role: 'CLIENT' } };
 
 function build(jobOverrides: Record<string, unknown> = {}) {
-  const profiles = { findByUserId: jest.fn().mockResolvedValue(OWNER) };
+  const profiles = {
+    findByUserId: jest.fn().mockResolvedValue(OWNER),
+    findById: jest.fn().mockResolvedValue({ id: 'profile_1', createdAt: new Date('2026-01-01') }),
+  };
   const categories = { findById: jest.fn().mockResolvedValue({ id: 'cat_1' }) };
   const jobs = {
     create: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'job_1', ...data })),
@@ -46,6 +49,9 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     countAttachments: jest.fn().mockResolvedValue(0),
     // Nobody hired by default: the requirement has no connection yet.
     findHiredProviderProfileId: jest.fn().mockResolvedValue(null),
+    countPostedByStatus: jest
+      .fn()
+      .mockResolvedValue({ DRAFT: 0, PUBLISHED: 0, FILLED: 0, CANCELLED: 0 }),
   };
   const categoriesService = { resolveFilterIds: jest.fn().mockResolvedValue(['cat_1']) };
   const mediaService = {
@@ -351,6 +357,29 @@ describe('JobsService', () => {
         hasPrevious: true,
       });
     });
+
+    // A provider deciding whether to bid benefits from knowing how much
+    // competition there already is — Upwork shows the same thing as a
+    // proposal range on every listing.
+    it('exposes the proposal count on public search results, flattened from the ORM aggregate', async () => {
+      const { service, jobs } = build();
+      jobs.search.mockResolvedValue([{ id: 'job_1', _count: { proposals: 7 } }]);
+
+      const result = await service.search(searchDto());
+
+      expect(result.data[0]).toMatchObject({ proposalCount: 7 });
+      expect(result.data[0]).not.toHaveProperty('_count');
+    });
+
+    it('exposes the proposal count on a single public requirement too', async () => {
+      const { service, jobs } = build();
+      jobs.findPublicById.mockResolvedValue({ id: 'job_1', _count: { proposals: 4 } });
+
+      const job = await service.findPublicById('job_1');
+
+      expect(job).toMatchObject({ proposalCount: 4 });
+      expect(job).not.toHaveProperty('_count');
+    });
   });
 
   describe('attachments', () => {
@@ -540,6 +569,40 @@ describe('JobsService', () => {
       const job = await service.findMineById('user_1', 'job_1');
 
       expect(job).toMatchObject({ proposalCount: 0 });
+    });
+  });
+
+  describe('clientStats', () => {
+    it('404s for a profile that does not exist', async () => {
+      const { service, profiles } = build();
+      profiles.findById.mockResolvedValue(null);
+
+      await expect(service.clientStats('missing')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('reports jobsPosted as everything ever live, excluding drafts', async () => {
+      const { service, jobs } = build();
+      jobs.countPostedByStatus.mockResolvedValue({
+        DRAFT: 5,
+        PUBLISHED: 2,
+        FILLED: 3,
+        CANCELLED: 1,
+      });
+
+      const stats = await service.clientStats('profile_1');
+
+      expect(stats.jobsPosted).toBe(6); // PUBLISHED + FILLED + CANCELLED, not DRAFT
+      expect(stats.openJobs).toBe(2);
+      expect(stats.hireRate).toBeCloseTo(3 / 6);
+    });
+
+    it('reports hireRate as null rather than 0 when nothing has ever been posted', async () => {
+      const { service } = build();
+
+      const stats = await service.clientStats('profile_1');
+
+      expect(stats.hireRate).toBeNull();
+      expect(stats.jobsPosted).toBe(0);
     });
   });
 

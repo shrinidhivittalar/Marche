@@ -36,6 +36,8 @@ import { jobsApi } from '../../lib/jobs-api';
 import { formatJobBudget, formatEventWhen, formatDeadline, postedAgo } from '../../lib/formatJob';
 import { LOCATIONS } from '../../data/categoryOptions';
 
+const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
+
 // The provider landing feed, on the real Jobs API — the same source
 // SearchJobsPage, JobDetailProviderView and MyWorkPage already read. It used
 // to render mock requirements, so the ids on its cards could never resolve
@@ -107,6 +109,13 @@ export const ProviderHomePage: React.FC = () => {
 
   const feedItems = (jobs.data?.items ?? []).filter((job) => !dismissedIds.has(job.id));
   const selectedJob = feedItems.find((job) => job.id === selectedJobId);
+
+  const selectedClientProfileId = selectedJob?.clientProfile.id;
+  const selectedClientStats = useApiResource(
+    () => jobsApi.clientStats(selectedClientProfileId as string),
+    [selectedClientProfileId],
+    { enabled: Boolean(selectedClientProfileId) },
+  );
 
   const openFiltersModal = () => {
     setPendingCategory(categorySlug);
@@ -268,6 +277,11 @@ export const ProviderHomePage: React.FC = () => {
                     <span className="font-semibold text-primary">{formatJobBudget(job)}</span>
                     <span className="shrink-0">{postedAgo(job.publishedAt ?? job.createdAt)}</span>
                   </div>
+                  <div className="flex items-center gap-1">
+                    <span>
+                      {job.proposalCount} proposal{job.proposalCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
                   {job.location && (
                     <div className="flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -300,7 +314,8 @@ export const ProviderHomePage: React.FC = () => {
                   <DialogTitle>{selectedJob.title}</DialogTitle>
                   <DialogDescription>
                     {postedAgo(selectedJob.publishedAt ?? selectedJob.createdAt)} •{' '}
-                    {selectedJob.clientProfile.displayName}
+                    {selectedJob.clientProfile.displayName} • {selectedJob.proposalCount} proposal
+                    {selectedJob.proposalCount === 1 ? '' : 's'}
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -363,23 +378,45 @@ export const ProviderHomePage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2.5 text-xs">
-                  <span className="w-8 h-8 rounded-full bg-surface-subtle ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-ink shrink-0">
-                    {selectedJob.clientProfile.displayName.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block font-bold text-ink truncate">
-                      {selectedJob.clientProfile.displayName}
+                <div className="p-3 bg-bg border border-border rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-surface-subtle ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-ink shrink-0">
+                      {selectedJob.clientProfile.displayName.slice(0, 2).toUpperCase()}
                     </span>
-                    <span className="block text-[10px] text-ink-muted truncate">
-                      {selectedJob.clientProfile.location ?? 'Location not stated'}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block font-bold text-ink truncate">
+                        {selectedJob.clientProfile.displayName}
+                      </span>
+                      <span className="block text-[10px] text-ink-muted truncate">
+                        {selectedJob.clientProfile.location ?? 'Location not stated'}
+                      </span>
+                    </div>
+                    {selectedJob.clientProfile.verifiedAt && (
+                      <span className="flex items-center gap-1 text-primary font-semibold text-[11px] shrink-0">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Verified
+                      </span>
+                    )}
                   </div>
-                  {selectedJob.clientProfile.verifiedAt && (
-                    <span className="flex items-center gap-1 text-primary font-semibold text-[11px] shrink-0">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Verified
-                    </span>
+
+                  {/* Real hiring history — no spend or hourly-rate figures,
+                      since this app has no payment integration. */}
+                  {selectedClientStats.data && (
+                    <div className="pt-2 border-t border-border flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+                      <span>
+                        {selectedClientStats.data.jobsPosted} job
+                        {selectedClientStats.data.jobsPosted === 1 ? '' : 's'} posted
+                      </span>
+                      <span>
+                        {selectedClientStats.data.hireRate !== null
+                          ? `${Math.round(selectedClientStats.data.hireRate * 100)}% hire rate`
+                          : 'Not yet hired'}
+                      </span>
+                      <span>
+                        Since{' '}
+                        {memberSinceFormat.format(new Date(selectedClientStats.data.memberSince))}
+                      </span>
+                    </div>
                   )}
                 </div>
               </DialogBody>

@@ -3,6 +3,7 @@ import { ProfilesModule } from '../profiles/profiles.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { ConnectionReviewsController } from './controllers/connection-reviews.controller';
 import { ProfileReviewsController } from './controllers/profile-reviews.controller';
+import { ClientReviewHistoryController } from './controllers/client-review-history.controller';
 import { ReviewsRepository } from './repositories/reviews.repository';
 import { ReviewsService } from './services/reviews.service';
 
@@ -11,7 +12,11 @@ import { ReviewsService } from './services/reviews.service';
 // status", and that module already owns both.
 @Module({
   imports: [ProfilesModule, ProposalsModule],
-  controllers: [ConnectionReviewsController, ProfileReviewsController],
+  controllers: [
+    ConnectionReviewsController,
+    ProfileReviewsController,
+    ClientReviewHistoryController,
+  ],
   providers: [ReviewsRepository, ReviewsService],
 })
 export class ReviewsModule {}
