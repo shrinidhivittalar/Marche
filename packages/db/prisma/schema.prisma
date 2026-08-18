@@ -235,6 +235,8 @@ model Profile {
   proposals           Proposal[]
   clientConnections   Connection[] @relation("ClientConnections")
   providerConnections Connection[] @relation("ProviderConnections")
+  savedProviders      SavedProvider[] @relation("ClientSavedProviders")
+  savedByClients      SavedProvider[] @relation("ProviderSavedByClients")
 
   @@map("profiles")
 }
@@ -955,4 +957,34 @@ model Notification {
   // Serves the unread-count query.
   @@index([recipientUserId, readAt])
   @@map("notifications")
+}
+
+// "Saved Talent" — a client bookmarking a provider's profile for later.
+// Its own table rather than a flag on Profile, same reasoning as
+// Connection: this is a relationship between two Profiles, and a client can
+// save many providers while a provider is saved by many clients — a single
+// flag column has nowhere to put that.
+//
+// Two relation names for the same reason Connection has two: both sides of
+// the FK point at Profile, so Prisma needs to tell them apart.
+model SavedProvider {
+  id String @id @default(uuid())
+
+  clientProfileId String
+  clientProfile   Profile @relation("ClientSavedProviders", fields: [clientProfileId], references: [id], onDelete: Cascade)
+
+  providerProfileId String
+  providerProfile   Profile @relation("ProviderSavedByClients", fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // A client can save a given provider once — the toggle a second save
+  // click performs is unsave, not a second row. Also what makes a double
+  // click / two open tabs safe rather than merely unlikely to duplicate.
+  @@unique([clientProfileId, providerProfileId])
+  // Serves "my saved providers" and "who has saved this provider" (from
+  // either side, like Connection's two indexes).
+  @@index([clientProfileId])
+  @@index([providerProfileId])
+  @@map("saved_providers")
 }

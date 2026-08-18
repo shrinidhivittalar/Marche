@@ -1,9 +1,10 @@
-import React from 'react';
-import { ArrowLeft, BadgeCheck, MapPin } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, BadgeCheck, Heart, MapPin } from 'lucide-react';
 import { Button, Card } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { profilesApi, type ApiProfile } from '../../lib/marketplace-api';
+import { savedProvidersApi } from '../../lib/saved-providers-api';
 
 // The page a client lands on after finding someone in the marketplace, and
 // the destination of the whole discovery journey. It previously rendered
@@ -21,7 +22,8 @@ interface PublicProfile extends ApiProfile {
 }
 
 export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
-  const { accessToken, goBack, authLoading } = useApp();
+  const { accessToken, currentUser, goBack, authLoading } = useApp();
+  const token = accessToken as string;
 
   // /profiles/:id requires a session; /u/:username is public. The id route
   // is the authenticated one, so the request waits for auth to settle
@@ -31,6 +33,29 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
     [accessToken, id],
     { enabled: !!accessToken },
   );
+
+  // Only a client viewing a provider's profile can save it — the backend
+  // enforces the same rule (SavedProvidersService.save), this just avoids
+  // showing a button that would 403.
+  const canSave = currentUser.role === 'client' && profile.data?.role === 'PROVIDER';
+  const isSaved = useApiResource(() => savedProvidersApi.isSaved(token, id), [token, id, canSave], {
+    enabled: Boolean(token && canSave),
+  });
+  const [savePending, setSavePending] = useState(false);
+
+  const handleToggleSave = async () => {
+    setSavePending(true);
+    try {
+      if (isSaved.data?.saved) {
+        await savedProvidersApi.unsave(token, id);
+      } else {
+        await savedProvidersApi.save(token, id);
+      }
+      await isSaved.refetch();
+    } finally {
+      setSavePending(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -77,14 +102,29 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" data-testid="public-profile-page">
-      <button
-        type="button"
-        onClick={goBack}
-        className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink"
-        data-testid="public-profile-back"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={goBack}
+          className="flex items-center gap-2 text-sm text-ink-muted hover:text-ink"
+          data-testid="public-profile-back"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+
+        {canSave && (
+          <Button
+            variant={isSaved.data?.saved ? 'outline' : 'primary'}
+            size="sm"
+            icon={Heart}
+            onClick={handleToggleSave}
+            disabled={savePending || isSaved.loading}
+            data-testid="toggle-save-provider"
+          >
+            {isSaved.data?.saved ? 'Saved' : 'Save'}
+          </Button>
+        )}
+      </div>
 
       <Card className="p-8 space-y-4">
         <div className="flex items-start gap-4">
