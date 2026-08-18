@@ -44,6 +44,7 @@ model User {
   media              Media[]
   notifications      Notification[]
   reviewsWritten     Review[]
+  sentMessages       Message[]
 
   @@map("users")
 }
@@ -854,7 +855,8 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reviews Review[]
+  reviews  Review[]
+  messages Message[]
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
@@ -1028,4 +1030,35 @@ model Review {
   @@index([connectionId])
   @@index([revieweeProfileId, createdAt])
   @@map("reviews")
+}
+
+// Chat between the two parties on a Connection (module5.md). There is no
+// broader inbox concept — a conversation only exists because a proposal was
+// accepted, exactly like the Connection it belongs to, so cascading with it
+// is correct rather than orphaning history nobody can read anyway (both
+// parties' access is gated by being on that Connection).
+model Message {
+  id String @id @default(uuid())
+
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // The sender is always one of the connection's two parties, enforced at
+  // the service layer (like Notification's recipient, not something this
+  // table can check on its own). Cascade for the same reason as
+  // Notification.recipient: a message with no sender behind it is not a
+  // record worth keeping.
+  senderUserId String
+  sender       User   @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  body String
+
+  // Null = unread, same convention as Notification.readAt.
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // Serves the thread for one connection, oldest first.
+  @@index([connectionId, createdAt])
+  @@map("messages")
 }

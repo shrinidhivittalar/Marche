@@ -111,4 +111,15 @@ export class ConnectionsRepository {
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
   }
+
+  // Unpaginated, ids only — for MessagesService, which needs every
+  // connection a profile is party to in order to build the conversation
+  // list preview, not one page of the "Connections" screen's own listing.
+  async listIdsByProfile(profileId: string): Promise<string[]> {
+    const connections = await this.prisma.client.connection.findMany({
+      where: ownedBy(profileId),
+      select: { id: true },
+    });
+    return connections.map((connection) => connection.id);
+  }
 }

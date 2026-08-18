@@ -27,9 +27,11 @@ import { ConnectionsService } from './services/connections.service';
   controllers: [ProposalsController, JobProposalsController, ConnectionsController],
   providers: [ProposalsRepository, ConnectionsRepository, ProposalsService, ConnectionsService],
   // ConnectionsService (party-checked single-connection read, including its
-  // status) and ConnectionsRepository are exported for ReviewsModule —
-  // review eligibility is COMPLETED + is a party + not already reviewed, and
-  // the first two-thirds of that already live here.
+  // status) and ConnectionsRepository (also unpaginated id listing) are
+  // exported for both MessagesModule and ReviewsModule — messaging is
+  // scoped to the two parties on a Connection, and review eligibility is
+  // COMPLETED + is a party + not already reviewed. This is where all of
+  // that already lives.
   exports: [ConnectionsService, ConnectionsRepository],
 })
 export class ProposalsModule {}
