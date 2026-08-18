@@ -145,6 +145,19 @@ export class ProposalsRepository {
     return this.prisma.client.proposal.count({ where: { providerProfileId } });
   }
 
+  // Dates a provider is waiting on, for the availability calendar: every
+  // still-open proposal with an event date, regardless of age. Deliberately
+  // narrow — the calendar only needs the date, not the full offer.
+  listSubmittedDatesForProvider(providerProfileId: string) {
+    return this.prisma.client.proposal.findMany({
+      where: { providerProfileId, status: 'SUBMITTED', job: { eventDate: { not: null } } },
+      select: {
+        id: true,
+        job: { select: { id: true, title: true, eventDate: true } },
+      },
+    });
+  }
+
   // ---------- writes ----------
 
   create(data: Prisma.ProposalUncheckedCreateInput): Promise<Proposal> {

@@ -19,6 +19,7 @@ import {
   CheckCheck,
   TrendingUp,
   Search,
+  Gavel,
 } from 'lucide-react';
 import {
   Popover,
@@ -117,6 +118,7 @@ export const Sidebar: React.FC = () => {
 
   const adminNav = [
     { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
+    { label: 'Disputes', path: '/admin/disputes', icon: Gavel },
     { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];

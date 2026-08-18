@@ -5,10 +5,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
-import { getOwnProfileOrThrow } from '../../profiles/profile-access.util';
+import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { ConnectionsRepository } from '../repositories/connections.repository';
+import { ProposalsRepository } from '../repositories/proposals.repository';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
+
+// One date on the provider's availability calendar. CONFIRMED always wins
+// over PENDING for the same date — a hired date is real regardless of
+// whatever else was proposed for that day.
+export interface CalendarEntry {
+  date: string;
+  status: 'PENDING' | 'CONFIRMED';
+  jobId: string;
+  jobTitle: string;
+}
 
 /**
  * Reads, plus the one write that moves a connection's own lifecycle:
@@ -31,6 +42,7 @@ import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto
 export class ConnectionsService {
   constructor(
     private readonly connectionsRepository: ConnectionsRepository,
+    private readonly proposalsRepository: ProposalsRepository,
     private readonly profilesRepository: ProfilesRepository,
   ) {}
 
@@ -108,6 +120,42 @@ export class ConnectionsService {
     }
 
     return this.connectionsRepository.markCompleted(connectionId);
+  }
+
+  /**
+   * The provider's own availability calendar: every date they are either
+   * waiting to hear back on (a SUBMITTED proposal) or already booked for
+   * (an ACTIVE connection). Provider-only — a client's own requirements
+   * already list their dates, and don't need a second view.
+   *
+   * A date can appear from both a pending proposal and a confirmed
+   * connection at once (e.g. two proposals on different jobs landing on the
+   * same day); CONFIRMED wins, since that is the one that actually blocks
+   * the day.
+   */
+  async myCalendar(userId: string): Promise<CalendarEntry[]> {
+    const profile = await this.getOwnProfile(userId);
+    assertProviderRole(profile.user.role);
+    await this.connectionsRepository.sweepAutoComplete();
+
+    const [pending, confirmed] = await Promise.all([
+      this.proposalsRepository.listSubmittedDatesForProvider(profile.id),
+      this.connectionsRepository.listActiveDatesForProvider(profile.id),
+    ]);
+
+    const byDate = new Map<string, CalendarEntry>();
+    for (const { job } of pending) {
+      if (!job.eventDate) continue;
+      const date = job.eventDate.toISOString().slice(0, 10);
+      byDate.set(date, { date, status: 'PENDING', jobId: job.id, jobTitle: job.title });
+    }
+    for (const { job } of confirmed) {
+      if (!job.eventDate) continue;
+      const date = job.eventDate.toISOString().slice(0, 10);
+      byDate.set(date, { date, status: 'CONFIRMED', jobId: job.id, jobTitle: job.title });
+    }
+
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 
   private async getOwnProfile(userId: string) {
