@@ -12,6 +12,7 @@ function build() {
     markRead: jest.fn().mockResolvedValue(1),
     markAllRead: jest.fn().mockResolvedValue(0),
     listSubmittedProviderUserIds: jest.fn().mockResolvedValue([]),
+    listProviderUserIdsForCategory: jest.fn().mockResolvedValue([]),
   };
 
   const service = new NotificationsService(repository as never);
@@ -98,6 +99,32 @@ describe('NotificationsService', () => {
       repository.listSubmittedProviderUserIds.mockRejectedValue(new Error('database unavailable'));
 
       await expect(service.jobCancelled('job_1')).resolves.toBeUndefined();
+      expect(repository.createMany).not.toHaveBeenCalled();
+    });
+
+    it('resolves JobMatched recipients from providers with a live service in the category', async () => {
+      const { service, repository } = build();
+      repository.listProviderUserIdsForCategory.mockResolvedValue(['user_5', 'user_6']);
+
+      await service.jobMatched('job_1', 'cat_1', 'Wedding photography');
+
+      expect(repository.listProviderUserIdsForCategory).toHaveBeenCalledWith('cat_1');
+      expect(repository.createMany).toHaveBeenCalledWith(
+        ['user_5', 'user_6'],
+        'JOB_MATCHED',
+        'New job matching your services',
+        'A new requirement was posted in a category you offer services in: "Wedding photography"',
+        { jobId: 'job_1' },
+      );
+    });
+
+    it('swallows a failure resolving JobMatched recipients too', async () => {
+      const { service, repository } = build();
+      repository.listProviderUserIdsForCategory.mockRejectedValue(
+        new Error('database unavailable'),
+      );
+
+      await expect(service.jobMatched('job_1', 'cat_1', 'title')).resolves.toBeUndefined();
       expect(repository.createMany).not.toHaveBeenCalled();
     });
   });

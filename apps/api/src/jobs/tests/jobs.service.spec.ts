@@ -26,6 +26,8 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     findById: jest.fn().mockResolvedValue({
       id: 'job_1',
       clientProfileId: 'profile_1',
+      categoryId: 'cat_1',
+      title: 'A requirement',
       status: 'DRAFT' as JobStatus,
       publishedAt: null,
       ...jobOverrides,
@@ -51,7 +53,10 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     markPrivate: jest.fn().mockResolvedValue(undefined),
     signViewUrl: jest.fn().mockResolvedValue('https://signed.example/file'),
   };
-  const notificationsService = { jobCancelled: jest.fn().mockResolvedValue(undefined) };
+  const notificationsService = {
+    jobCancelled: jest.fn().mockResolvedValue(undefined),
+    jobMatched: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new JobsService(
     jobs as unknown as JobsRepository,
@@ -162,6 +167,26 @@ describe('JobsService', () => {
       await service.publish('user_1', 'job_1');
 
       expect(jobs.update).not.toHaveBeenCalled();
+    });
+
+    it('notifies providers with a matching service once published — Job Alerts', async () => {
+      const { service, notificationsService } = build();
+
+      await service.publish('user_1', 'job_1');
+
+      expect(notificationsService.jobMatched).toHaveBeenCalledWith(
+        'job_1',
+        'cat_1',
+        'A requirement',
+      );
+    });
+
+    it('does not re-notify on a repeat publish of an already-published requirement', async () => {
+      const { service, notificationsService } = build({ status: 'PUBLISHED' });
+
+      await service.publish('user_1', 'job_1');
+
+      expect(notificationsService.jobMatched).not.toHaveBeenCalled();
     });
 
     it('refuses to publish a cancelled requirement', async () => {

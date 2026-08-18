@@ -19,6 +19,7 @@ export function notificationCategory(type: ApiNotification['type']): Notificatio
     case 'CONNECTION_ESTABLISHED':
       return 'connection';
     case 'JOB_CANCELLED':
+    case 'JOB_MATCHED':
       return 'job';
   }
 }
@@ -61,6 +62,11 @@ export function notificationRoute(
 
     // Recipient is always a provider who had proposed.
     case 'JOB_CANCELLED':
+      return jobId ? `/provider/jobs/${jobId}` : null;
+
+    // Recipient is a provider with a matching service, not yet a proposer —
+    // same destination, the public requirement they can now bid on.
+    case 'JOB_MATCHED':
       return jobId ? `/provider/jobs/${jobId}` : null;
 
     default:
