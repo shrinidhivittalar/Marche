@@ -13,6 +13,9 @@ import { MediaModule } from './media/media.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { MessagesModule } from './messages/messages.module';
+import { DisputesModule } from './disputes/disputes.module';
 import { SavedProvidersModule } from './saved-providers/saved-providers.module';
 
 @Module({
@@ -64,6 +67,9 @@ import { SavedProvidersModule } from './saved-providers/saved-providers.module';
     JobsModule,
     ProposalsModule,
     NotificationsModule,
+    ReviewsModule,
+    MessagesModule,
+    DisputesModule,
     SavedProvidersModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

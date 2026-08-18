@@ -19,6 +19,7 @@ import {
 import { useApiResource } from '../../hooks/useApiResource';
 import { profilesApi } from '../../lib/marketplace-api';
 import { jobsApi, type JobStatus } from '../../lib/jobs-api';
+import { connectionsApi } from '../../lib/proposals-api';
 import { formatJobBudget } from '../../lib/formatJob';
 
 // Wording for the statuses the API actually has. The mock model had Paused,
@@ -49,8 +50,7 @@ interface ClientDashboardProps {
 }
 
 export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashboard' }) => {
-  const { currentUser, contracts, navigate, clientSettings, updateClientSettings, accessToken } =
-    useApp();
+  const { currentUser, navigate, clientSettings, updateClientSettings, accessToken } = useApp();
 
   // Read from the real profile, not the demo user. The editor writes to
   // /profiles/me once signed in, so a checklist built on the mock fields
@@ -106,30 +106,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
     (r) => r.status === 'PUBLISHED',
   ).length;
 
-  const inProgressContracts = contracts.filter(
-    (c) => c.clientId === currentUser.id && c.bookingState === 'Confirmed',
+  // The client's real connections (for the "All contracts" tab and the KPI
+  // row) — the mock `contracts` array this replaced only ever held demo
+  // fixture data, since `hireVendor` (the action that would have populated
+  // it) is unreachable from any real navigation.
+  const myConnections = useApiResource(
+    () => connectionsApi.mine(accessToken as string, 1, 50),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
   );
+  const connectionItems = myConnections.data?.items ?? [];
 
-  const completedContracts = contracts.filter(
-    (c) =>
-      c.clientId === currentUser.id &&
-      (c.bookingState === 'Completed' || c.bookingState === 'Closed'),
-  );
+  const inProgressContracts = connectionItems.filter((c) => c.status === 'ACTIVE');
+  const completedContracts = connectionItems.filter((c) => c.status === 'COMPLETED');
 
-  // Contracts belonging to this client (for the "All contracts" tab)
-  const myContracts = contracts.filter((c) => c.clientId === currentUser.id);
-  const filteredContracts = myContracts
+  const filteredContracts = connectionItems
     .filter((c) => {
       if (!contractSearch.trim()) return true;
       const q = contractSearch.toLowerCase();
       return (
-        c.jobTitle.toLowerCase().includes(q) ||
-        c.vendorName.toLowerCase().includes(q) ||
-        c.acknowledgementNumber.toLowerCase().includes(q)
+        c.job.title.toLowerCase().includes(q) ||
+        c.providerProfile.displayName.toLowerCase().includes(q)
       );
     })
     .sort((a, b) => {
-      const diff = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+      // Nulls (no event date set) sort last regardless of direction — there
+      // is nothing to compare them against.
+      if (!a.job.eventDate) return 1;
+      if (!b.job.eventDate) return -1;
+      const diff = new Date(a.job.eventDate).getTime() - new Date(b.job.eventDate).getTime();
       return contractSortDir === 'asc' ? diff : -diff;
     });
 
@@ -262,20 +267,20 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredContracts.map((ctr) => (
-                  <Card key={ctr.id} className="p-5 space-y-4">
+                  <Card key={ctr.id} className="p-5 space-y-4" data-testid="contract-row">
                     <div className="flex items-center justify-between border-b border-border pb-3">
-                      <span className="text-xs font-mono font-bold text-primary">
-                        REF: {ctr.acknowledgementNumber}
+                      <span className="text-xs font-mono font-bold text-primary truncate">
+                        REF: {ctr.id.slice(0, 8)}
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-primary text-[10px] font-extrabold">
-                        {ctr.bookingState}
+                        {ctr.status}
                       </span>
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-bold text-ink">{ctr.jobTitle}</h3>
+                      <h3 className="text-sm font-bold text-ink">{ctr.job.title}</h3>
                       <p className="text-xs text-ink-muted">
-                        Provider: <strong>{ctr.vendorName}</strong>
+                        Provider: <strong>{ctr.providerProfile.displayName}</strong>
                       </p>
                     </div>
 
@@ -283,10 +288,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                       <div>
                         <span className="block text-[10px] text-ink-muted">Booking Amount</span>
                         <span className="text-sm font-extrabold text-ink">
-                          ₹{ctr.amount.toLocaleString('en-IN')}
+                          ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
                         </span>
                       </div>
-                      <Button size="sm" onClick={() => navigate(`/contracts/${ctr.id}`)}>
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/contracts/${ctr.id}`)}
+                        data-testid="manage-contract"
+                      >
                         Manage Contract
                       </Button>
                     </div>

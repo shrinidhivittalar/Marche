@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   CalendarDays,
   ChevronRight,
@@ -8,27 +8,17 @@ import {
   ShieldCheck,
   IndianRupee,
   CheckCircle2,
-  Lock,
+  Clock3,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card } from '@marche/ui';
+import { Card } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
-import { proposalsApi } from '../../lib/proposals-api';
+import { proposalsApi, connectionsApi } from '../../lib/proposals-api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen } from '../../lib/formatJob';
-import { TimeSlot } from '../../types';
-import { formatEventSchedule } from '../../lib/formatTime';
-import {
-  DEFAULT_DAY_AVAILABILITY,
-  getVendorAvailability,
-  setVendorAvailability,
-  type DayAvailability,
-} from '../../lib/availability';
-
-const SLOTS: TimeSlot[] = ['Morning', 'Afternoon', 'Evening', 'Full Day'];
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -52,12 +42,12 @@ function getMonthCells(monthDate: Date): (Date | null)[] {
 }
 
 export const MyWorkPage: React.FC = () => {
-  const { currentUser, contracts, navigate, accessToken } = useApp();
+  const { currentUser, navigate, accessToken } = useApp();
 
   const [activeTab, setActiveTab] = useState<'bids' | 'contracts' | 'calendar'>('bids');
 
-  // The proposals tab is on the real API as of Module 5. The contracts and
-  // calendar tabs below are still mock — those modules do not exist.
+  // The proposals tab is on the real API as of Module 5. The calendar tab
+  // below is still mock — availability has no backend yet.
   //
   // There is no longer a draft/submitted split: a proposal is submitted
   // complete, in one operation, so every row here is a real submission.
@@ -68,13 +58,24 @@ export const MyWorkPage: React.FC = () => {
   );
   const proposalItems = myProposals.data?.items ?? [];
 
-  // Vendor's active or completed contracts
-  const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
+  // Vendor's connections — the mock `contracts` array this replaced only
+  // ever held demo fixture data (see ClientDashboard.tsx for why).
+  const myConnections = useApiResource(
+    () => connectionsApi.mine(accessToken as string, 1, 50),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
+  const myContracts = myConnections.data?.items ?? [];
 
   // Total earnings won/held
-  const totalEarnings = myContracts.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalEarnings = myContracts.reduce(
+    (acc, curr) => acc + Number(curr.proposal.proposedPrice),
+    0,
+  );
 
-  // Availability calendar state — keyed by ISO date, mock/in-memory only
+  // Availability calendar — real data as of the availability-calendar module:
+  // pending dates from submitted proposals, confirmed dates from active
+  // connections. See ConnectionsService.myCalendar for how the two combine.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayISO = toISODate(today);
@@ -82,37 +83,14 @@ export const MyWorkPage: React.FC = () => {
   const [calendarMonth, setCalendarMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [availability, setAvailability] = useState<Record<string, DayAvailability>>(() =>
-    getVendorAvailability(currentUser.id),
-  );
   const [selectedDate, setSelectedDate] = useState<string>(todayISO);
 
-  useEffect(() => {
-    setVendorAvailability(currentUser.id, availability);
-  }, [availability, currentUser.id]);
-
-  const getDayAvailability = (dateISO: string): DayAvailability =>
-    availability[dateISO] ?? DEFAULT_DAY_AVAILABILITY;
-
-  const getAggregateStatus = (dateISO: string): 'open' | 'partial' | 'blocked' | 'booked' => {
-    const values = Object.values(getDayAvailability(dateISO));
-    if (values.some((v) => v === 'booked')) return 'booked';
-    const openCount = values.filter((v) => v === 'open').length;
-    if (openCount === values.length) return 'open';
-    if (openCount === 0) return 'blocked';
-    return 'partial';
-  };
-
-  const toggleSlotStatus = (dateISO: string, slot: TimeSlot) => {
-    setAvailability((prev) => {
-      const current = prev[dateISO] ?? DEFAULT_DAY_AVAILABILITY;
-      if (current[slot] === 'booked') return prev; // confirmed contracts can't be manually unblocked
-      return {
-        ...prev,
-        [dateISO]: { ...current, [slot]: current[slot] === 'open' ? 'blocked' : 'open' },
-      };
-    });
-  };
+  const myCalendar = useApiResource(
+    () => connectionsApi.myCalendar(accessToken as string),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
+  const calendarByDate = new Map((myCalendar.data ?? []).map((entry) => [entry.date, entry]));
 
   const goToPrevMonth = () => {
     setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -315,10 +293,12 @@ export const MyWorkPage: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <StatusBadge status={ctr.bookingState} />
+                        <StatusBadge status={ctr.status} />
                       </div>
-                      <h3 className="text-base font-bold text-ink">{ctr.jobTitle}</h3>
-                      <p className="text-xs text-ink-muted mt-0.5">Client: {ctr.clientName}</p>
+                      <h3 className="text-base font-bold text-ink">{ctr.job.title}</h3>
+                      <p className="text-xs text-ink-muted mt-0.5">
+                        Client: {ctr.clientProfile.displayName}
+                      </p>
                     </div>
 
                     <div className="text-right">
@@ -326,7 +306,7 @@ export const MyWorkPage: React.FC = () => {
                         Contract Value
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ₹{ctr.amount.toLocaleString('en-IN')}
+                        ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>
@@ -334,12 +314,13 @@ export const MyWorkPage: React.FC = () => {
                   <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
                     <span>
                       Event Date:{' '}
-                      {formatEventSchedule(
-                        ctr.eventDate,
-                        ctr.timingMode,
-                        ctr.eventStartTime,
-                        ctr.eventEndTime,
-                      )}
+                      {ctr.job.eventDate
+                        ? new Date(ctr.job.eventDate).toLocaleDateString('en-IN', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : 'Not set'}
                     </span>
                     <span className="text-primary font-bold hover:underline flex items-center gap-1">
                       Open Contract Room <ChevronRight className="w-4 h-4" />
@@ -391,29 +372,22 @@ export const MyWorkPage: React.FC = () => {
                   const dateISO = toISODate(date);
                   const isPast = dateISO < todayISO;
                   const isSelected = dateISO === selectedDate;
-                  const status = getAggregateStatus(dateISO);
+                  const entry = calendarByDate.get(dateISO);
 
                   return (
                     <button
                       key={dateISO}
                       type="button"
-                      disabled={isPast}
                       onClick={() => setSelectedDate(dateISO)}
-                      className={`aspect-square rounded-lg text-xs font-medium flex flex-col items-center justify-center gap-1 transition-all ${
-                        isPast ? 'text-zinc-300 cursor-not-allowed' : 'cursor-pointer hover:bg-bg'
+                      className={`aspect-square rounded-lg text-xs font-medium flex flex-col items-center justify-center gap-1 transition-all cursor-pointer hover:bg-bg ${
+                        isPast ? 'text-zinc-300' : ''
                       } ${isSelected ? 'ring-2 ring-primary' : ''}`}
                     >
                       <span className={isPast ? '' : 'text-ink'}>{date.getDate()}</span>
-                      {!isPast && (
+                      {entry && (
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
-                            status === 'booked'
-                              ? 'bg-primary'
-                              : status === 'open'
-                                ? 'bg-emerald-500'
-                                : status === 'partial'
-                                  ? 'bg-amber-500'
-                                  : 'bg-rose-400'
+                            entry.status === 'CONFIRMED' ? 'bg-primary' : 'bg-amber-500'
                           }`}
                         />
                       )}
@@ -424,64 +398,55 @@ export const MyWorkPage: React.FC = () => {
 
               <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-border text-[11px] text-ink-muted">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Open
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Pending proposal
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Partially blocked
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Fully blocked
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Booked (contract
-                  confirmed)
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Confirmed booking
                 </span>
               </div>
             </Card>
 
-            {/* Selected Day Slot Panel */}
+            {/* Selected Day Panel */}
             <Card className="p-6 space-y-3">
               <div>
                 <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                  Slot Availability
+                  Selected Day
                 </span>
                 <h3 className="text-sm font-bold text-ink">{selectedDateLabel}</h3>
               </div>
 
-              <div className="grid grid-cols-1 gap-2">
-                {SLOTS.map((slot) => {
-                  const status = getDayAvailability(selectedDate)[slot];
-                  const isBooked = status === 'booked';
-                  const isOpen = status === 'open';
+              {myCalendar.loading && <p className="text-xs text-ink-muted">Loading calendar…</p>}
+
+              {(() => {
+                const entry = calendarByDate.get(selectedDate);
+                if (!entry) {
                   return (
-                    <button
-                      key={slot}
-                      type="button"
-                      disabled={isBooked}
-                      onClick={() => toggleSlotStatus(selectedDate, slot)}
-                      className={`p-3 rounded-xl border text-xs font-medium transition-all text-left flex items-center justify-between gap-2 ${
-                        isBooked
-                          ? 'bg-surface-subtle border-primary/30 text-primary cursor-not-allowed'
-                          : isOpen
-                            ? 'bg-emerald-50 border-emerald-300 text-primary cursor-pointer'
-                            : 'bg-zinc-100 border-zinc-200 text-zinc-500 cursor-pointer'
-                      }`}
-                    >
-                      <span>
-                        <span className="block font-bold">{slot} Slot</span>
-                        <span className="text-[10px]">
-                          {isBooked
-                            ? 'BOOKED — CONTRACT CONFIRMED'
-                            : isOpen
-                              ? 'AVAILABLE FOR BOOKING'
-                              : 'BLOCKED / UNAVAILABLE'}
-                        </span>
-                      </span>
-                      {isBooked && <Lock className="w-3.5 h-3.5 shrink-0" />}
-                    </button>
+                    <p className="text-xs text-ink-muted">No proposals or bookings on this day.</p>
                   );
-                })}
-              </div>
+                }
+                const isConfirmed = entry.status === 'CONFIRMED';
+                return (
+                  <div
+                    className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${
+                      isConfirmed
+                        ? 'bg-surface-subtle border-primary/30 text-primary'
+                        : 'bg-amber-50 border-amber-300 text-amber-700'
+                    }`}
+                  >
+                    {isConfirmed ? (
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <Clock3 className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>
+                      <span className="block font-bold">{entry.jobTitle}</span>
+                      <span className="text-[10px]">
+                        {isConfirmed ? 'BOOKED — CLIENT HIRED YOU' : 'PENDING — AWAITING CLIENT'}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })()}
             </Card>
           </div>
         )}

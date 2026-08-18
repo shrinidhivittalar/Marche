@@ -98,6 +98,16 @@ export class NotificationsService {
     }
   }
 
+  async disputeRaised(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'DISPUTE_RAISED',
+      title: 'A dispute was raised',
+      message: 'The other party on one of your connections raised a dispute.',
+      data,
+    });
+  }
+
   // A client publishing a requirement notifies every provider with a live
   // service in the same category — Job Alerts. Recipients are resolved here
   // rather than passed in, for the same reason as jobCancelled: Jobs has no

@@ -88,8 +88,12 @@ export type ApiProposalAttachment = ApiJobAttachment;
  * comparing against the caller's own profile id rather than needing two
  * different endpoints.
  */
+export type ConnectionStatus = 'ACTIVE' | 'COMPLETED';
+
 export interface ApiConnection {
   id: string;
+  status: ConnectionStatus;
+  completedAt: string | null;
   createdAt: string;
   job: {
     id: string;
@@ -120,6 +124,14 @@ export interface ApiConnection {
     verifiedAt: string | null;
     avatarMediaId: string | null;
   };
+}
+
+/** One date on the provider's own availability calendar. */
+export interface ApiCalendarEntry {
+  date: string;
+  status: 'PENDING' | 'CONFIRMED';
+  jobId: string;
+  jobTitle: string;
 }
 
 export interface ProposalBody {
@@ -198,4 +210,11 @@ export const connectionsApi = {
     ),
 
   byId: (token: string, id: string) => apiFetch<ApiConnection>(`/connections/${id}`, token),
+
+  /** Client-only, idempotent, only allowed once the job's eventDate has passed. */
+  complete: (token: string, id: string) =>
+    apiFetch<ApiConnection>(`/connections/${id}/complete`, token, { method: 'PATCH' }),
+
+  /** Provider-only. Dates from submitted proposals and active connections combined. */
+  myCalendar: (token: string) => apiFetch<ApiCalendarEntry[]>('/connections/me/calendar', token),
 };

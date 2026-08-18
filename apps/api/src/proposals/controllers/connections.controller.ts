@@ -36,6 +36,19 @@ export class ConnectionsController {
     return this.connectionsService.listMine(user.id, pagination);
   }
 
+  // Also a literal path, so it must be declared before ':id' for the same
+  // matching-order reason as 'me' above.
+  @Get('me/calendar')
+  @ApiOperation({
+    summary: "The caller's own availability calendar (Provider only)",
+    description:
+      'Every date they are waiting on a decision for (a submitted proposal) or already ' +
+      'booked for (an active connection). A confirmed date always wins over a pending one.',
+  })
+  myCalendar(@CurrentUser() user: AuthenticatedUser) {
+    return this.connectionsService.myCalendar(user.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'One connection, readable by either party to it' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

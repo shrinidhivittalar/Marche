@@ -88,6 +88,19 @@ export class ConnectionsRepository {
     return this.prisma.client.connection.count({ where: ownedBy(profileId) });
   }
 
+  // Dates already committed, for the availability calendar: every active
+  // connection with an event date. COMPLETED ones are history, not a future
+  // slot to guard, so they're excluded.
+  listActiveDatesForProvider(providerProfileId: string) {
+    return this.prisma.client.connection.findMany({
+      where: { providerProfileId, status: 'ACTIVE', job: { eventDate: { not: null } } },
+      select: {
+        id: true,
+        job: { select: { id: true, title: true, eventDate: true } },
+      },
+    });
+  }
+
   // Client confirmation, or the sweep below — either is "complete" the same
   // way, so both call this rather than each writing the row independently.
   markCompleted(id: string) {
@@ -110,5 +123,16 @@ export class ConnectionsRepository {
       where: { status: 'ACTIVE', job: { eventDate: { lt: cutoff } } },
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
+  }
+
+  // Unpaginated, ids only — for MessagesService, which needs every
+  // connection a profile is party to in order to build the conversation
+  // list preview, not one page of the "Connections" screen's own listing.
+  async listIdsByProfile(profileId: string): Promise<string[]> {
+    const connections = await this.prisma.client.connection.findMany({
+      where: ownedBy(profileId),
+      select: { id: true },
+    });
+    return connections.map((connection) => connection.id);
   }
 }
