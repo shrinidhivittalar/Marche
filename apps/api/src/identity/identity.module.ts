@@ -13,6 +13,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { EmailModule } from '../email/email.module';
 import { ReferralsModule } from '../referrals/referrals.module';
+import { EmailThrottlerGuard } from './guards/email-throttler.guard';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ReferralsModule } from '../referrals/referrals.module';
     VerificationTokensRepository,
     PasswordResetsRepository,
     JwtStrategy,
+    EmailThrottlerGuard,
   ],
 })
 export class IdentityModule {}

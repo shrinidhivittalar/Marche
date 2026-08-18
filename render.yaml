@@ -37,6 +37,12 @@ services:
       - key: DATABASE_URL
         sync: false
 
+      # Backs rate limiting (see apps/api/src/throttler). Point this at a
+      # Render Key Value instance so limits are shared across every API
+      # instance and survive redeploys — there is no in-memory fallback.
+      - key: REDIS_URL
+        sync: false
+
       # Signs and verifies access tokens. identity/strategies/jwt.strategy.ts
       # throws on boot if this is missing, so a wrong or absent value fails
       # the deploy loudly rather than silently disabling auth.

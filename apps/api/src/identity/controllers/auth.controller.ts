@@ -13,46 +13,23 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService, REFRESH_TOKEN_TTL_MS } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_TTL_MS } from '../auth-rate-limit';
+import { EmailThrottlerGuard } from '../guards/email-throttler.guard';
 
 const REFRESH_COOKIE_NAME = 'marche_refresh_token';
 
 // Tighter limit for the endpoints a brute-force/credential-stuffing attempt
 // would actually target — the global 100/min default (app.module.ts) is too
-// loose to stop rapid password guessing on its own.
-//
-// Overridable by an explicit environment variable. This exists for automated
-// end-to-end runs, which sign in far more often than any human would and
-// otherwise trip the limiter partway through a suite (playwright.config.ts
-// sets 500). Refresh tokens are single-use and rotating (auth.service.ts), so
-// a test run cannot avoid this by reusing one saved session.
-export const DEFAULT_AUTH_RATE_LIMIT = 5;
-
-// The override is parsed defensively because the failure is silent and total:
-// `Number('abc')` is NaN and `Number('')` is 0, and @Throttle given either
-// stops limiting in any meaningful way. A typo on the Render dashboard would
-// therefore switch brute-force protection off with no error and no log line.
-// Anything that is not a positive finite count falls back to the default.
-//
-// No upper clamp. Any ceiling would have to sit above the 500 the e2e suite
-// legitimately needs, and 500/min is already far past the point where a limit
-// constrains an attacker — so a clamp would buy no protection while adding a
-// second number to keep in sync with the test config.
-export function resolveAuthRateLimit(raw: string | undefined): number {
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return DEFAULT_AUTH_RATE_LIMIT;
-  }
-  return Math.floor(parsed);
-}
-
-const AUTH_RATE_LIMIT = resolveAuthRateLimit(process.env.AUTH_RATE_LIMIT);
-const AUTH_THROTTLE = { default: { limit: AUTH_RATE_LIMIT, ttl: 60_000 } };
+// loose to stop rapid password guessing on its own. See auth-rate-limit.ts
+// for the override and its reasoning.
+const AUTH_THROTTLE = { default: { limit: AUTH_RATE_LIMIT, ttl: AUTH_RATE_LIMIT_TTL_MS } };
 
 function requestContext(req: Request) {
   return { userAgent: req.headers['user-agent'], ipAddress: req.ip };
@@ -114,6 +91,7 @@ export class AuthController {
 
   @Post('register')
   @Throttle(AUTH_THROTTLE)
+  @UseGuards(EmailThrottlerGuard)
   @ApiOperation({
     summary:
       'Create an account and send a verification email (always 201 with the same body, whether or not the address was already registered)',
@@ -124,6 +102,7 @@ export class AuthController {
 
   @Post('login')
   @Throttle(AUTH_THROTTLE)
+  @UseGuards(EmailThrottlerGuard)
   @ApiOperation({
     summary:
       'Exchange email/password for an access token; refresh token is set as an httpOnly cookie',
@@ -169,6 +148,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @Throttle(AUTH_THROTTLE)
+  @UseGuards(EmailThrottlerGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Request a password reset email (always 204, regardless of whether the email exists)',
