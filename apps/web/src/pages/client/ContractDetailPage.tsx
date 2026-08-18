@@ -125,7 +125,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
         </button>
 
         <div className="flex items-center gap-3">
-          <StatusBadge status={c.status} />
+          <span data-testid="connection-status" data-status={c.status}>
+            <StatusBadge status={c.status} />
+          </span>
           <Button size="sm" variant="outline" icon={FileCheck} onClick={() => setInvoiceOpen(true)}>
             View Invoice
           </Button>
@@ -207,11 +209,20 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           </div>
         )}
 
-        {confirmError && <p className="text-xs font-medium text-red-600">{confirmError}</p>}
+        {confirmError && (
+          <p className="text-xs font-medium text-red-600" data-testid="confirm-complete-error">
+            {confirmError}
+          </p>
+        )}
 
         {canConfirmComplete && (
           <div className="pt-2 flex justify-end">
-            <Button icon={CheckCircle2} onClick={handleConfirmComplete} disabled={confirming}>
+            <Button
+              icon={CheckCircle2}
+              onClick={handleConfirmComplete}
+              disabled={confirming}
+              data-testid="confirm-complete"
+            >
               Confirm Completion
             </Button>
           </div>
@@ -240,7 +251,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
           {myReview.loading ? (
             <p className="text-xs text-ink-muted">Loading…</p>
           ) : myReview.data ? (
-            <div className="space-y-2">
+            <div className="space-y-2" data-testid="my-review" data-rating={myReview.data.rating}>
               <div className="flex items-center gap-2 text-xs font-semibold text-amber-600">
                 <span className="flex items-center gap-0.5">
                   {Array.from({ length: 5 }).map((_, idx) => (
@@ -260,7 +271,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4" data-testid="review-form">
               <div className="flex items-center gap-2">
                 {Array.from({ length: 5 }).map((_, idx) => {
                   const value = idx + 1;
@@ -270,6 +281,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                       key={value}
                       type="button"
                       title={`${value} star${value === 1 ? '' : 's'}`}
+                      data-testid={`review-rating-${value}`}
                       onClick={() => setReviewRating(value)}
                       className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
                         active
@@ -283,6 +295,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                 })}
               </div>
               <Textarea
+                data-testid="review-comment-input"
                 rows={4}
                 value={reviewComment}
                 onChange={(event) => {
@@ -291,13 +304,18 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                 }}
                 placeholder="What went well? Was communication, quality, and delivery as expected?"
               />
-              {reviewError && <p className="text-xs font-medium text-red-600">{reviewError}</p>}
+              {reviewError && (
+                <p className="text-xs font-medium text-red-600" data-testid="review-error">
+                  {reviewError}
+                </p>
+              )}
               <div className="flex justify-end">
                 <Button
                   size="sm"
                   icon={Star}
                   onClick={handleSubmitReview}
                   disabled={submittingReview}
+                  data-testid="submit-review"
                 >
                   Submit Review
                 </Button>

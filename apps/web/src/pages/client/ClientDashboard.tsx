@@ -267,7 +267,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredContracts.map((ctr) => (
-                  <Card key={ctr.id} className="p-5 space-y-4">
+                  <Card key={ctr.id} className="p-5 space-y-4" data-testid="contract-row">
                     <div className="flex items-center justify-between border-b border-border pb-3">
                       <span className="text-xs font-mono font-bold text-primary truncate">
                         REF: {ctr.id.slice(0, 8)}
@@ -291,7 +291,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                           ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
                         </span>
                       </div>
-                      <Button size="sm" onClick={() => navigate(`/contracts/${ctr.id}`)}>
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/contracts/${ctr.id}`)}
+                        data-testid="manage-contract"
+                      >
                         Manage Contract
                       </Button>
                     </div>
