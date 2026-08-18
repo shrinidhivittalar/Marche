@@ -13,6 +13,7 @@ import { MediaModule } from './media/media.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     JobsModule,
     ProposalsModule,
     NotificationsModule,
+    MessagesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

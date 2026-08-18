@@ -58,7 +58,7 @@ const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { currentUser, route, navigate, contracts, messages } = useApp();
+  const { currentUser, route, navigate, apiMessagesUnreadCount } = useApp();
   const {
     notifications,
     loading: notificationsLoading,
@@ -93,21 +93,12 @@ export const Sidebar: React.FC = () => {
   // Already scoped to the caller by the API — no client-side filter needed.
   const recentNotifs = notifications.slice(0, 5);
 
-  const myContractIds = new Set(
-    contracts
-      .filter((c) => c.clientId === currentUser.id || c.vendorId === currentUser.id)
-      .map((c) => c.id),
-  );
-  const unreadMessageCount = messages.filter(
-    (m) => myContractIds.has(m.contractId) && m.senderId !== currentUser.id && !m.read,
-  ).length;
-
   const clientNav = [
     { label: 'Home', path: '/client/dashboard', icon: LayoutDashboard },
     { label: 'Search', path: '/client/search', icon: Search },
     { label: 'Jobs', path: '/client/jobs', icon: Briefcase },
     { label: 'Freelancers', path: '/client/freelancers/hired', icon: Users },
-    { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessageCount },
+    { label: 'Messages', path: '/messages', icon: MessageSquare, badge: apiMessagesUnreadCount },
     { label: 'Finances', path: '/client/payments', icon: CreditCard },
     { label: 'Work Diaries', path: '/client/work-diaries', icon: Clock },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
@@ -120,7 +111,7 @@ export const Sidebar: React.FC = () => {
     { label: 'Stats', path: '/provider/stats', icon: TrendingUp },
     { label: 'Contracts', path: '/provider/contracts', icon: FileSignature },
     { label: 'Finances', path: '/provider/finances', icon: IndianRupee },
-    { label: 'Messages', path: '/messages', icon: MessageSquare, badge: unreadMessageCount },
+    { label: 'Messages', path: '/messages', icon: MessageSquare, badge: apiMessagesUnreadCount },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 

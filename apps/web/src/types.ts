@@ -1,6 +1,5 @@
 export type UserRole = 'client' | 'vendor' | 'admin';
 
-
 export type IdentityVerificationStatus = 'not_submitted' | 'pending' | 'verified';
 
 export interface IdentityVerification {
@@ -197,8 +196,6 @@ export interface Contract {
   agreement?: ContractAgreementSnapshot;
 }
 
-
-
 export interface WorkDiaryEntry {
   id: string;
   contractId: string;
@@ -238,8 +235,6 @@ export interface AuditLogEntry {
   afterState?: string;
   reason?: string;
 }
-
-
 
 export interface Referral {
   id: string;
@@ -386,14 +381,4 @@ export interface AvailabilitySlot {
   date: string; // YYYY-MM-DD
   slot: TimeSlot;
   status: 'open' | 'blocked' | 'booked';
-}
-
-export interface ChatMessage {
-  id: string;
-  contractId: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  timestamp: string;
-  read: boolean;
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useApiResource } from '../hooks/useApiResource';
 import { notificationsApi, type ApiNotification } from '../lib/notifications-api';
+import { messagesApi } from '../lib/messages-api';
 import {
   User,
   UserRole,
@@ -9,7 +10,6 @@ import {
   Contract,
   AuditLogEntry,
   Notification,
-  ChatMessage,
   BookingState,
   EventCategory,
   Review,
@@ -29,7 +29,6 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
-  INITIAL_MESSAGES,
   INITIAL_TALENT,
 } from '../data/mockData';
 import {
@@ -117,7 +116,7 @@ interface AppContextType {
   apiUnreadCount: number;
   markApiNotificationRead: (id: string) => Promise<void>;
   markAllApiNotificationsRead: () => Promise<void>;
-  messages: ChatMessage[];
+  apiMessagesUnreadCount: number;
   reviews: Review[];
   talentProfiles: TalentProfile[];
   referrals: Referral[];
@@ -192,8 +191,6 @@ interface AppContextType {
 
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
-  sendMessage: (contractId: string, text: string) => void;
-  markMessagesRead: (contractId: string) => void;
 
   // Job quick actions
   togglePauseJob: (id: string) => void;
@@ -359,6 +356,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [accessToken],
     { enabled: Boolean(accessToken) },
   );
+  const apiMessagesUnread = useApiResource(
+    () => messagesApi.unreadCount(accessToken as string),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
+  );
 
   // Both of these mark read locally before the request goes out. Clicking a
   // notification navigates away in the same tick, so waiting for the round
@@ -449,11 +451,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
   });
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_messages`);
-    return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
-  });
-
   const [reviews, setReviews] = useState<Review[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_reviews`);
     return saved ? JSON.parse(saved) : [];
@@ -515,7 +512,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_contracts`, JSON.stringify(contracts));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_audit`, JSON.stringify(auditLogs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_notifications`, JSON.stringify(notifications));
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_messages`, JSON.stringify(messages));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_reviews`, JSON.stringify(reviews));
     localStorage.setItem(
       `${LOCAL_STORAGE_KEY}_favorite_conversations`,
@@ -533,7 +529,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contracts,
     auditLogs,
     notifications,
-    messages,
     reviews,
     favoriteConversationIds,
     savedTalentIds,
@@ -1418,29 +1413,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const sendMessage = (contractId: string, text: string) => {
-    const newMsg: ChatMessage = {
-      id: generateId('msg'),
-      contractId,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      text,
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
-    setMessages((prev) => [...prev, newMsg]);
-  };
-
-  const markMessagesRead = (contractId: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.contractId === contractId && m.senderId !== currentUser.id && !m.read
-          ? { ...m, read: true }
-          : m,
-      ),
-    );
-  };
-
   const toggleFavoriteConversation = (contractId: string) => {
     setFavoriteConversationIds((prev) =>
       prev.includes(contractId) ? prev.filter((id) => id !== contractId) : [...prev, contractId],
@@ -1610,7 +1582,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         apiUnreadCount: apiNotificationsUnread.data?.count ?? 0,
         markApiNotificationRead,
         markAllApiNotificationsRead,
-        messages,
+        apiMessagesUnreadCount: apiMessagesUnread.data?.count ?? 0,
         reviews,
         talentProfiles,
         referrals,
@@ -1645,8 +1617,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminOverrideBookingState,
         markNotificationRead,
         markAllNotificationsRead,
-        sendMessage,
-        markMessagesRead,
         togglePauseJob,
         deleteJob,
         updateJob,

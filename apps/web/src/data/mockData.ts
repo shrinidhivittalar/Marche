@@ -13,7 +13,6 @@ import {
   ProviderProjectPackage,
   ProviderTestimonial,
   ProviderEmploymentEntry,
-  ChatMessage,
 } from '../types';
 
 export const DEMO_USERS: Record<UserRole, User> = {
@@ -21,7 +20,8 @@ export const DEMO_USERS: Record<UserRole, User> = {
     id: 'user_client_1',
     name: 'Priya Menon',
     email: 'priya.menon@luminaevents.co',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     role: 'client',
     companyOrTitle: 'Lumina Luxury Events',
     rating: 4.9,
@@ -36,7 +36,8 @@ export const DEMO_USERS: Record<UserRole, User> = {
     id: 'user_vendor_1',
     name: 'Arjun Verma',
     email: 'arjun@vermaimagery.com',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     role: 'vendor',
     companyOrTitle: 'Verma Visuals Studio',
     rating: 4.98,
@@ -52,7 +53,8 @@ export const DEMO_USERS: Record<UserRole, User> = {
     id: 'user_admin_1',
     name: 'Marche Platform Admin',
     email: 'ops@marche.app',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     role: 'admin',
     companyOrTitle: 'Marche Marketplace Ops',
     verified: true,
@@ -67,7 +69,8 @@ export const INITIAL_SERVICES: VendorService[] = [
     title: 'Full-Day Editorial Event Photography & Live Editing',
     category: 'Photography',
     startingPrice: 3200,
-    description: 'Dual-camera coverage with real-time photo gallery delivery for social press & executive guests.',
+    description:
+      'Dual-camera coverage with real-time photo gallery delivery for social press & executive guests.',
     includedSlots: ['Morning', 'Afternoon', 'Evening', 'Full Day'],
     galleryImages: [
       'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
@@ -81,7 +84,8 @@ export const INITIAL_SERVICES: VendorService[] = [
     title: 'Artisanal Farm-to-Table Plated Dinner Catering',
     category: 'Catering',
     startingPrice: 5500,
-    description: 'Custom 5-course seasonal menu with sommelier wine pairing and sommelier service for up to 120 guests.',
+    description:
+      'Custom 5-course seasonal menu with sommelier wine pairing and sommelier service for up to 120 guests.',
     includedSlots: ['Evening', 'Full Day'],
     galleryImages: [
       'https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80',
@@ -94,8 +98,10 @@ export const INITIAL_TALENT: TalentProfile[] = [
   {
     id: 'user_vendor_1',
     name: 'Arjun Verma',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
     category: 'Photography',
     headline: 'Master Editorial & Event Photographer • Verma Visuals Studio',
     bio: 'Award-winning editorial & event photographer specializing in luxury galas, product launches, and fashion week shows.',
@@ -114,15 +120,15 @@ export const INITIAL_TALENT: TalentProfile[] = [
     hoursPerWeek: 'More than 30 hrs/week',
     openToContractToHire: true,
     avgResponseHours: '0-4 hours',
-    education: [
-      { school: 'National Institute of Design, Ahmedabad', degree: 'BFA, Photography' },
-    ],
+    education: [{ school: 'National Institute of Design, Ahmedabad', degree: 'BFA, Photography' }],
   },
   {
     id: 'user_vendor_2',
     name: 'Meera Reddy Studio',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80',
     category: 'Catering',
     headline: 'Artisanal Farm-to-Table Catering & Sommelier Service',
     bio: 'Custom seasonal menus with wine pairing for 20 to 300 guests, from intimate dinners to full-scale galas.',
@@ -145,8 +151,10 @@ export const INITIAL_TALENT: TalentProfile[] = [
   {
     id: 'user_vendor_3',
     name: 'DJ Vikram Nair',
-    avatar: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&auto=format&fit=crop&q=80',
     category: 'DJ & Sound',
     headline: 'High-Energy DJ & Full Sound Production',
     bio: 'Ten years mixing weddings, corporate launches, and nightlife events with full line-array sound systems.',
@@ -169,8 +177,10 @@ export const INITIAL_TALENT: TalentProfile[] = [
   {
     id: 'user_vendor_4',
     name: 'Bloom & Branch Design',
-    avatar: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=800&auto=format&fit=crop&q=80',
     category: 'Floral & Decor',
     headline: 'Full-Service Floral Design & Installation',
     bio: 'Bespoke floral installations and event styling, from minimalist arrangements to full venue transformations.',
@@ -193,8 +203,10 @@ export const INITIAL_TALENT: TalentProfile[] = [
   {
     id: 'user_vendor_5',
     name: 'Spring Loft Venues',
-    avatar: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800&auto=format&fit=crop&q=80',
     category: 'Venue',
     headline: 'Industrial-Chic Loft Space for 20-250 Guests',
     bio: 'A flexible loft venue with in-house AV, catering kitchen access, and rooftop overflow for larger events.',
@@ -217,8 +229,10 @@ export const INITIAL_TALENT: TalentProfile[] = [
   {
     id: 'user_vendor_6',
     name: 'Kavya Rao Events',
-    avatar: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
-    portfolioImage: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
+    avatar:
+      'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80',
+    portfolioImage:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
     category: 'Event Planning',
     headline: 'Full-Service Planning & Day-Of Coordination',
     bio: 'End-to-end event planning for corporate offsites, product launches, and destination weddings.',
@@ -247,14 +261,16 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Product Launch Gala Photography',
     category: 'Photography',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-06-14',
     endDate: '2026-06-14',
     status: 'completed',
     priceType: 'Fixed price',
     amount: 3800,
     rating: 5.0,
-    review: 'Arjun captured every key moment of our launch flawlessly — gallery delivered same day.',
+    review:
+      'Arjun captured every key moment of our launch flawlessly — gallery delivered same day.',
     tags: ['Clear Communicator', 'Committed to Quality'],
   },
   {
@@ -263,7 +279,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Fashion Week Backstage Coverage',
     category: 'Photography',
     clientName: 'Ananya Iyer',
-    clientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-05-01',
     endDate: '2026-05-02',
     status: 'completed',
@@ -279,7 +296,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Executive Retreat Portrait Session',
     category: 'Photography',
     clientName: 'Rohan Kapoor',
-    clientAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-03-20',
     endDate: '2026-03-22',
     status: 'completed',
@@ -295,7 +313,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Corporate Anniversary Gala Photography',
     category: 'Photography',
     clientName: 'Ananya Iyer',
-    clientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-07-10',
     status: 'in_progress',
     priceType: 'Fixed price',
@@ -307,7 +326,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Cross-Coast Product Launch Dinner',
     category: 'Catering',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-06-01',
     endDate: '2026-06-01',
     status: 'completed',
@@ -323,7 +343,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Private Estate Anniversary Dinner',
     category: 'Catering',
     clientName: 'Ananya Iyer',
-    clientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-04-18',
     endDate: '2026-04-18',
     status: 'completed',
@@ -339,7 +360,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Corporate Milestone Celebration',
     category: 'DJ & Sound',
     clientName: 'Rohan Kapoor',
-    clientAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-05-28',
     endDate: '2026-05-28',
     status: 'completed',
@@ -355,7 +377,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Nightlife Launch Party',
     category: 'DJ & Sound',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-02-14',
     endDate: '2026-02-14',
     status: 'completed',
@@ -371,7 +394,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Corporate Gala Floral & Decor',
     category: 'Floral & Decor',
     clientName: 'Ananya Iyer',
-    clientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-04-30',
     endDate: '2026-04-30',
     status: 'completed',
@@ -387,7 +411,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Destination Wedding Coordination',
     category: 'Event Planning',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-03-10',
     endDate: '2026-03-10',
     status: 'completed',
@@ -403,7 +428,8 @@ export const INITIAL_WORK_HISTORY: ProviderWorkHistoryEntry[] = [
     jobTitle: 'Product Launch Offsite Planning',
     category: 'Event Planning',
     clientName: 'Rohan Kapoor',
-    clientAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     startDate: '2026-01-20',
     endDate: '2026-01-20',
     status: 'completed',
@@ -419,37 +445,43 @@ export const INITIAL_PORTFOLIO_ITEMS: ProviderPortfolioItem[] = [
   {
     id: 'portfolio_1',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&auto=format&fit=crop&q=80',
     caption: 'Full-Day Editorial Event Coverage',
   },
   {
     id: 'portfolio_2',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&auto=format&fit=crop&q=80',
     caption: 'Step-and-Repeat Press Wall',
   },
   {
     id: 'portfolio_3',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
     caption: 'Live Wireless Tethering Setup',
   },
   {
     id: 'portfolio_4',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
     caption: 'Executive Portrait Session',
   },
   {
     id: 'portfolio_5',
     vendorId: 'user_vendor_2',
-    image: 'https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80',
     caption: 'Plated Dinner Service',
   },
   {
     id: 'portfolio_6',
     vendorId: 'user_vendor_2',
-    image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
     caption: 'Cocktail Hour Spread',
   },
 ];
@@ -458,7 +490,8 @@ export const INITIAL_PROJECT_CATALOG: ProviderProjectPackage[] = [
   {
     id: 'project_1',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=400&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=400&auto=format&fit=crop&q=80',
     title: 'You will get full-day event photography coverage with a same-day preview gallery',
     priceFrom: 1200,
     deliveryDays: 2,
@@ -466,7 +499,8 @@ export const INITIAL_PROJECT_CATALOG: ProviderProjectPackage[] = [
   {
     id: 'project_2',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&auto=format&fit=crop&q=80',
     title: 'You will get a 1-hour on-site portrait session for executives or VIP guests',
     priceFrom: 450,
     deliveryDays: 3,
@@ -474,7 +508,8 @@ export const INITIAL_PROJECT_CATALOG: ProviderProjectPackage[] = [
   {
     id: 'project_3',
     vendorId: 'user_vendor_1',
-    image: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=400&auto=format&fit=crop&q=80',
+    image:
+      'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=400&auto=format&fit=crop&q=80',
     title: 'You will get a curated highlight reel of 25 edited photos for social media',
     priceFrom: 300,
     deliveryDays: 1,
@@ -529,7 +564,8 @@ export const INITIAL_JOBS: Job[] = [
     id: 'job_101',
     clientId: 'user_client_1',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     clientCompany: 'Lumina Digital Solutions',
     clientVerified: true,
     title: 'Editorial Photography Coverage for Product Launch Gala',
@@ -560,13 +596,14 @@ export const INITIAL_JOBS: Job[] = [
     id: 'job_102',
     clientId: 'user_client_1',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     clientCompany: 'Lumina Digital Solutions',
     clientVerified: true,
     title: 'Full-Service Catering for Cross-Coast Product Launch',
     category: 'Catering',
     description:
-      'Seeking an experienced catering team for a 150-guest product launch event — plated dinner service, passed hors d\'oeuvres, and a full bar package.',
+      "Seeking an experienced catering team for a 150-guest product launch event — plated dinner service, passed hors d'oeuvres, and a full bar package.",
     location: 'Bangalore, Karnataka',
     eventDate: '2026-10-05',
     timingMode: 'fixed',
@@ -580,7 +617,7 @@ export const INITIAL_JOBS: Job[] = [
     proposalsCount: 2,
     createdAt: '2026-07-24T14:30:00Z',
     deliverables: [
-      'Passed hors d\'oeuvres for cocktail hour',
+      "Passed hors d'oeuvres for cocktail hour",
       'Plated 3-course dinner service for 150 guests',
       'Full bar package with dedicated bartenders',
       'On-site service staff & cleanup crew',
@@ -591,7 +628,8 @@ export const INITIAL_JOBS: Job[] = [
     id: 'job_103',
     clientId: 'user_client_2',
     clientName: 'Rohan Kapoor',
-    clientAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     clientCompany: 'Aether Capital',
     clientVerified: true,
     title: 'Full-Service Event Planning & Day-Of Coordination',
@@ -621,7 +659,8 @@ export const INITIAL_JOBS: Job[] = [
     id: 'job_104',
     clientId: 'user_client_3',
     clientName: 'Ananya Iyer',
-    clientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     clientCompany: 'Vanguard Design Studio',
     clientVerified: true,
     title: 'Full Floral & Decor Design for Corporate Gala',
@@ -655,7 +694,8 @@ export const INITIAL_PROPOSALS: Proposal[] = [
     jobId: 'job_101',
     vendorId: 'user_vendor_1',
     vendorName: 'Arjun Verma',
-    vendorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    vendorAvatar:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     vendorRating: 4.98,
     vendorReviewCount: 42,
     vendorCategory: 'Photography',
@@ -677,7 +717,8 @@ export const INITIAL_PROPOSALS: Proposal[] = [
         id: 'ms_2',
         title: 'Full Event Day Photography Coverage',
         amount: 2200,
-        description: '4+ hours of on-site coverage including candids, step-and-repeat, and hero shots.',
+        description:
+          '4+ hours of on-site coverage including candids, step-and-repeat, and hero shots.',
       },
       {
         id: 'ms_3',
@@ -698,7 +739,8 @@ export const INITIAL_PROPOSALS: Proposal[] = [
     jobId: 'job_101',
     vendorId: 'user_vendor_3',
     vendorName: 'Meera Reddy Studio',
-    vendorAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    vendorAvatar:
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     vendorRating: 4.89,
     vendorReviewCount: 29,
     vendorCategory: 'Photography',
@@ -714,7 +756,8 @@ export const INITIAL_PROPOSALS: Proposal[] = [
         id: 'ms_4',
         title: 'Full Event Day Coverage (2-Photographer Team)',
         amount: 2900,
-        description: 'Complete on-site coverage with a lead and second-shooter for full guest and press coverage.',
+        description:
+          'Complete on-site coverage with a lead and second-shooter for full guest and press coverage.',
       },
       {
         id: 'ms_5',
@@ -737,10 +780,12 @@ export const INITIAL_CONTRACTS: Contract[] = [
     category: 'Event Planning',
     clientId: 'user_client_2',
     clientName: 'Rohan Kapoor',
-    clientAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     vendorId: 'user_vendor_4',
     vendorName: 'Elevate Events Co.',
-    vendorAvatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+    vendorAvatar:
+      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
     proposalId: 'prop_888',
     amount: 4200,
     eventDate: '2026-08-28',
@@ -759,10 +804,12 @@ export const INITIAL_CONTRACTS: Contract[] = [
     category: 'Photography',
     clientId: 'user_client_1',
     clientName: 'Priya Menon',
-    clientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    clientAvatar:
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     vendorId: 'user_vendor_1',
     vendorName: 'Arjun Verma',
-    vendorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    vendorAvatar:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     proposalId: 'prop_201',
     amount: 3800,
     eventDate: '2026-09-18',
@@ -773,54 +820,6 @@ export const INITIAL_CONTRACTS: Contract[] = [
     bookingState: 'Confirmed',
     createdAt: '2026-07-22T10:00:00Z',
     acknowledgementNumber: 'MARCHE-ACK-2026-9042',
-  },
-];
-
-export const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg_1',
-    contractId: 'ctr_302',
-    senderId: 'user_client_1',
-    senderName: 'Priya Menon',
-    text: "Hi Arjun! Excited to have you shooting the launch gala. Can you confirm arrival time for setup?",
-    timestamp: '2026-07-22T10:15:00Z',
-    read: true,
-  },
-  {
-    id: 'msg_2',
-    contractId: 'ctr_302',
-    senderId: 'user_vendor_1',
-    senderName: 'Arjun Verma',
-    text: "Hi Priya — happy to be on board. We'll arrive at 5pm to scout light and set up before the 6pm start.",
-    timestamp: '2026-07-22T10:42:00Z',
-    read: true,
-  },
-  {
-    id: 'msg_3',
-    contractId: 'ctr_302',
-    senderId: 'user_client_1',
-    senderName: 'Priya Menon',
-    text: "Perfect. I'll send over the run-of-show and press list by end of week so you know who to prioritize for hero shots.",
-    timestamp: '2026-07-23T09:05:00Z',
-    read: true,
-  },
-  {
-    id: 'msg_4',
-    contractId: 'ctr_302',
-    senderId: 'user_vendor_1',
-    senderName: 'Arjun Verma',
-    text: "Sounds great. Once I have that I'll put together a shot list draft for your sign-off.",
-    timestamp: '2026-07-23T09:20:00Z',
-    read: true,
-  },
-  {
-    id: 'msg_5',
-    contractId: 'ctr_302',
-    senderId: 'user_vendor_1',
-    senderName: 'Arjun Verma',
-    text: "Quick update — shot list draft is ready. Take a look and let me know if the priorities look right.",
-    timestamp: '2026-07-24T14:30:00Z',
-    read: false,
   },
 ];
 
@@ -875,7 +874,8 @@ export const INITIAL_NOTIFICATIONS: Notification[] = [
     id: 'notif_2',
     userId: 'user_client_1',
     title: 'Proposal Received',
-    message: 'Meera Reddy Studio submitted a proposal (₹4,200) for your E-Commerce Platform Redesign job.',
+    message:
+      'Meera Reddy Studio submitted a proposal (₹4,200) for your E-Commerce Platform Redesign job.',
     type: 'proposal',
     read: true,
     timestamp: '2026-07-21T15:10:00Z',
