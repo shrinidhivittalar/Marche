@@ -23,6 +23,7 @@ import {
   DialogBody,
   DialogFooter,
   Checkbox,
+  Skeleton,
 } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import {
@@ -35,6 +36,8 @@ import { profilesApi, marketplaceApi } from '../../lib/marketplace-api';
 import { jobsApi } from '../../lib/jobs-api';
 import { formatJobBudget, formatEventWhen, formatDeadline, postedAgo } from '../../lib/formatJob';
 import { LOCATIONS } from '../../data/categoryOptions';
+
+const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
 
 // The provider landing feed, on the real Jobs API — the same source
 // SearchJobsPage, JobDetailProviderView and MyWorkPage already read. It used
@@ -60,6 +63,29 @@ import { LOCATIONS } from '../../data/categoryOptions';
 // skew the server's page, exactly as on SearchJobsPage.
 
 const FEED_LIMIT = 12;
+
+// Mirrors the real card's layout — category pill, title, two description
+// lines, budget row — so the feed doesn't jump around once the real cards
+// replace these.
+function JobCardSkeleton() {
+  return (
+    <div className="bg-white border border-border rounded-2xl p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-5 w-24 rounded-full" />
+        <Skeleton className="h-4 w-4 rounded" />
+      </div>
+      <Skeleton className="h-4 w-3/4" />
+      <div className="space-y-1.5 flex-1">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-3 w-12" />
+      </div>
+    </div>
+  );
+}
 
 export const ProviderHomePage: React.FC = () => {
   const { currentUser, navigate, searchQuery, setSearchQuery, accessToken } = useApp();
@@ -108,6 +134,13 @@ export const ProviderHomePage: React.FC = () => {
   const feedItems = (jobs.data?.items ?? []).filter((job) => !dismissedIds.has(job.id));
   const selectedJob = feedItems.find((job) => job.id === selectedJobId);
 
+  const selectedClientProfileId = selectedJob?.clientProfile.id;
+  const selectedClientStats = useApiResource(
+    () => jobsApi.clientStats(selectedClientProfileId as string),
+    [selectedClientProfileId],
+    { enabled: Boolean(selectedClientProfileId) },
+  );
+
   const openFiltersModal = () => {
     setPendingCategory(categorySlug);
     setPendingLocation(location);
@@ -127,6 +160,16 @@ export const ProviderHomePage: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Header — every other page has a title; this one didn't, which read
+          as an unfinished screen on mobile where there's no Sidebar to
+          carry the page context instead. */}
+      <div className="space-y-0.5">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">Home</div>
+        <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
+          Good Morning, {currentUser.name.split(' ')[0]} 👋
+        </h1>
+      </div>
+
       {/* Account Notice Banner — goes away once the profile is actually complete */}
       {!isProfileComplete && !noticeDismissed && (
         <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl px-4 py-3 text-xs">
@@ -216,6 +259,12 @@ export const ProviderHomePage: React.FC = () => {
             actionLabel="Try again"
             onAction={() => void jobs.refetch()}
           />
+        ) : jobs.loading && feedItems.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <JobCardSkeleton key={i} />
+            ))}
+          </div>
         ) : !jobs.loading && feedItems.length === 0 ? (
           <EmptyState
             title="No jobs match your filters"
@@ -258,6 +307,11 @@ export const ProviderHomePage: React.FC = () => {
                     <span className="font-semibold text-primary">{formatJobBudget(job)}</span>
                     <span className="shrink-0">{postedAgo(job.publishedAt ?? job.createdAt)}</span>
                   </div>
+                  <div className="flex items-center gap-1">
+                    <span>
+                      {job.proposalCount} proposal{job.proposalCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
                   {job.location && (
                     <div className="flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -290,7 +344,8 @@ export const ProviderHomePage: React.FC = () => {
                   <DialogTitle>{selectedJob.title}</DialogTitle>
                   <DialogDescription>
                     {postedAgo(selectedJob.publishedAt ?? selectedJob.createdAt)} •{' '}
-                    {selectedJob.clientProfile.displayName}
+                    {selectedJob.clientProfile.displayName} • {selectedJob.proposalCount} proposal
+                    {selectedJob.proposalCount === 1 ? '' : 's'}
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -326,6 +381,70 @@ export const ProviderHomePage: React.FC = () => {
                       <CalendarClock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       <span className="font-semibold text-amber-700">
                         Due {formatDeadline(selectedJob)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Deliverables and full client identity — the two things the
+                    card doesn't have room for, so this overview earns its
+                    place between the card and the full detail page instead
+                    of just repeating the card at a larger size. */}
+                {selectedJob.deliverables.length > 0 && (
+                  <div>
+                    <span className="block text-[10px] text-ink-muted uppercase font-mono mb-1.5">
+                      Expected Deliverables
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedJob.deliverables.map((deliverable) => (
+                        <span
+                          key={deliverable}
+                          className="px-2.5 py-1 rounded-full bg-bg border border-border text-[11px] text-ink"
+                        >
+                          {deliverable}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 bg-bg border border-border rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-surface-subtle ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-ink shrink-0">
+                      {selectedJob.clientProfile.displayName.slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block font-bold text-ink truncate">
+                        {selectedJob.clientProfile.displayName}
+                      </span>
+                      <span className="block text-[10px] text-ink-muted truncate">
+                        {selectedJob.clientProfile.location ?? 'Location not stated'}
+                      </span>
+                    </div>
+                    {selectedJob.clientProfile.verifiedAt && (
+                      <span className="flex items-center gap-1 text-primary font-semibold text-[11px] shrink-0">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Verified
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Real hiring history — no spend or hourly-rate figures,
+                      since this app has no payment integration. */}
+                  {selectedClientStats.data && (
+                    <div className="pt-2 border-t border-border flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+                      <span>
+                        {selectedClientStats.data.jobsPosted} job
+                        {selectedClientStats.data.jobsPosted === 1 ? '' : 's'} posted
+                      </span>
+                      <span>
+                        {selectedClientStats.data.hireRate !== null
+                          ? `${Math.round(selectedClientStats.data.hireRate * 100)}% hire rate`
+                          : 'Not yet hired'}
+                      </span>
+                      <span>
+                        Since{' '}
+                        {memberSinceFormat.format(new Date(selectedClientStats.data.memberSince))}
                       </span>
                     </div>
                   )}

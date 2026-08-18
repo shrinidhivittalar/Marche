@@ -8,7 +8,6 @@ import {
   CheckCheck,
   Briefcase,
   Shield,
-  MoreVertical,
   Star,
   ArrowLeft,
 } from 'lucide-react';
@@ -231,16 +230,7 @@ export const MessagesPage: React.FC = () => {
             className={`${mobileView === 'chat' ? 'hidden' : 'flex'} md:flex md:col-span-5 lg:col-span-4 min-h-0 border-r border-border flex-col bg-bg/50`}
           >
             <div className="shrink-0 p-3.5 border-b border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-ink">Messages</h2>
-                <button
-                  type="button"
-                  title="More options"
-                  className="p-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-surface cursor-pointer"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-              </div>
+              <h2 className="text-base font-bold text-ink">Messages</h2>
 
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

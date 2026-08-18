@@ -39,6 +39,7 @@ function build() {
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn(),
     update: jest.fn(),
+    groupBy: jest.fn().mockResolvedValue([]),
   };
   const prisma = { client: { job } } as unknown as PrismaService;
   return { repository: new JobsRepository(prisma), job };
@@ -107,6 +108,22 @@ describe('JobsRepository', () => {
 
       const where = job.count.mock.calls[0][0].where as WhereLike;
       expect(visibilityClauseOf(where).status).toBe('PUBLISHED');
+    });
+  });
+
+  describe('countPostedByStatus', () => {
+    it('excludes DRAFT from the query and zero-fills every status', async () => {
+      const { repository, job } = build();
+      job.groupBy.mockResolvedValue([
+        { status: 'PUBLISHED', _count: 3 },
+        { status: 'FILLED', _count: 2 },
+      ]);
+
+      const result = await repository.countPostedByStatus('client_1');
+
+      const where = job.groupBy.mock.calls[0][0].where as WhereLike;
+      expect(where.status).toEqual({ not: 'DRAFT' });
+      expect(result).toEqual({ DRAFT: 0, PUBLISHED: 3, FILLED: 2, CANCELLED: 0 });
     });
   });
 

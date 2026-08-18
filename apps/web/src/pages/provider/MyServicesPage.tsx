@@ -11,6 +11,7 @@ import {
   SelectValue,
   TextField,
   Textarea,
+  Skeleton,
 } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
@@ -245,9 +246,23 @@ export const MyServicesPage: React.FC = () => {
       </Card>
 
       {services.loading && (
-        <Card className="p-8" data-testid="services-loading">
-          <p className="text-ink-muted">Loading your services…</p>
-        </Card>
+        <div className="space-y-3" data-testid="services-loading">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                  <Skeleton className="h-4 w-16 rounded-full" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-16" />
+                  <Skeleton className="h-8 w-16" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
 
       {services.error && (

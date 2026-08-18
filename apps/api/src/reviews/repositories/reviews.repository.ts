@@ -59,6 +59,23 @@ export class ReviewsRepository {
     });
   }
 
+  // Every review this user has written, newest first — the client-history
+  // panel's source. Unfiltered by visibility for the same reason
+  // listByProfile is: the sibling-exists half of "blind until both or the
+  // window elapses" needs a second query ReviewsService already knows how
+  // to run, so filtering happens there, not here.
+  listByReviewer(reviewerUserId: string) {
+    return this.prisma.client.review.findMany({
+      where: { reviewerUserId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        ...REVIEW_FIELDS,
+        connection: { select: { job: { select: { id: true, title: true } } } },
+        revieweeProfile: { select: { displayName: true } },
+      },
+    });
+  }
+
   // How many reviews exist per connection, for the connections given — the
   // sibling-exists half of "blind until both sides submit or the window
   // elapses". There are at most two per connection (one per party), so a

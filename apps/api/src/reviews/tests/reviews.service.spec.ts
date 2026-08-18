@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ReviewsService } from '../services/reviews.service';
 
 function build() {
@@ -7,6 +7,7 @@ function build() {
     findByConnectionAndReviewer: jest.fn().mockResolvedValue(null),
     listByConnection: jest.fn().mockResolvedValue([]),
     listByProfile: jest.fn().mockResolvedValue([]),
+    listByReviewer: jest.fn().mockResolvedValue([]),
     countByConnectionIds: jest.fn().mockResolvedValue(new Map()),
   };
   const connectionsService = {
@@ -14,6 +15,7 @@ function build() {
   };
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
+    findById: jest.fn().mockResolvedValue({ id: 'profile_client', userId: 'user_client' }),
   };
 
   const service = new ReviewsService(
@@ -208,6 +210,74 @@ describe('ReviewsService', () => {
       const stats = await service.statsForProfile('profile_target');
 
       expect(stats).toEqual({ averageRating: null, reviewCount: 0 });
+    });
+  });
+
+  describe('clientHistory', () => {
+    function reviewWrittenBy(daysAgo: number, overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        ...reviewAt(daysAgo, overrides),
+        reviewerUserId: 'user_client',
+        connection: { job: { id: 'job_1', title: 'Wedding photography' } },
+        revieweeProfile: { displayName: 'A Provider' },
+      };
+    }
+
+    it('404s for a profile that does not exist', async () => {
+      const { service, profilesRepository } = build();
+      profilesRepository.findById.mockResolvedValue(null);
+
+      await expect(service.clientHistory('missing')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('only includes visible reviews the client itself wrote', async () => {
+      const { service, reviewsRepository } = build();
+      reviewsRepository.listByReviewer.mockResolvedValue([reviewWrittenBy(15)]); // past the window
+      reviewsRepository.countByConnectionIds.mockResolvedValue(new Map([['connection_1', 1]]));
+
+      const history = await service.clientHistory('profile_client');
+
+      expect(reviewsRepository.listByReviewer).toHaveBeenCalledWith('user_client');
+      expect(history).toEqual([
+        {
+          jobId: 'job_1',
+          jobTitle: 'Wedding photography',
+          providerDisplayName: 'A Provider',
+          rating: 5,
+          comment: 'great',
+          createdAt: expect.any(Date),
+        },
+      ]);
+    });
+
+    it('hides a one-sided review inside the reveal window — same rule as listForProfile', async () => {
+      const { service, reviewsRepository } = build();
+      reviewsRepository.listByReviewer.mockResolvedValue([reviewWrittenBy(1)]); // 1 day old
+      reviewsRepository.countByConnectionIds.mockResolvedValue(new Map([['connection_1', 1]]));
+
+      const history = await service.clientHistory('profile_client');
+
+      expect(history).toHaveLength(0);
+    });
+
+    it('caps the result at the given limit', async () => {
+      const { service, reviewsRepository } = build();
+      reviewsRepository.listByReviewer.mockResolvedValue([
+        reviewWrittenBy(20, { connectionId: 'c1' }),
+        reviewWrittenBy(19, { connectionId: 'c2' }),
+        reviewWrittenBy(18, { connectionId: 'c3' }),
+      ]);
+      reviewsRepository.countByConnectionIds.mockResolvedValue(
+        new Map([
+          ['c1', 1],
+          ['c2', 1],
+          ['c3', 1],
+        ]),
+      );
+
+      const history = await service.clientHistory('profile_client', 2);
+
+      expect(history).toHaveLength(2);
     });
   });
 });

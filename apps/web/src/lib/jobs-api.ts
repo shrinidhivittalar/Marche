@@ -57,14 +57,13 @@ export interface ApiJob {
   publishedAt: string | null;
   cancelledAt?: string | null;
   /**
-   * How many proposals this requirement has received.
-   *
-   * Owner reads only — `/jobs/me` and `/jobs/me/:id`. Absent on the public
-   * routes, because it is the client's own count of who replied and no part
-   * of discovery needs it. Counted per request rather than stored, so it
-   * cannot drift the way a cached column would.
+   * How many proposals this requirement has received. Public — a provider
+   * deciding whether to bid benefits from knowing the competition, the same
+   * way Upwork shows a proposal range on every listing. Counted per
+   * request rather than stored, so it cannot drift the way a cached column
+   * would.
    */
-  proposalCount?: number;
+  proposalCount: number;
   createdAt: string;
   category: { id: string; name: string; slug: string };
   clientProfile: {
@@ -116,6 +115,14 @@ export interface JobBody {
   deliverables?: string[];
 }
 
+/** "About the client" stats a provider sees before bidding — see JobsService.clientStats. */
+export interface ApiClientStats {
+  memberSince: string;
+  jobsPosted: number;
+  openJobs: number;
+  hireRate: number | null;
+}
+
 export const jobsApi = {
   // ---------- provider discovery (public) ----------
 
@@ -123,6 +130,9 @@ export const jobsApi = {
     apiFetch<JobsEnvelope<ApiJob>>(`/jobs${toQuery({ ...params })}`, null).then(normalisePage),
 
   byId: (id: string) => apiFetch<ApiJob>(`/jobs/${id}`, null),
+
+  clientStats: (clientProfileId: string) =>
+    apiFetch<ApiClientStats>(`/profiles/${clientProfileId}/client-stats`, null),
 
   // ---------- client ownership ----------
 

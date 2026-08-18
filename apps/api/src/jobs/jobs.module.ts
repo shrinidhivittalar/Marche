@@ -5,6 +5,7 @@ import { MediaModule } from '../media/media.module';
 import { AiModule } from '../ai/ai.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { JobsController } from './controllers/jobs.controller';
+import { ClientJobStatsController } from './controllers/client-job-stats.controller';
 import { JobsRepository } from './repositories/jobs.repository';
 import { JobsService } from './services/jobs.service';
 
@@ -19,7 +20,7 @@ import { JobsService } from './services/jobs.service';
 // the four writes acceptance makes land together.
 @Module({
   imports: [ProfilesModule, MarketplaceModule, MediaModule, AiModule, NotificationsModule],
-  controllers: [JobsController],
+  controllers: [JobsController, ClientJobStatsController],
   providers: [JobsRepository, JobsService],
   // JobsRepository is exported alongside it because Module 5 reads the Job
   // row directly to decide whether it is accepting proposals — the same

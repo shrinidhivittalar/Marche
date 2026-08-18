@@ -14,6 +14,8 @@ export {
 } from './components/Card';
 export type { CardProps } from './components/Card';
 
+export { Skeleton } from './components/Skeleton';
+
 export { Badge } from './components/Badge';
 export type { BadgeProps } from './components/Badge';
 

@@ -32,9 +32,16 @@ const SORT_ORDER: Record<JobSort, Prisma.JobOrderByWithRelationInput[]> = {
 };
 
 // What a client sees on their own requirement, and what a provider sees on
-// a published one. Identical for now: nothing on a Job is owner-only.
-// Declared once so the two read paths cannot drift apart, and so adding a
-// field means adding it in one place.
+// a published one. Declared once so the two read paths cannot drift apart,
+// and so adding a field means adding it in one place.
+//
+// The proposal count is counted, never stored — the schema comment above
+// JobStatus says why: a PROPOSAL_ACTIVITY column would have to be flipped on
+// every submission and unflipped on every withdrawal, and would be wrong the
+// first time either was missed. Public rather than owner-only, unlike when
+// this was first written: a provider deciding whether to bid benefits from
+// knowing how much competition there already is, the same way Upwork shows
+// a proposal range on every listing.
 const JOB_FIELDS = {
   id: true,
   title: true,
@@ -60,19 +67,13 @@ const JOB_FIELDS = {
       verifiedAt: true,
     },
   },
+  _count: { select: { proposals: true } },
 } satisfies Prisma.JobSelect;
 
 // What the owner sees on top of the shared fields.
-//
-// The proposal count is counted, never stored — the schema comment above
-// JobStatus says why: a PROPOSAL_ACTIVITY column would have to be flipped on
-// every submission and unflipped on every withdrawal, and would be wrong the
-// first time either was missed. Owner reads only: it is the client's own
-// count of who has replied, and no part of discovery needs it.
 const OWNER_JOB_FIELDS = {
   ...JOB_FIELDS,
   cancelledAt: true,
-  _count: { select: { proposals: true } },
 } satisfies Prisma.JobSelect;
 
 @Injectable()
@@ -108,6 +109,23 @@ export class JobsRepository {
 
   countByProfile(clientProfileId: string) {
     return this.prisma.client.job.count({ where: { clientProfileId, deletedAt: null } });
+  }
+
+  // For the public "About the client" stats — how many of this client's
+  // requirements ever went live, broken down by where each one ended up.
+  // DRAFT is excluded: a draft was never posted, so it says nothing about
+  // this client's hiring behaviour.
+  async countPostedByStatus(clientProfileId: string): Promise<Record<JobStatus, number>> {
+    const rows = await this.prisma.client.job.groupBy({
+      by: ['status'],
+      where: { clientProfileId, deletedAt: null, status: { not: 'DRAFT' } },
+      _count: true,
+    });
+    const counts = { DRAFT: 0, PUBLISHED: 0, FILLED: 0, CANCELLED: 0 } as Record<JobStatus, number>;
+    for (const row of rows) {
+      counts[row.status] = row._count;
+    }
+    return counts;
   }
 
   // ---------- public reads (visibility filter always applied) ----------

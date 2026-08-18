@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, Textarea } from '@marche/ui';
+import { Button, Card, Textarea, Skeleton } from '@marche/ui';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -78,7 +78,20 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   const [submittingDispute, setSubmittingDispute] = useState(false);
 
   if (connection.loading) {
-    return <p className="text-xs text-ink-muted py-12 text-center">Loading contract…</p>;
+    return (
+      <div className="max-w-4xl mx-auto space-y-6" data-testid="contract-loading">
+        <Card className="p-6 space-y-3">
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-4 w-1/3" />
+        </Card>
+        <Card className="p-6 space-y-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
+        </Card>
+      </div>
+    );
   }
 
   if (!connection.data) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, BadgeCheck, Heart, MapPin, Star } from 'lucide-react';
-import { Button, Card } from '@marche/ui';
+import { Button, Card, Skeleton } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { profilesApi, type ApiProfile } from '../../lib/marketplace-api';
@@ -92,9 +92,26 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
 
   if (profile.loading) {
     return (
-      <Card className="p-10 text-center" data-testid="public-profile-loading">
-        <p className="text-ink-muted">Loading profile…</p>
-      </Card>
+      <div className="space-y-6" data-testid="public-profile-loading">
+        <Card className="p-8 space-y-4">
+          <div className="flex items-start gap-4">
+            <Skeleton className="w-20 h-20 rounded-2xl shrink-0" />
+            <div className="space-y-2 flex-1 pt-1">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-40" />
+            </div>
+          </div>
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
+        </Card>
+        <Card className="p-8 space-y-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </Card>
+      </div>
     );
   }
 
