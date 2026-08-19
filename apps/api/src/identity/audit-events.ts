@@ -11,6 +11,11 @@ export const AUTH_EVENTS = {
   LOGIN_SUCCESS: 'auth.login.success',
   LOGIN_FAILURE: 'auth.login.failure',
   LOGOUT: 'auth.logout',
+  // A refresh token that was already rotated away got presented again.
+  // Rotation is single-use, so the only way this happens is a stolen token
+  // being replayed after the legitimate holder already moved on to its
+  // successor — the signal SECURITY_AUDIT.md finding 5 said was missing.
+  REFRESH_TOKEN_REUSE: 'auth.refresh_token.reuse',
   PASSWORD_RESET_REQUESTED: 'auth.password_reset.requested',
   PASSWORD_RESET_COMPLETED: 'auth.password_reset.completed',
   EMAIL_VERIFIED: 'auth.email_verified',

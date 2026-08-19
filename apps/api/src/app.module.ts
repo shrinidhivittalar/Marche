@@ -5,6 +5,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { stdSerializers } from 'pino';
 import { PrismaModule } from './prisma/prisma.module';
+import { ThrottlerStorageModule } from './throttler/throttler-storage.module';
+import { RedisThrottlerStorage } from './throttler/redis-throttler-storage';
 import { AuditModule } from './audit/audit.module';
 import { IdentityModule } from './identity/identity.module';
 import { ProfilesModule } from './profiles/profiles.module';
@@ -58,7 +60,20 @@ import { ReferralsModule } from './referrals/referrals.module';
     // Generous default for the whole API; auth-sensitive routes (login,
     // register, forgot-password, reset-password) set their own tighter
     // @Throttle() limit — see auth.controller.ts.
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
+    //
+    // Storage is Redis-backed (ThrottlerStorageModule), not the package
+    // default in-memory Map — that resets on every redeploy and is
+    // per-instance, so it doesn't actually limit anything once there is more
+    // than one API instance.
+    ThrottlerStorageModule,
+    ThrottlerModule.forRootAsync({
+      imports: [ThrottlerStorageModule],
+      inject: [RedisThrottlerStorage],
+      useFactory: (storage: RedisThrottlerStorage) => ({
+        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+        storage,
+      }),
+    }),
     PrismaModule,
     AuditModule,
     IdentityModule,

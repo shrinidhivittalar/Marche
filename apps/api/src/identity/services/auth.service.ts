@@ -211,6 +211,7 @@ export class AuthService {
     const refreshTokenHash = hashToken(rawRefreshToken);
     const session = await this.sessionsRepository.findActiveByRefreshTokenHash(refreshTokenHash);
     if (!session) {
+      await this.handlePossibleRefreshReuse(refreshTokenHash, context);
       throw new UnauthorizedException('Session expired or invalid');
     }
 
@@ -222,6 +223,27 @@ export class AuthService {
     // Rotate: the presented refresh token is single-use.
     await this.sessionsRepository.revoke(session.id);
     return this.issueSession(user, context);
+  }
+
+  // Rotation is single-use, so a hash that exists but is already revoked
+  // means someone is replaying a refresh token that was already exchanged
+  // for its successor — the legitimate holder has moved on. That only
+  // happens if the token was stolen. Kills every session for the account,
+  // the same precaution a password reset already takes, and leaves an audit
+  // trail so the theft is visible instead of silent.
+  private async handlePossibleRefreshReuse(
+    refreshTokenHash: string,
+    context: RequestContext,
+  ): Promise<void> {
+    const stale = await this.sessionsRepository.findByRefreshTokenHash(refreshTokenHash);
+    if (!stale?.revokedAt) return;
+
+    await this.sessionsRepository.revokeAllForUser(stale.userId);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.REFRESH_TOKEN_REUSE,
+      userId: stale.userId,
+      ...context,
+    });
   }
 
   async logout(rawRefreshToken: string): Promise<void> {

@@ -47,14 +47,10 @@ import { ContractDetailPage } from './pages/client/ContractDetailPage';
 import { YourHiresPage } from './pages/client/freelancers/YourHiresPage';
 import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
 import { ReferFreelancersPage } from './pages/client/freelancers/ReferFreelancersPage';
-import { WeeklySummaryPage } from './pages/client/finances/WeeklySummaryPage';
-import { TransactionsPage } from './pages/client/finances/TransactionsPage';
-import { BudgetsPage } from './pages/client/finances/BudgetsPage';
 
 import { ProviderHomePage } from './pages/provider/ProviderHomePage';
 import { SearchJobsPage } from './pages/provider/SearchJobsPage';
 import { MyWorkPage } from './pages/provider/MyWorkPage';
-import { FinancesPage } from './pages/provider/FinancesPage';
 import { ContractsPage } from './pages/provider/ContractsPage';
 import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
@@ -100,9 +96,27 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
       icon={CreditCard}
     />
   ),
-  '/client/finances/weekly-summary': () => <WeeklySummaryPage />,
-  '/client/finances/transactions': () => <TransactionsPage />,
-  '/client/finances/budgets': () => <BudgetsPage />,
+  '/client/finances/weekly-summary': () => (
+    <ComingSoonPage
+      title="Weekly summary"
+      description="Payment history, invoices, and transaction records will be available here soon."
+      icon={CreditCard}
+    />
+  ),
+  '/client/finances/transactions': () => (
+    <ComingSoonPage
+      title="Transactions"
+      description="Payment history, invoices, and transaction records will be available here soon."
+      icon={CreditCard}
+    />
+  ),
+  '/client/finances/budgets': () => (
+    <ComingSoonPage
+      title="Budgets"
+      description="Payment history, invoices, and transaction records will be available here soon."
+      icon={CreditCard}
+    />
+  ),
   '/client/work-diaries': () => (
     <ComingSoonPage
       title="Work Diaries"
@@ -115,7 +129,13 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/analytics': () => <MyWorkPage />,
   '/provider/profile': () => <EditProfilePage />,
   '/provider/services': () => <MyServicesPage />,
-  '/provider/finances': () => <FinancesPage />,
+  '/provider/finances': () => (
+    <ComingSoonPage
+      title="Finances"
+      description="Payment history, invoices, and transaction records will be available here soon."
+      icon={CreditCard}
+    />
+  ),
   '/provider/contracts': () => <ContractsPage />,
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,

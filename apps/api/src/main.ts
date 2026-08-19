@@ -16,6 +16,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
+  // Without this, Nest never calls onModuleDestroy on SIGTERM/SIGINT, so
+  // PrismaService.onModuleDestroy() (which disconnects the pool) never runs
+  // and connections leak on every redeploy.
+  app.enableShutdownHooks();
+
   // Trust exactly one hop (the immediate reverse proxy — Render/Railway/
   // nginx/Cloudflare in front of this service) so req.ip resolves to the
   // real client address instead of the proxy's. Needed for per-client

@@ -1,4 +1,4 @@
-import { DEFAULT_AUTH_RATE_LIMIT, resolveAuthRateLimit } from '../controllers/auth.controller';
+import { DEFAULT_AUTH_RATE_LIMIT, resolveAuthRateLimit } from '../auth-rate-limit';
 
 // AUTH_RATE_LIMIT is set by hand on the hosting dashboard and by the e2e
 // config. The dangerous case is not a wrong number but an unusable one: it

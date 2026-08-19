@@ -3,6 +3,7 @@ import { ConflictException } from '@nestjs/common';
 import { AppModule } from '../../app.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProposalsService } from '../services/proposals.service';
+import { RedisThrottlerStorage } from '../../throttler/redis-throttler-storage';
 
 /**
  * The one test in this module that a mock cannot stand in for.
@@ -49,7 +50,21 @@ describe('proposal acceptance under concurrency', () => {
   let categoryId: string;
 
   beforeAll(async () => {
-    moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      // This suite calls services directly and never sends an HTTP request,
+      // so the throttler guard never runs — overridden only so module
+      // compilation doesn't need a real Redis connection (see .env's
+      // REDIS_URL placeholder and apps/api/src/throttler).
+      .overrideProvider(RedisThrottlerStorage)
+      .useValue({
+        increment: async () => ({
+          totalHits: 0,
+          timeToExpire: 0,
+          isBlocked: false,
+          timeToBlockExpire: 0,
+        }),
+      })
+      .compile();
     prisma = moduleRef.get(PrismaService);
     proposals = moduleRef.get(ProposalsService);
 

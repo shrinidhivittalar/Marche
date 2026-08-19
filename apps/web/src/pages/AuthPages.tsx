@@ -577,6 +577,9 @@ export const AuthVerifyEmailPage: React.FC = () => {
   useEffect(() => {
     const token = tokenFromUrl();
     if (!token) return; // already reflected in the initial state above
+    // SECURITY_AUDIT.md finding 4: don't let the token linger in the
+    // visible URL/browser history once it's been read into memory.
+    window.history.replaceState({}, '', window.location.pathname);
     verifyEmailToken(token)
       .then(() => setStatus('success'))
       .catch((err) => {
@@ -633,13 +636,24 @@ export const AuthVerifyEmailPage: React.FC = () => {
 
 export const AuthResetPasswordPage: React.FC = () => {
   const { navigate, submitPasswordReset } = useApp();
-  const token = tokenFromUrl();
+  // Captured once rather than re-read on every render — the URL is about to
+  // be stripped of the token below, and re-reading after that would make
+  // the page flip to "invalid link" the moment anything else re-renders it.
+  const [token] = useState(tokenFromUrl);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // SECURITY_AUDIT.md finding 4: the token rides in the URL, which lands in
+  // browser history. It can't be avoided on first load — the link comes by
+  // email — but there is no reason it should linger there once React has
+  // it in memory, so drop it from the visible URL right after mount.
+  useEffect(() => {
+    if (token) window.history.replaceState({}, '', window.location.pathname);
+  }, [token]);
 
   if (!token) {
     return (
