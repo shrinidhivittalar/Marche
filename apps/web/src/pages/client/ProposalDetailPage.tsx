@@ -1,21 +1,31 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Paperclip, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, Paperclip, ShieldCheck, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
-import { proposalsApi, type ApiProposal } from '../../lib/proposals-api';
+import {
+  connectionsApi,
+  proposalsApi,
+  type ApiConnection,
+  type ApiProposal,
+} from '../../lib/proposals-api';
+import { paymentsApi } from '../../lib/payments-api';
+import { loadRazorpayCheckout } from '../../lib/loadRazorpayCheckout';
 import { ApiError } from '../../lib/api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 
 // One proposal, as the client who received it sees it, on the real API.
 //
-// The hire flow changed shape with the rewire. It used to create a mock
-// contract and route to a contract page; accepting now establishes a
-// Connection and nothing more, because Contracts is a later module. Saying
-// so is better than routing to a page that would invent one.
+// Accepting establishes a Connection and — now that Payments is a real
+// module rather than a later one — immediately offers to pay the agreed
+// amount, matching the event-industry norm of paying at booking (see
+// schema.prisma's comment on the Payment model). This replaced the "not
+// part of Marché yet" notice that used to sit where the payment prompt is
+// now: routing to a fabricated payment flow would have been worse than
+// saying nothing, but a real one is neither.
 //
 // Accepting also rejects every competing proposal and fills the requirement,
 // in one transaction — so the confirmation says that plainly rather than
@@ -26,7 +36,7 @@ interface ProposalDetailPageProps {
 }
 
 export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) => {
-  const { navigate, goBack, accessToken } = useApp();
+  const { navigate, goBack, accessToken, currentUser } = useApp();
   const token = accessToken as string;
 
   const proposal = useApiResource(() => proposalsApi.byId<ApiProposal>(token, id), [id, token], {
@@ -39,7 +49,30 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   const [confirmingHire, setConfirmingHire] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hired, setHired] = useState(false);
+  // Set immediately by handleAccept, for the same-session no-round-trip
+  // case. On a fresh page load (a refresh, or navigating back in later) this
+  // is null and myConnections below is what finds the connection instead —
+  // without it, the payment prompt only ever showed up in the same session
+  // hiring happened in, and reappeared as if unpaid was never offered on any
+  // later visit.
+  const [justAcceptedConnection, setJustAcceptedConnection] = useState<ApiConnection | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Only runs once the proposal is already accepted — an open or declined
+  // proposal has no connection to find.
+  const myConnections = useApiResource(() => connectionsApi.mine(token, 1, 50), [token], {
+    enabled: Boolean(token) && proposal.data?.status === 'ACCEPTED',
+  });
+  const connection: ApiConnection | null =
+    justAcceptedConnection ?? myConnections.data?.items.find((c) => c.proposal.id === id) ?? null;
+
+  const paymentStatus = useApiResource(
+    () => paymentsApi.status(token, connection!.id),
+    [token, connection?.id],
+    { enabled: Boolean(token) && Boolean(connection) },
+  );
+  const paid = paymentStatus.data?.status === 'PAID';
 
   if (proposal.loading) {
     return <p className="text-xs text-ink-muted py-12 text-center">Loading proposal…</p>;
@@ -72,8 +105,8 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     setBusy(true);
     setError(null);
     try {
-      await proposalsApi.accept(token, offer.id);
-      setHired(true);
+      const newConnection = await proposalsApi.accept(token, offer.id);
+      setJustAcceptedConnection(newConnection);
       setConfirmingHire(false);
       await proposal.refetch();
     } catch (err) {
@@ -84,6 +117,48 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       setConfirmingHire(false);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handlePay = async () => {
+    if (!connection) return;
+    setPaying(true);
+    setPaymentError(null);
+    try {
+      await loadRazorpayCheckout();
+      const order = await paymentsApi.createOrder(token, connection.id);
+
+      if (!window.Razorpay) {
+        throw new Error('Payment checkout failed to load.');
+      }
+      new window.Razorpay({
+        key: order.razorpayKeyId,
+        amount: order.amountPaise,
+        currency: order.currency,
+        order_id: order.razorpayOrderId,
+        name: 'Marché',
+        description: `Booking: ${connection.job.title}`,
+        prefill: { name: currentUser.name },
+        theme: { color: '#166534' },
+        handler: async (response) => {
+          try {
+            await paymentsApi.verify(token, connection.id, {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            await paymentStatus.refetch();
+          } catch (err) {
+            setPaymentError(message(err));
+          } finally {
+            setPaying(false);
+          }
+        },
+        modal: { ondismiss: () => setPaying(false) },
+      }).open();
+    } catch (err) {
+      setPaymentError(message(err));
+      setPaying(false);
     }
   };
 
@@ -124,7 +199,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
         <ProposalStatusBadge status={offer.status} />
       </div>
 
-      {(hired || offer.status === 'ACCEPTED') && (
+      {(connection || offer.status === 'ACCEPTED') && (
         <Card className="p-5 border-emerald-300 bg-emerald-50 space-y-1">
           <p className="text-xs font-semibold text-emerald-900 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
@@ -134,6 +209,33 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
             The requirement is now filled, every other proposal on it has been declined, and you are
             connected to this provider.
           </p>
+        </Card>
+      )}
+
+      {connection && !paymentStatus.loading && (
+        <Card className="p-6 space-y-3" data-testid="payment-card">
+          {paid ? (
+            <p className="text-xs font-semibold text-emerald-700 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              Payment received — {formatOffer(offer)} paid for this booking.
+            </p>
+          ) : (
+            <>
+              <div>
+                <h2 className="text-sm font-bold text-ink">Pay for this booking</h2>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  {formatOffer(offer)} to {provider.displayName}, matching the amount you just
+                  agreed to.
+                </p>
+              </div>
+              {paymentError && (
+                <p className="text-xs font-semibold text-destructive">{paymentError}</p>
+              )}
+              <Button icon={CreditCard} onClick={handlePay} disabled={paying} data-testid="pay-now">
+                {paying ? 'Opening checkout…' : `Pay ${formatOffer(offer)} now`}
+              </Button>
+            </>
+          )}
         </Card>
       )}
 
@@ -248,8 +350,8 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
           <div className="p-3.5 bg-bg border border-border rounded-xl flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <p className="text-[11px] leading-relaxed">
-              Payments and contracts are not part of Marché yet — hiring connects you to the
-              provider so you can agree the details directly.
+              You'll be asked to pay {formatOffer(offer)} right after confirming, to secure the
+              booking.
             </p>
           </div>
           <div className="flex items-center gap-3 pt-2">
