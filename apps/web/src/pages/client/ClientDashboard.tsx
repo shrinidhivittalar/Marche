@@ -17,6 +17,7 @@ import {
   isApiProfileComplete,
 } from '../../lib/profileCompleteness';
 import { useApiResource } from '../../hooks/useApiResource';
+import { ComingSoonOverlay } from '../../components/common/ComingSoonOverlay';
 import { profilesApi } from '../../lib/marketplace-api';
 import { jobsApi, type JobStatus } from '../../lib/jobs-api';
 import { connectionsApi } from '../../lib/proposals-api';
@@ -189,7 +190,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         </div>
 
         {jobsTab === 'contracts' ? (
-          <>
+          // Real connection data, but the contracts workspace itself isn't
+          // built yet — same Coming Soon treatment as the provider side
+          // rather than shipping a half-finished experience.
+          <ComingSoonOverlay description="A dedicated contracts workspace is coming soon. In the meantime, your hires are tracked as connections.">
             {/* Search, Filters, Sort */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <div className="relative flex-1">
@@ -303,7 +307,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                 ))}
               </div>
             )}
-          </>
+          </ComingSoonOverlay>
         ) : (
           // The client requirement list, on the real Jobs API. The mock block
           // that stood here is replaced rather than kept alongside it: two
