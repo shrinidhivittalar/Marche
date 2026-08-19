@@ -1,7 +1,8 @@
 // Client for Direct Contracts. Its own file rather than folded into
 // proposals-api.ts or jobs-api.ts — it's a client-only write with a
 // distinct shape (provider + terms in one call), even though what it
-// produces underneath is an ordinary Connection.
+// produces underneath is an ordinary Proposal, pending the named
+// provider's own accept/decline.
 import { apiFetch } from './api-fetch';
 import type { ApiConnection } from './proposals-api';
 
@@ -17,9 +18,18 @@ export interface CreateDirectContractBody {
 }
 
 export const directContractsApi = {
+  /** Sends the offer. Nothing is binding until the provider accepts it below. */
   create: (token: string, body: CreateDirectContractBody) =>
-    apiFetch<ApiConnection>('/direct-contracts', token, {
+    apiFetch<{ id: string }>('/direct-contracts', token, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  /** Provider-only. Returns the resulting connection. */
+  accept: (token: string, proposalId: string) =>
+    apiFetch<ApiConnection>(`/direct-contracts/${proposalId}/accept`, token, { method: 'POST' }),
+
+  /** Provider-only. */
+  decline: (token: string, proposalId: string) =>
+    apiFetch<void>(`/direct-contracts/${proposalId}/decline`, token, { method: 'POST' }),
 };

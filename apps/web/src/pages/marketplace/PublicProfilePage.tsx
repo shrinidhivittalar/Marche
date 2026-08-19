@@ -37,7 +37,7 @@ interface PublicProfile extends ApiProfile {
 }
 
 export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
-  const { accessToken, currentUser, goBack, navigate, authLoading } = useApp();
+  const { accessToken, currentUser, goBack, authLoading } = useApp();
   const token = accessToken as string;
 
   // /profiles/:id requires a session; /u/:username is public. The id route
@@ -107,6 +107,10 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   const [hireDeliveryDays, setHireDeliveryDays] = useState('');
   const [hireError, setHireError] = useState<string | null>(null);
   const [hiring, setHiring] = useState(false);
+  // The offer is pending until the provider accepts it (see
+  // direct-contracts-api.ts) — there is no connection to send them to yet,
+  // so this replaces the form with a confirmation instead of navigating.
+  const [hireSent, setHireSent] = useState(false);
 
   const handleCreateDirectContract = async () => {
     setHireError(null);
@@ -135,7 +139,7 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
 
     setHiring(true);
     try {
-      const connection = await directContractsApi.create(token, {
+      await directContractsApi.create(token, {
         providerProfileId: id,
         categoryId: hireCategoryId,
         title: hireTitle.trim(),
@@ -143,10 +147,9 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
         price,
         deliveryDays,
       });
-      setHireModalOpen(false);
-      navigate(`/contracts/${connection.id}`);
+      setHireSent(true);
     } catch (err) {
-      setHireError(err instanceof ApiError ? err.message : 'Unable to create the contract.');
+      setHireError(err instanceof ApiError ? err.message : 'Unable to send the offer.');
     } finally {
       setHiring(false);
     }
@@ -230,7 +233,11 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
               variant="primary"
               size="sm"
               icon={Handshake}
-              onClick={() => setHireModalOpen(true)}
+              onClick={() => {
+                setHireSent(false);
+                setHireError(null);
+                setHireModalOpen(true);
+              }}
               data-testid="hire-directly"
             >
               Hire directly
@@ -255,81 +262,94 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
         isOpen={hireModalOpen}
         onClose={() => setHireModalOpen(false)}
         title={`Hire ${p.displayName} directly`}
-        description="Skips the public job posting — this creates a booking with just this provider, at the terms you set."
+        description={
+          hireSent
+            ? undefined
+            : `Skips the public job posting — sends ${p.displayName} an offer at the terms you set. Nothing is booked until they accept it.`
+        }
         maxWidth="lg"
       >
-        <div className="space-y-4 pt-2">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Select value={hireCategoryId} onValueChange={setHireCategoryId}>
-                <SelectTrigger data-testid="direct-hire-category" aria-label="Category">
-                  <SelectValue placeholder="Choose a category…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leafCategories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.parentName} › {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input
-              placeholder="Title"
-              value={hireTitle}
-              onChange={(e) => setHireTitle(e.target.value)}
-              data-testid="direct-hire-title"
-              aria-label="Title"
-              className="sm:col-span-2"
-            />
-          </div>
-          <Textarea
-            rows={4}
-            value={hireDescription}
-            onChange={(e) => setHireDescription(e.target.value)}
-            placeholder="What's this booking for?"
-            data-testid="direct-hire-description"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              type="number"
-              placeholder="Agreed price (₹)"
-              value={hirePrice}
-              onChange={(e) => setHirePrice(e.target.value)}
-              data-testid="direct-hire-price"
-              aria-label="Agreed price"
-            />
-            <Input
-              type="number"
-              placeholder="Delivery days"
-              value={hireDeliveryDays}
-              onChange={(e) => setHireDeliveryDays(e.target.value)}
-              data-testid="direct-hire-delivery"
-              aria-label="Delivery days"
-            />
-          </div>
-          {hireError && (
-            <p className="text-xs font-semibold text-destructive" data-testid="direct-hire-error">
-              {hireError}
+        {hireSent ? (
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-ink" data-testid="direct-hire-sent">
+              Offer sent to {p.displayName}. You'll be notified once they accept or decline it.
             </p>
-          )}
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              onClick={handleCreateDirectContract}
-              disabled={hiring}
-              data-testid="confirm-direct-hire"
-            >
-              {hiring ? 'Creating…' : 'Create contract'}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setHireModalOpen(false)}
-              className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
-            >
-              Cancel
-            </button>
+            <Button onClick={() => setHireModalOpen(false)}>Done</Button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Select value={hireCategoryId} onValueChange={setHireCategoryId}>
+                  <SelectTrigger data-testid="direct-hire-category" aria-label="Category">
+                    <SelectValue placeholder="Choose a category…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leafCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.parentName} › {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Input
+                placeholder="Title"
+                value={hireTitle}
+                onChange={(e) => setHireTitle(e.target.value)}
+                data-testid="direct-hire-title"
+                aria-label="Title"
+                className="sm:col-span-2"
+              />
+            </div>
+            <Textarea
+              rows={4}
+              value={hireDescription}
+              onChange={(e) => setHireDescription(e.target.value)}
+              placeholder="What's this booking for?"
+              data-testid="direct-hire-description"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                type="number"
+                placeholder="Agreed price (₹)"
+                value={hirePrice}
+                onChange={(e) => setHirePrice(e.target.value)}
+                data-testid="direct-hire-price"
+                aria-label="Agreed price"
+              />
+              <Input
+                type="number"
+                placeholder="Delivery days"
+                value={hireDeliveryDays}
+                onChange={(e) => setHireDeliveryDays(e.target.value)}
+                data-testid="direct-hire-delivery"
+                aria-label="Delivery days"
+              />
+            </div>
+            {hireError && (
+              <p className="text-xs font-semibold text-destructive" data-testid="direct-hire-error">
+                {hireError}
+              </p>
+            )}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                onClick={handleCreateDirectContract}
+                disabled={hiring}
+                data-testid="confirm-direct-hire"
+              >
+                {hiring ? 'Sending…' : 'Send offer'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setHireModalOpen(false)}
+                className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Card className="p-8 space-y-4">

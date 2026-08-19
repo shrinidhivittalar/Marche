@@ -32,6 +32,12 @@ import { ConnectionsService } from './services/connections.service';
   // scoped to the two parties on a Connection, and review eligibility is
   // COMPLETED + is a party + not already reviewed. This is where all of
   // that already lives.
-  exports: [ConnectionsService, ConnectionsRepository],
+  //
+  // ProposalsRepository is exported for DirectContractsModule, which needs
+  // its transitionFromSubmitted — a direct contract's offer is a real
+  // Proposal row (see DirectContractsService), so accepting or declining
+  // one is the same conditional-transition primitive Proposals already
+  // owns, not a duplicate.
+  exports: [ConnectionsService, ConnectionsRepository, ProposalsRepository],
 })
 export class ProposalsModule {}

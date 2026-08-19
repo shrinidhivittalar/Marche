@@ -1,7 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
+import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
+import { ProposalsRepository } from '../../proposals/repositories/proposals.repository';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
@@ -13,20 +21,33 @@ import type { CreateDirectContractDto } from '../dto/create-direct-contract.dto'
 
 // Reuses the same Job -> Proposal -> Connection pipeline the marketplace
 // hire flow does, per CLAUDE.md's "reuse before invent" — a direct contract
-// is a real Connection when it's done, so Payments/Reviews/Disputes/Work
+// is a real Connection once accepted, so Payments/Reviews/Disputes/Work
 // Diary all work on it unchanged. What's different is only how it's made:
-// no public listing, no competing proposals, one transaction instead of a
-// discover-then-propose-then-accept sequence.
+// no public listing, no competing proposals, and the client — not a
+// provider — authors the offer.
+//
+// The offer sits as a SUBMITTED Proposal on a DRAFT (never PUBLISHED,
+// already invisible to the marketplace via job-visibility.ts's isDirect
+// check) Job until the named provider accepts or declines it. A negative
+// security test found the earlier version skipped this entirely — it
+// created an ACTIVE Connection straight from the client's request, so a
+// provider could be bound into a paid or unpaid engagement they never
+// agreed to. This mirrors ProposalsService.accept()'s claim-then-transition
+// pattern, just triggered by the provider instead of the client, since here
+// the provider is the party whose consent is missing.
 @Injectable()
 export class DirectContractsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly profilesRepository: ProfilesRepository,
+    private readonly jobsRepository: JobsRepository,
     private readonly categoriesRepository: CategoriesRepository,
+    private readonly proposalsRepository: ProposalsRepository,
     private readonly connectionsRepository: ConnectionsRepository,
     private readonly notificationsService: NotificationsService,
   ) {}
 
+  /** Client only. Creates the offer; nothing is binding until the provider accepts it. */
   async create(clientUserId: string, dto: CreateDirectContractDto) {
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, clientUserId);
     assertClientRole(clientProfile.user.role);
@@ -45,12 +66,13 @@ export class DirectContractsService {
       throw new BadRequestException('Category not found');
     }
 
-    // One transaction: the job, its (already-accepted) proposal, and the
-    // connection all come into existence together or not at all — there is
-    // no moment where a direct-contract job exists without the proposal
-    // and connection that make it mean something, same invariant
-    // ProposalsService.accept holds for the marketplace path.
-    const connection = await this.prisma.client.$transaction(async (tx) => {
+    // The job and its proposal come into existence together or not at all —
+    // a proposal with no job behind it, or vice versa, is meaningless. Left
+    // as DRAFT: never published, never discoverable (job-visibility.ts
+    // excludes isDirect regardless of status anyway, but DRAFT also means
+    // ProposalsService.submit() refuses anyone else a proposal on it, since
+    // assertAcceptingProposals requires PUBLISHED).
+    const { job, proposal } = await this.prisma.client.$transaction(async (tx) => {
       const job = await tx.job.create({
         data: {
           clientProfileId: clientProfile.id,
@@ -63,10 +85,7 @@ export class DirectContractsService {
           budgetMax: dto.price,
           location: dto.location,
           eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
-          // Skips DRAFT/PUBLISHED entirely — never listed, never
-          // discoverable, so there is no open period for it to sit in.
-          status: 'FILLED',
-          publishedAt: new Date(),
+          status: 'DRAFT',
           isDirect: true,
         },
       });
@@ -75,29 +94,123 @@ export class DirectContractsService {
         data: {
           jobId: job.id,
           providerProfileId: providerProfile.id,
-          coverMessage: 'Direct contract, agreed outside the marketplace.',
+          coverMessage: 'Direct contract, offered outside the marketplace.',
           proposedPrice: dto.price,
           deliveryDays: dto.deliveryDays,
-          status: 'ACCEPTED',
+          status: 'SUBMITTED',
           submittedAt: new Date(),
-          acceptedAt: new Date(),
         },
       });
+
+      return { job, proposal };
+    });
+
+    await this.notificationsService.directContractOffered(providerProfile.userId, {
+      jobId: job.id,
+      proposalId: proposal.id,
+    });
+
+    return proposal;
+  }
+
+  /** Provider only — the named recipient of the offer. Creates the connection. */
+  async accept(providerUserId: string, proposalId: string) {
+    const { proposal, job, providerProfile } = await this.getOwnOffer(providerUserId, proposalId);
+
+    const connection = await this.prisma.client.$transaction(async (tx) => {
+      // Conditional UPDATE, same reasoning as ProposalsService.accept's
+      // claimFilled call: without it, two near-simultaneous accept requests
+      // (e.g. a doubled click) could both pass a read-then-write check and
+      // both try to create a Connection, tripping Connection.jobId's unique
+      // constraint instead of failing with a clear message.
+      const claimed = await this.jobsRepository.claimFilled(tx, job.id, ['DRAFT']);
+      if (claimed === 0) {
+        throw new ConflictException('This offer is no longer available');
+      }
+
+      const moved = await this.proposalsRepository.transitionFromSubmitted(
+        tx,
+        proposal.id,
+        'ACCEPTED',
+      );
+      if (moved === 0) {
+        throw new ConflictException('This offer is no longer available');
+      }
 
       return this.connectionsRepository.create(tx, {
         jobId: job.id,
         proposalId: proposal.id,
-        clientProfileId: clientProfile.id,
+        clientProfileId: job.clientProfileId,
         providerProfileId: providerProfile.id,
       });
     });
 
-    await this.notificationsService.connectionEstablished([clientUserId, providerProfile.userId], {
+    await this.notificationsService.directContractAccepted(job.clientProfileUserId, {
       connectionId: connection.id,
       jobId: connection.job.id,
       proposalId: connection.proposal.id,
     });
+    await this.notificationsService.connectionEstablished(
+      [job.clientProfileUserId, providerUserId],
+      {
+        connectionId: connection.id,
+        jobId: connection.job.id,
+        proposalId: connection.proposal.id,
+      },
+    );
 
     return connection;
+  }
+
+  /** Provider only. Declining leaves the job dead in DRAFT — it was never discoverable anyway. */
+  async decline(providerUserId: string, proposalId: string): Promise<void> {
+    const { proposal, job } = await this.getOwnOffer(providerUserId, proposalId);
+
+    const moved = await this.proposalsRepository.transitionFromSubmitted(
+      this.proposalsRepository.client,
+      proposal.id,
+      'REJECTED',
+    );
+    if (moved === 0) {
+      throw new ConflictException('This offer has already been decided');
+    }
+
+    await this.notificationsService.directContractDeclined(job.clientProfileUserId, {
+      jobId: job.id,
+      proposalId: proposal.id,
+    });
+  }
+
+  /**
+   * The provider-side ownership gate for accept/decline: the caller must be
+   * the specific provider the offer names, not merely any provider. 403
+   * rather than 404 for someone else's offer, matching
+   * ProposalsService.getOwnProposal.
+   */
+  private async getOwnOffer(providerUserId: string, proposalId: string) {
+    const providerProfile = await getOwnProfileOrThrow(this.profilesRepository, providerUserId);
+    const proposal = await this.proposalsRepository.findById(proposalId);
+    if (!proposal) {
+      throw new NotFoundException('Offer not found');
+    }
+    if (proposal.providerProfileId !== providerProfile.id) {
+      throw new ForbiddenException('You do not have access to this offer');
+    }
+
+    const job = await this.jobsRepository.findById(proposal.jobId);
+    if (!job || !job.isDirect) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    const clientUserId = await this.profilesRepository.findUserIdById(job.clientProfileId);
+    if (!clientUserId) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    return {
+      proposal,
+      job: { ...job, clientProfileUserId: clientUserId },
+      providerProfile,
+    };
   }
 }

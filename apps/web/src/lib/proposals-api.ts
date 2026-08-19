@@ -73,6 +73,8 @@ export interface ApiOwnProposal extends ProposalCore {
     eventEndTime: string | null;
     location: string | null;
     proposalDeadline: string | null;
+    /** True for a direct-contracts-api.ts offer — accepted/declined there, not via accept/reject below. */
+    isDirect: boolean;
     clientProfile: { id: string; username: string | null; displayName: string };
   };
 }

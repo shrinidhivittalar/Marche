@@ -66,6 +66,11 @@ const OWN_PROPOSAL_FIELDS = {
       eventEndTime: true,
       location: true,
       proposalDeadline: true,
+      // Lets the provider's proposal-detail screen tell a direct contract
+      // offer (DirectContractsService) apart from an ordinary proposal they
+      // submitted themselves — the two need different actions (accept/decline
+      // vs. withdraw) on what is otherwise the same Proposal row.
+      isDirect: true,
       clientProfile: { select: { id: true, username: true, displayName: true } },
     },
   },
