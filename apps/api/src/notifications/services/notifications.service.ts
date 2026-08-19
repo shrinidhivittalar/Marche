@@ -60,6 +60,48 @@ export class NotificationsService {
     });
   }
 
+  // Direct Contracts reuses the Proposal lifecycle (see DirectContractsService),
+  // just with the client as the offer's author instead of the provider — so
+  // these three reuse the same NotificationType values as the ordinary
+  // proposal flow, with copy written for who is actually being notified of
+  // what, rather than adding types that would mean the same thing.
+
+  async directContractOffered(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'PROPOSAL_SUBMITTED',
+      title: 'Direct contract offer',
+      message: 'A client wants to hire you directly. Review the offer and accept or decline it.',
+      data,
+    });
+  }
+
+  async directContractAccepted(
+    recipientUserId: string,
+    data: Prisma.InputJsonValue,
+  ): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'PROPOSAL_ACCEPTED',
+      title: 'Direct contract accepted',
+      message: 'The provider accepted your direct contract offer.',
+      data,
+    });
+  }
+
+  async directContractDeclined(
+    recipientUserId: string,
+    data: Prisma.InputJsonValue,
+  ): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'PROPOSAL_REJECTED',
+      title: 'Direct contract declined',
+      message: 'The provider declined your direct contract offer.',
+      data,
+    });
+  }
+
   async connectionEstablished(
     recipientUserIds: string[],
     data: Prisma.InputJsonValue,

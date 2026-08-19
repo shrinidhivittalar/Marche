@@ -39,7 +39,10 @@ services:
 
       # Backs rate limiting (see apps/api/src/throttler). Point this at a
       # Render Key Value instance so limits are shared across every API
-      # instance and survive redeploys — there is no in-memory fallback.
+      # instance and survive redeploys. Optional — unset falls back to a
+      # per-process in-memory store rather than failing to boot, but that
+      # fallback doesn't share or persist limits, so treat this as required
+      # in practice.
       - key: REDIS_URL
         sync: false
 

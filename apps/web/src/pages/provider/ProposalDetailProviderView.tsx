@@ -13,6 +13,7 @@ import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { proposalsApi, type ApiOwnProposal } from '../../lib/proposals-api';
+import { directContractsApi } from '../../lib/direct-contracts-api';
 import { mediaApi } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
@@ -133,6 +134,33 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
     }
   };
 
+  const handleAcceptOffer = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const connection = await directContractsApi.accept(token, mine.id);
+      navigate(`/contracts/${connection.id}`);
+    } catch (err) {
+      // A 409 here means the offer was withdrawn or already decided elsewhere.
+      setError(message(err));
+      setBusy(false);
+    }
+  };
+
+  const handleDeclineOffer = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await directContractsApi.decline(token, mine.id);
+      await proposal.refetch();
+      setConfirmingWithdraw(false);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <button
@@ -208,11 +236,13 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
       </Card>
 
       <Card className="p-8 space-y-6">
-        <h2 className="text-lg font-bold text-ink">What you offered</h2>
+        <h2 className="text-lg font-bold text-ink">
+          {mine.job.isDirect ? 'What the client offered' : 'What you offered'}
+        </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
           <div>
-            <p className="text-ink-muted">Your price</p>
+            <p className="text-ink-muted">{mine.job.isDirect ? 'Offered price' : 'Your price'}</p>
             <p className="font-mono font-bold text-ink text-base mt-0.5">{formatOffer(mine)}</p>
           </div>
           <div>
@@ -221,17 +251,21 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
           </div>
         </div>
 
-        <div>
-          <p className="text-xs text-ink-muted mb-1">Cover message</p>
-          <p className="text-xs text-ink leading-relaxed whitespace-pre-line">
-            {mine.coverMessage}
-          </p>
-        </div>
+        {!mine.job.isDirect && (
+          <div>
+            <p className="text-xs text-ink-muted mb-1">Cover message</p>
+            <p className="text-xs text-ink leading-relaxed whitespace-pre-line">
+              {mine.coverMessage}
+            </p>
+          </div>
+        )}
 
         {/* Stated plainly rather than left to be discovered by looking for an
             edit button that is not there. */}
         <p className="text-[11px] text-ink-muted">
-          A submitted proposal cannot be edited — the client decides on exactly what they read.
+          {mine.job.isDirect
+            ? 'This is a direct offer — decide below whether to accept or decline it.'
+            : 'A submitted proposal cannot be edited — the client decides on exactly what they read.'}
         </p>
       </Card>
 
@@ -318,7 +352,54 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
         </Card>
       )}
 
-      {open && (
+      {open && mine.job.isDirect && (
+        <Card className="p-8 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-ink">Accept or decline</h2>
+            <p className="text-xs text-ink-muted mt-1">
+              Accepting establishes the connection immediately at the price above. Declining is
+              final — the client would need to send a new offer.
+            </p>
+          </div>
+
+          {confirmingWithdraw ? (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="danger"
+                data-testid="confirm-decline-offer"
+                onClick={handleDeclineOffer}
+                disabled={busy}
+              >
+                {busy ? 'Declining…' : 'Yes, decline permanently'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setConfirmingWithdraw(false)}
+                className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
+              >
+                Go back
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Button data-testid="accept-offer" onClick={handleAcceptOffer} disabled={busy}>
+                {busy ? 'Accepting…' : 'Accept offer'}
+              </Button>
+              <Button
+                variant="outline"
+                icon={XCircle}
+                data-testid="decline-offer"
+                onClick={() => setConfirmingWithdraw(true)}
+                disabled={busy}
+              >
+                Decline
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {open && !mine.job.isDirect && (
         <Card className="p-8 space-y-4">
           <div>
             <h2 className="text-lg font-bold text-ink">Withdraw</h2>

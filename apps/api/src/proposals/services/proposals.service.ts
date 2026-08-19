@@ -485,6 +485,19 @@ export class ProposalsService {
       throw new ForbiddenException('You do not have access to this proposal');
     }
 
+    // A direct contract's "proposal" represents the client's own offer to a
+    // specific provider (DirectContractsService) — the client authored it,
+    // so accepting or rejecting it here would let them decide their own
+    // offer for the provider, skipping the consent the provider is supposed
+    // to give. That decision belongs to DirectContractsService.accept/decline
+    // instead, gated on the provider's ownership of the proposal, not the
+    // client's ownership of the job.
+    if (job.isDirect) {
+      throw new ForbiddenException(
+        'A direct contract offer is accepted or declined by the provider, not the client',
+      );
+    }
+
     return { proposal, job, profile };
   }
 

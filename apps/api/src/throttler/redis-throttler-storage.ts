@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { ThrottlerStorage } from '@nestjs/throttler';
 import Redis from 'ioredis';
 
@@ -49,12 +49,35 @@ end
 return { hits, hitsTtl, 0, 0 }
 `;
 
+interface MemoryEntry {
+  hits: number;
+  expiresAt: number;
+  blockedUntil: number;
+}
+
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy {
-  private readonly client: Redis;
+  private readonly logger = new Logger(RedisThrottlerStorage.name);
+  private readonly client: Redis | null;
 
-  constructor(redisUrl: string) {
-    this.client = new Redis(redisUrl);
+  // Per-process fallback, used only when REDIS_URL isn't set (see the
+  // warning below) — deliberately not the primary path. Limits kept here
+  // reset on every redeploy and are never shared across instances, which is
+  // the exact gap moving to Redis was meant to close. Kept as a documented
+  // last resort rather than a hard boot failure, so a deploy isn't blocked
+  // on provisioning Redis before the rest of the app can be verified.
+  private readonly memoryStore = new Map<string, MemoryEntry>();
+
+  constructor(redisUrl: string | undefined) {
+    if (redisUrl) {
+      this.client = new Redis(redisUrl);
+    } else {
+      this.client = null;
+      this.logger.warn(
+        'REDIS_URL is not set — rate limiting is falling back to per-process, in-memory storage. ' +
+          'Limits reset on every redeploy and are not shared across instances; see .env.example.',
+      );
+    }
   }
 
   async increment(
@@ -64,10 +87,22 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
     blockDuration: number,
     throttlerName: string,
   ): Promise<ThrottlerStorageRecord> {
+    return this.client
+      ? this.incrementRedis(key, ttl, limit, blockDuration, throttlerName)
+      : this.incrementMemory(key, ttl, limit, blockDuration, throttlerName);
+  }
+
+  private async incrementRedis(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): Promise<ThrottlerStorageRecord> {
     const hitsKey = `throttle:${throttlerName}:${key}`;
     const blockKey = `throttle-block:${throttlerName}:${key}`;
 
-    const [totalHits, timeToExpireMs, isBlocked, timeToBlockExpireMs] = (await this.client.eval(
+    const [totalHits, timeToExpireMs, isBlocked, timeToBlockExpireMs] = (await this.client!.eval(
       INCREMENT_SCRIPT,
       2,
       hitsKey,
@@ -85,7 +120,49 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
     };
   }
 
+  // Same semantics as the Lua script above, minus the cross-instance
+  // atomicity Redis provides — a single process's Map is inherently
+  // serialised per key already, so no lock is needed for that part.
+  private incrementMemory(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): ThrottlerStorageRecord {
+    const now = Date.now();
+    const storeKey = `${throttlerName}:${key}`;
+    const existing = this.memoryStore.get(storeKey);
+
+    if (existing && existing.blockedUntil > now) {
+      return {
+        totalHits: existing.hits,
+        timeToExpire: Math.ceil(Math.max(existing.expiresAt - now, 0) / 1000),
+        isBlocked: true,
+        timeToBlockExpire: Math.ceil((existing.blockedUntil - now) / 1000),
+      };
+    }
+
+    const entry: MemoryEntry =
+      existing && existing.expiresAt > now
+        ? existing
+        : { hits: 0, expiresAt: now + ttl, blockedUntil: 0 };
+
+    entry.hits += 1;
+    if (entry.hits > limit) {
+      entry.blockedUntil = now + blockDuration;
+    }
+    this.memoryStore.set(storeKey, entry);
+
+    return {
+      totalHits: entry.hits,
+      timeToExpire: Math.ceil(Math.max(entry.expiresAt - now, 0) / 1000),
+      isBlocked: entry.blockedUntil > now,
+      timeToBlockExpire: entry.blockedUntil > now ? Math.ceil(blockDuration / 1000) : 0,
+    };
+  }
+
   async onModuleDestroy() {
-    this.client.disconnect();
+    this.client?.disconnect();
   }
 }
