@@ -186,6 +186,9 @@ describe('AuthService', () => {
         expect.any(String),
       );
       expect(result).toEqual({ status: 'verification_email_sent' });
+      // Not yet — the address isn't proven to belong to whoever registered
+      // it until they verify it (see the verifyEmail describe block below).
+      expect(referralsService.handleUserJoined).not.toHaveBeenCalled();
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: 'auth.register', userId: created.id }),
       );
@@ -559,11 +562,27 @@ describe('AuthService', () => {
         expiresAt: new Date(Date.now() + 1000 * 60),
         createdAt: new Date(),
       });
+      usersRepository.markEmailVerified.mockResolvedValue(buildUser({ email: 'jane@example.com' }));
 
       await authService.verifyEmail('raw-token');
 
       expect(usersRepository.markEmailVerified).toHaveBeenCalledWith('user_1');
       expect(verificationTokensRepository.deleteById).toHaveBeenCalledWith('verification_1');
+    });
+
+    it('marks the referral joined once the address is actually verified', async () => {
+      verificationTokensRepository.findByTokenHash.mockResolvedValue({
+        id: 'verification_1',
+        userId: 'user_1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000 * 60),
+        createdAt: new Date(),
+      });
+      usersRepository.markEmailVerified.mockResolvedValue(buildUser({ email: 'jane@example.com' }));
+
+      await authService.verifyEmail('raw-token');
+
+      expect(referralsService.handleUserJoined).toHaveBeenCalledWith('jane@example.com');
     });
   });
 });

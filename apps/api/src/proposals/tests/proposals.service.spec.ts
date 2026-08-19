@@ -503,6 +503,15 @@ describe('ProposalsService', () => {
       expect(proposals.transitionFromSubmitted).not.toHaveBeenCalled();
     });
 
+    it('refuses to withdraw a direct contract offer — that goes through DirectContractsService.decline', async () => {
+      const { service, proposals } = build({ job: { isDirect: true } });
+
+      await expect(service.withdraw('user_1', 'proposal_1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(proposals.transitionFromSubmitted).not.toHaveBeenCalled();
+    });
+
     it('notifies the client who owns the requirement, not the withdrawing provider', async () => {
       const { service, notificationsService } = build();
 

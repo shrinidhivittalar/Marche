@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   MessageSquare,
   Search,
@@ -144,6 +144,21 @@ export const MessagesPage: React.FC = () => {
     setMobileView('chat');
     void messagesApi.markRead(token, convId).then(() => previews.refetch());
   };
+
+  // `activeConv` falls back to conversations[0] below so the chat panel
+  // isn't empty on first load — but that fallback only affects what's
+  // rendered, not `activeConvId` (deliberately left unset; the fallback
+  // already handles highlighting it as active). Without this, the first
+  // conversation displays as open while staying genuinely unread
+  // server-side, since markRead otherwise only runs from
+  // openConversation's explicit click handler.
+  useEffect(() => {
+    const firstConvId = conversations[0]?.id;
+    if (!activeConvId && firstConvId) {
+      void messagesApi.markRead(token, firstConvId).then(() => previews.refetch());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvId, conversations[0]?.id]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

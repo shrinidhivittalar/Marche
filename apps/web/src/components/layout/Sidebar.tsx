@@ -228,7 +228,11 @@ export const Sidebar: React.FC = () => {
                 {!collapsed && item.badge && item.badge > 0 ? (
                   <span
                     data-testid={
-                      item.label === 'Notifications' ? 'notifications-unread-badge' : undefined
+                      item.label === 'Notifications'
+                        ? 'notifications-unread-badge'
+                        : item.label === 'Messages'
+                          ? 'messages-unread-badge'
+                          : undefined
                     }
                     className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground"
                   >
