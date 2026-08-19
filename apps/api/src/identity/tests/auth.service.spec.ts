@@ -53,6 +53,7 @@ describe('AuthService', () => {
     sessionsRepository = {
       create: jest.fn(),
       findActiveByRefreshTokenHash: jest.fn(),
+      findByRefreshTokenHash: jest.fn(),
       revoke: jest.fn(),
       revokeAllForUser: jest.fn(),
     } as unknown as jest.Mocked<SessionsRepository>;
@@ -373,9 +374,27 @@ describe('AuthService', () => {
 
     it('rejects a token with no matching active session', async () => {
       sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(null);
+      sessionsRepository.findByRefreshTokenHash.mockResolvedValue(null);
 
       await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
         UnauthorizedException,
+      );
+      expect(sessionsRepository.revokeAllForUser).not.toHaveBeenCalled();
+    });
+
+    it('kills every session for the account when a rotated-away token is replayed', async () => {
+      sessionsRepository.findActiveByRefreshTokenHash.mockResolvedValue(null);
+      sessionsRepository.findByRefreshTokenHash.mockResolvedValue({
+        ...activeSession,
+        revokedAt: new Date(),
+      });
+
+      await expect(authService.refresh('raw-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(sessionsRepository.revokeAllForUser).toHaveBeenCalledWith('user_1');
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.refresh_token.reuse', userId: 'user_1' }),
       );
     });
 

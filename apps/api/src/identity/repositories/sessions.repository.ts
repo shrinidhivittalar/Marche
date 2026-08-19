@@ -22,6 +22,14 @@ export class SessionsRepository {
     });
   }
 
+  // Unlike findActiveByRefreshTokenHash, this ignores revokedAt/expiresAt —
+  // it exists so refresh() can tell "this hash was never issued" apart from
+  // "this hash was issued and already rotated away", which is the reuse
+  // signal.
+  findByRefreshTokenHash(refreshTokenHash: string): Promise<Session | null> {
+    return this.prisma.client.session.findUnique({ where: { refreshTokenHash } });
+  }
+
   revoke(sessionId: string): Promise<Session> {
     return this.prisma.client.session.update({
       where: { id: sessionId },
