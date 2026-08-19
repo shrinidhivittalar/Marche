@@ -6,6 +6,7 @@ import {
   CreditCard,
   FileCheck,
   Gavel,
+  NotebookPen,
   Printer,
   ShieldCheck,
   Star,
@@ -22,6 +23,7 @@ import { connectionsApi } from '../../lib/proposals-api';
 import { reviewsApi } from '../../lib/reviews-api';
 import { disputesApi } from '../../lib/disputes-api';
 import { paymentsApi } from '../../lib/payments-api';
+import { workDiaryApi } from '../../lib/work-diary-api';
 import { loadRazorpayCheckout } from '../../lib/loadRazorpayCheckout';
 import { ApiError } from '../../lib/api';
 
@@ -68,6 +70,10 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     enabled: Boolean(token),
   });
 
+  const workDiary = useApiResource(() => workDiaryApi.forConnection(token, id), [token, id], {
+    enabled: Boolean(token),
+  });
+
   const paymentStatus = useApiResource(() => paymentsApi.status(token, id), [token, id], {
     enabled: Boolean(token),
   });
@@ -90,6 +96,9 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   const [disputeEvidence, setDisputeEvidence] = useState('');
   const [disputeError, setDisputeError] = useState<string | null>(null);
   const [submittingDispute, setSubmittingDispute] = useState(false);
+  const [diaryNote, setDiaryNote] = useState('');
+  const [diaryError, setDiaryError] = useState<string | null>(null);
+  const [submittingDiary, setSubmittingDiary] = useState(false);
 
   if (connection.loading) {
     return (
@@ -218,6 +227,24 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
       setDisputeError(error instanceof ApiError ? error.message : 'Unable to raise dispute.');
     } finally {
       setSubmittingDispute(false);
+    }
+  };
+
+  const handleAddDiaryEntry = async () => {
+    if (diaryNote.trim().length < 3) {
+      setDiaryError('Add a short note before posting.');
+      return;
+    }
+    setSubmittingDiary(true);
+    setDiaryError(null);
+    try {
+      await workDiaryApi.addEntry(token, id, diaryNote.trim());
+      await workDiary.refetch();
+      setDiaryNote('');
+    } catch (error) {
+      setDiaryError(error instanceof ApiError ? error.message : 'Unable to post the update.');
+    } finally {
+      setSubmittingDiary(false);
     }
   };
 
@@ -541,6 +568,70 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             ))}
           </div>
         )}
+      </Card>
+
+      {/* Work Diary */}
+      <Card className="p-8 space-y-4" data-testid="work-diary-card">
+        <div>
+          <h3 className="text-base font-bold text-ink flex items-center gap-2">
+            <NotebookPen className="w-4 h-4" />
+            Work diary
+          </h3>
+          <p className="text-[11px] text-ink-muted mt-0.5">
+            Dated updates either of you post about this booking.
+          </p>
+        </div>
+
+        {workDiary.loading ? (
+          <p className="text-xs text-ink-muted">Loading…</p>
+        ) : workDiary.data && workDiary.data.length > 0 ? (
+          <div className="space-y-3" data-testid="work-diary-entries">
+            {workDiary.data.map((entry) => (
+              <div
+                key={entry.id}
+                className="p-3 rounded-xl border border-border bg-bg text-xs space-y-1"
+                data-testid="work-diary-entry"
+              >
+                <p className="text-ink leading-relaxed">{entry.note}</p>
+                <p className="text-[11px] text-ink-muted">
+                  {entry.authorUserId === currentUser.id ? 'You' : otherParty.displayName} ·{' '}
+                  {formatDate(entry.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-ink-muted">No updates posted yet.</p>
+        )}
+
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Textarea
+            rows={2}
+            value={diaryNote}
+            onChange={(event) => {
+              setDiaryNote(event.target.value);
+              setDiaryError(null);
+            }}
+            placeholder="Post an update — what happened, what's next..."
+            data-testid="work-diary-input"
+          />
+          {diaryError && (
+            <p className="text-xs font-medium text-red-600" data-testid="work-diary-error">
+              {diaryError}
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              icon={NotebookPen}
+              onClick={handleAddDiaryEntry}
+              disabled={submittingDiary}
+              data-testid="post-work-diary-entry"
+            >
+              {submittingDiary ? 'Posting…' : 'Post update'}
+            </Button>
+          </div>
+        </div>
       </Card>
 
       <Modal
