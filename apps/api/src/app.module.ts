@@ -21,6 +21,7 @@ import { DisputesModule } from './disputes/disputes.module';
 import { SavedProvidersModule } from './saved-providers/saved-providers.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { PaymentsModule } from './payments/payments.module';
+import { DirectContractsModule } from './direct-contracts/direct-contracts.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { PaymentsModule } from './payments/payments.module';
     SavedProvidersModule,
     ReferralsModule,
     PaymentsModule,
+    DirectContractsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
