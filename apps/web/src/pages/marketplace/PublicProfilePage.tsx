@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
-import { ArrowLeft, BadgeCheck, Heart, MapPin, Star } from 'lucide-react';
-import { Button, Card, Skeleton } from '@marche/ui';
+import { ArrowLeft, BadgeCheck, Handshake, Heart, MapPin, Star } from 'lucide-react';
+import {
+  Button,
+  Card,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Skeleton,
+  Textarea,
+} from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
-import { profilesApi, type ApiProfile } from '../../lib/marketplace-api';
+import { Modal } from '../../components/common/Modal';
+import { marketplaceApi, profilesApi, type ApiProfile } from '../../lib/marketplace-api';
 import { reviewsApi } from '../../lib/reviews-api';
 import { savedProvidersApi } from '../../lib/saved-providers-api';
+import { directContractsApi } from '../../lib/direct-contracts-api';
+import { ApiError } from '../../lib/api';
 
 // The page a client lands on after finding someone in the marketplace, and
 // the destination of the whole discovery journey. It previously rendered
@@ -23,7 +37,7 @@ interface PublicProfile extends ApiProfile {
 }
 
 export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
-  const { accessToken, currentUser, goBack, authLoading } = useApp();
+  const { accessToken, currentUser, goBack, navigate, authLoading } = useApp();
   const token = accessToken as string;
 
   // /profiles/:id requires a session; /u/:username is public. The id route
@@ -71,6 +85,70 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
       await isSaved.refetch();
     } finally {
       setSavePending(false);
+    }
+  };
+
+  // Same eligibility as Save — a client hiring a provider they already
+  // know, skipping the public job posting. Reuses the marketplace category
+  // taxonomy rather than inventing a second one for this one form.
+  const canHireDirectly = canSave;
+  const categories = useApiResource(() => marketplaceApi.categories(), [], {
+    enabled: canHireDirectly,
+  });
+  const leafCategories = (categories.data ?? []).flatMap((parent) =>
+    (parent.children ?? []).map((child) => ({ ...child, parentName: parent.name })),
+  );
+
+  const [hireModalOpen, setHireModalOpen] = useState(false);
+  const [hireCategoryId, setHireCategoryId] = useState('');
+  const [hireTitle, setHireTitle] = useState('');
+  const [hireDescription, setHireDescription] = useState('');
+  const [hirePrice, setHirePrice] = useState('');
+  const [hireDeliveryDays, setHireDeliveryDays] = useState('');
+  const [hireError, setHireError] = useState<string | null>(null);
+  const [hiring, setHiring] = useState(false);
+
+  const handleCreateDirectContract = async () => {
+    setHireError(null);
+    if (!hireCategoryId) {
+      setHireError('Choose a category.');
+      return;
+    }
+    if (hireTitle.trim().length < 3) {
+      setHireError('Add a short title.');
+      return;
+    }
+    if (hireDescription.trim().length < 20) {
+      setHireError('Add at least a couple of sentences describing the work.');
+      return;
+    }
+    const price = Number(hirePrice);
+    const deliveryDays = Number(hireDeliveryDays);
+    if (!Number.isFinite(price) || price < 0) {
+      setHireError('Enter a valid price.');
+      return;
+    }
+    if (!Number.isInteger(deliveryDays) || deliveryDays < 1) {
+      setHireError('Enter a valid number of delivery days.');
+      return;
+    }
+
+    setHiring(true);
+    try {
+      const connection = await directContractsApi.create(token, {
+        providerProfileId: id,
+        categoryId: hireCategoryId,
+        title: hireTitle.trim(),
+        description: hireDescription.trim(),
+        price,
+        deliveryDays,
+      });
+      setHireModalOpen(false);
+      navigate(`/contracts/${connection.id}`);
+    } catch (err) {
+      setHireError(err instanceof ApiError ? err.message : 'Unable to create the contract.');
+    } finally {
+      setHiring(false);
     }
   };
 
@@ -146,19 +224,113 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        {canSave && (
-          <Button
-            variant={isSaved.data?.saved ? 'outline' : 'primary'}
-            size="sm"
-            icon={Heart}
-            onClick={handleToggleSave}
-            disabled={savePending || isSaved.loading}
-            data-testid="toggle-save-provider"
-          >
-            {isSaved.data?.saved ? 'Saved' : 'Save'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canHireDirectly && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Handshake}
+              onClick={() => setHireModalOpen(true)}
+              data-testid="hire-directly"
+            >
+              Hire directly
+            </Button>
+          )}
+          {canSave && (
+            <Button
+              variant={isSaved.data?.saved ? 'outline' : 'primary'}
+              size="sm"
+              icon={Heart}
+              onClick={handleToggleSave}
+              disabled={savePending || isSaved.loading}
+              data-testid="toggle-save-provider"
+            >
+              {isSaved.data?.saved ? 'Saved' : 'Save'}
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Modal
+        isOpen={hireModalOpen}
+        onClose={() => setHireModalOpen(false)}
+        title={`Hire ${p.displayName} directly`}
+        description="Skips the public job posting — this creates a booking with just this provider, at the terms you set."
+        maxWidth="lg"
+      >
+        <div className="space-y-4 pt-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Select value={hireCategoryId} onValueChange={setHireCategoryId}>
+                <SelectTrigger data-testid="direct-hire-category" aria-label="Category">
+                  <SelectValue placeholder="Choose a category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leafCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.parentName} › {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Input
+              placeholder="Title"
+              value={hireTitle}
+              onChange={(e) => setHireTitle(e.target.value)}
+              data-testid="direct-hire-title"
+              aria-label="Title"
+              className="sm:col-span-2"
+            />
+          </div>
+          <Textarea
+            rows={4}
+            value={hireDescription}
+            onChange={(e) => setHireDescription(e.target.value)}
+            placeholder="What's this booking for?"
+            data-testid="direct-hire-description"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              type="number"
+              placeholder="Agreed price (₹)"
+              value={hirePrice}
+              onChange={(e) => setHirePrice(e.target.value)}
+              data-testid="direct-hire-price"
+              aria-label="Agreed price"
+            />
+            <Input
+              type="number"
+              placeholder="Delivery days"
+              value={hireDeliveryDays}
+              onChange={(e) => setHireDeliveryDays(e.target.value)}
+              data-testid="direct-hire-delivery"
+              aria-label="Delivery days"
+            />
+          </div>
+          {hireError && (
+            <p className="text-xs font-semibold text-destructive" data-testid="direct-hire-error">
+              {hireError}
+            </p>
+          )}
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              onClick={handleCreateDirectContract}
+              disabled={hiring}
+              data-testid="confirm-direct-hire"
+            >
+              {hiring ? 'Creating…' : 'Create contract'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setHireModalOpen(false)}
+              className="text-xs font-semibold text-ink-muted hover:text-ink cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Card className="p-8 space-y-4">
         <div className="flex items-start gap-4">
