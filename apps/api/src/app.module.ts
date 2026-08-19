@@ -20,6 +20,7 @@ import { MessagesModule } from './messages/messages.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { SavedProvidersModule } from './saved-providers/saved-providers.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ReferralsModule } from './referrals/referrals.module';
     DisputesModule,
     SavedProvidersModule,
     ReferralsModule,
+    PaymentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

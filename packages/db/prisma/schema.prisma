@@ -817,8 +817,10 @@ model ProposalAttachment {
 // module5-completion.md. COMPLETED only ever means "the client confirmed, or
 // the event happened and enough time passed that a stalled confirmation
 // stopped blocking the parties from reviewing each other" — never a payment
-// or escrow state, since neither exists yet. See ConnectionsService for the
-// two ways a row gets here.
+// or escrow state. Payment now exists as its own table (below), deliberately
+// not folded in here: whether money moved is orthogonal to whether the event
+// happened, and Connection.status must keep meaning only the latter. See
+// ConnectionsService for the two ways a row gets here.
 enum ConnectionStatus {
   ACTIVE
   COMPLETED
@@ -864,6 +866,7 @@ model Connection {
   reviews   Review[]
   messages  Message[]
   disputes  Dispute[]
+  payment   Payment?
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
@@ -871,6 +874,54 @@ model Connection {
   // Serves the auto-complete sweep: every ACTIVE row, cheaply.
   @@index([status])
   @@map("connections")
+}
+
+// The client pays the full agreed amount at hire time — the event-industry
+// norm (SECURITY_AUDIT.md / FEATURE_GAP_ANALYSIS.md both note deposit-at-
+// booking as the convention here), not milestone or escrow-on-completion.
+// One row per connection: @@unique below is what makes "pay" idempotent —
+// a client retrying a stuck checkout reuses the same row instead of
+// spawning a second order for the same booking.
+//
+// Razorpay, not a generic "payments" abstraction: there is exactly one
+// integration and no plan for a second, so a provider-agnostic interface
+// would be speculative — see CLAUDE.md's YAGNI section. The one thing kept
+// out of this table on purpose is card/bank data — Razorpay Checkout never
+// sends it here, only order/payment ids and a signature to verify.
+enum PaymentStatus {
+  CREATED // Razorpay order made; checkout not yet completed or abandoned.
+  PAID // Signature verified (client callback or webhook — see PaymentsService).
+  FAILED // Razorpay reported the payment failed or was cancelled.
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  connectionId String     @unique
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  // Snapshot of Proposal.proposedPrice at order-creation time. Not a live
+  // read through connection.proposal — a price the client already agreed to
+  // and started paying must never change under them mid-checkout.
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("INR")
+
+  status PaymentStatus @default(CREATED)
+
+  // Razorpay's own ids. orderId is assigned at creation (unique — one order
+  // per row, per the model's own @@unique above); paymentId and signature
+  // only arrive once Checkout completes and are what PaymentsService verifies
+  // before flipping status to PAID.
+  razorpayOrderId   String  @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
 }
 
 // Media / upload pipeline (shared infrastructure, not a business module).
