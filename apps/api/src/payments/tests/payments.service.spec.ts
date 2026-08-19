@@ -16,12 +16,16 @@ function build() {
     retry: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'CREATED' }),
     markPaid: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'PAID' }),
     markFailed: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'FAILED' }),
+    listForClient: jest.fn().mockResolvedValue([]),
+    countForClient: jest.fn().mockResolvedValue(0),
+    listForProvider: jest.fn().mockResolvedValue([]),
+    countForProvider: jest.fn().mockResolvedValue(0),
   };
   const connectionsService = {
     findById: jest.fn().mockResolvedValue(CONNECTION),
   };
   const profilesRepository = {
-    findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
+    findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client', user: { role: 'CLIENT' } }),
   };
   const razorpay = {
     keyId: 'rzp_test_key',
@@ -193,6 +197,37 @@ describe('PaymentsService', () => {
 
       expect(connectionsService.findById).toHaveBeenCalledWith('user_provider', 'connection_1');
       expect(result?.status).toBe('PAID');
+    });
+  });
+
+  describe('listMine', () => {
+    it("reads a client's own payments from the client side of the join", async () => {
+      const { service, paymentsRepository } = build();
+      paymentsRepository.listForClient.mockResolvedValue([{ id: 'payment_1' }]);
+      paymentsRepository.countForClient.mockResolvedValue(1);
+
+      const result = await service.listMine('user_client', { page: 1, limit: 20 });
+
+      expect(paymentsRepository.listForClient).toHaveBeenCalledWith('profile_client', 0, 20);
+      expect(paymentsRepository.listForProvider).not.toHaveBeenCalled();
+      expect(result.data).toEqual([{ id: 'payment_1' }]);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it("reads a provider's own payments from the provider side of the join", async () => {
+      const { service, paymentsRepository, profilesRepository } = build();
+      profilesRepository.findByUserId.mockResolvedValue({
+        id: 'profile_provider',
+        user: { role: 'PROVIDER' },
+      });
+      paymentsRepository.listForProvider.mockResolvedValue([{ id: 'payment_2' }]);
+      paymentsRepository.countForProvider.mockResolvedValue(1);
+
+      const result = await service.listMine('user_provider', { page: 1, limit: 20 });
+
+      expect(paymentsRepository.listForProvider).toHaveBeenCalledWith('profile_provider', 0, 20);
+      expect(paymentsRepository.listForClient).not.toHaveBeenCalled();
+      expect(result.data).toEqual([{ id: 'payment_2' }]);
     });
   });
 });
