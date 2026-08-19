@@ -48,6 +48,7 @@ model User {
   disputesRaised     Dispute[]           @relation("DisputesRaised")
   disputesReceived   Dispute[]           @relation("DisputesReceived")
   disputesResolved   Dispute[]           @relation("DisputesResolved")
+  workDiaryEntries   WorkDiaryEntry[]
 
   @@map("users")
 }
@@ -871,10 +872,11 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reviews  Review[]
-  messages Message[]
-  disputes Dispute[]
-  payment  Payment?
+  reviews          Review[]
+  messages         Message[]
+  disputes         Dispute[]
+  payment          Payment?
+  workDiaryEntries WorkDiaryEntry[]
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])
@@ -1180,6 +1182,34 @@ model Dispute {
   @@index([connectionId])
   @@index([status, createdAt])
   @@map("disputes")
+}
+
+// A dated activity log on a connection, not hour-tracking — this
+// marketplace prices a booking as one agreed amount (Proposal.proposedPrice),
+// never an hourly rate, so there is nothing for an hours-logged number to
+// multiply against. Either party posts a short update ("delivered the
+// floral mockups", "on site 2pm-6pm"); both can read every entry. No edit
+// or delete — same reasoning as Review: a log the poster can rewrite after
+// the fact isn't a record.
+model WorkDiaryEntry {
+  id String @id @default(uuid())
+
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  author       User   @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  note String
+
+  createdAt DateTime @default(now())
+
+  // Serves "entries on this connection", oldest first (a log reads
+  // chronologically) and "my entries across every connection" for the
+  // aggregate Work Diary view.
+  @@index([connectionId])
+  @@index([authorUserId])
+  @@map("work_diary_entries")
 }
 
 // "Saved Talent" — a client bookmarking a provider's profile for later.
