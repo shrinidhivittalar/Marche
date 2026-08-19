@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import {
   Button,
   Card,
+  Combobox,
   Input,
   Select,
   SelectContent,
@@ -103,6 +104,24 @@ export const MyServicesPage: React.FC = () => {
   const leafCategories = (categories.data ?? []).flatMap((parent) =>
     (parent.children ?? []).map((child) => ({ ...child, parentName: parent.name })),
   );
+
+  // Mirrors SkillsCard in ProfileApiSection: typing a name the platform list
+  // doesn't have creates it (server matches case-insensitively first, so
+  // this never forks a duplicate of an existing skill). Refetching before
+  // selecting keeps the dropdown's options in sync with what the server now
+  // has, in case the same combobox is opened again before a page reload.
+  const createSkill = async (name: string) => {
+    if (!token) return;
+    try {
+      const created = await profilesApi.addSkillByName(token, name);
+      await skills.refetch();
+      setSkillId(created.skillId);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Could not add that skill. Please try again.',
+      );
+    }
+  };
 
   const create = () =>
     run(
@@ -205,27 +224,26 @@ export const MyServicesPage: React.FC = () => {
             data-testid="service-tags"
             aria-label="Tags"
           />
-          <Select value={skillId} onValueChange={setSkillId}>
-            <SelectTrigger
-              data-testid="service-skill"
-              aria-label="Skill"
-              className="h-auto py-2 text-sm"
-            >
-              <SelectValue placeholder="Add a skill (optional)…" />
-            </SelectTrigger>
-            <SelectContent>
-              {(skills.data?.items ?? []).map((skill) => (
-                <SelectItem key={skill.id} value={skill.id}>
-                  {skill.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={skillId}
+            onChange={setSkillId}
+            options={(skills.data?.items ?? []).map((skill) => ({
+              value: skill.id,
+              label: skill.name,
+            }))}
+            placeholder="Add a skill (optional)…"
+            searchPlaceholder="Search or type your own…"
+            emptyText="No matching skills."
+            data-testid="service-skill"
+            className="h-auto py-2 text-sm"
+            onCreate={createSkill}
+            createLabel={(name) => `Add "${name}" as a new skill`}
+          />
         </div>
 
         <p className="text-xs text-ink-muted">
-          Tags are free text and help people find you by keyword. Skills come from the platform list
-          and are what the marketplace filters on.
+          Tags are free text and help people find you by keyword. Skills are what the marketplace
+          filters on — pick one from the platform list, or type your own to add it.
         </p>
 
         <div className="flex items-center gap-3">

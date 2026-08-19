@@ -248,7 +248,10 @@ export const profilesApi = {
    * "photography" attaches the existing skill instead of a second one.
    */
   addSkillByName: (token: string, name: string) =>
-    apiFetch<unknown>('/skills', token, { method: 'POST', body: JSON.stringify({ name }) }),
+    apiFetch<{ id: string; skillId: string }>('/skills', token, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
   removeSkill: (token: string, userSkillId: string) =>
     apiFetch<void>(`/skills/${userSkillId}`, token, { method: 'DELETE' }),
 
