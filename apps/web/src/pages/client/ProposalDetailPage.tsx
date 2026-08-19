@@ -6,6 +6,7 @@ import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
+import { usePolling } from '../../hooks/usePolling';
 import {
   connectionsApi,
   proposalsApi,
@@ -73,6 +74,12 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     { enabled: Boolean(token) && Boolean(connection) },
   );
   const paid = paymentStatus.data?.status === 'PAID';
+
+  // The webhook (the authoritative confirmation — see the payments module's
+  // own comments) can land at any moment after Checkout closes, independent
+  // of this tab. Without polling, a client sitting on this exact page would
+  // never see "Payment received" turn up on its own.
+  usePolling(paymentStatus.refetch, Boolean(connection) && !paid);
 
   if (proposal.loading) {
     return <p className="text-xs text-ink-muted py-12 text-center">Loading proposal…</p>;

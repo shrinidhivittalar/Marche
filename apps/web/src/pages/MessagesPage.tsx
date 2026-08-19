@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   MessageSquare,
   Search,
@@ -14,6 +14,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Button, Input } from '@marche/ui';
 import { useApiResource } from '../hooks/useApiResource';
+import { usePolling } from '../hooks/usePolling';
 import { connectionsApi, type ApiConnection } from '../lib/proposals-api';
 import { messagesApi, type ApiMessage } from '../lib/messages-api';
 
@@ -123,21 +124,8 @@ export const MessagesPage: React.FC = () => {
 
   // Poll the open thread and the conversation-list previews so a reply from
   // the other party shows up without a manual refresh.
-  useEffect(() => {
-    if (!activeConv) return;
-    const id = setInterval(() => void thread.refetch(), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-    // `thread.refetch` is stable (useApiResource); `thread` itself is a new
-    // object every render and would resubscribe the interval on every poll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConv?.id, thread.refetch]);
-
-  useEffect(() => {
-    if (!token) return;
-    const id = setInterval(() => void previews.refetch(), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, previews.refetch]);
+  usePolling(thread.refetch, Boolean(activeConv), POLL_INTERVAL_MS);
+  usePolling(previews.refetch, Boolean(token), POLL_INTERVAL_MS);
 
   const previewFor = (convId: string) => previews.data?.find((p) => p.connectionId === convId);
 

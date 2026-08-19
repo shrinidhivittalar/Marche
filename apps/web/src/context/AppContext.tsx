@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useApiResource } from '../hooks/useApiResource';
+import { usePolling } from '../hooks/usePolling';
 import { notificationsApi, type ApiNotification } from '../lib/notifications-api';
 import { messagesApi } from '../lib/messages-api';
 import {
@@ -361,6 +362,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [accessToken],
     { enabled: Boolean(accessToken) },
   );
+
+  // Same interval MessagesPage polls an open thread at. These three are the
+  // one layer mounted on every screen (the bell, its badge, the sidebar's
+  // message count) — everything else in the app only refetches on its own
+  // page load or after an action taken on that page, which is a deliberate
+  // scope call (see usePolling's own comment) rather than an oversight.
+  usePolling(apiNotificationsList.refetch, Boolean(accessToken));
+  usePolling(apiNotificationsUnread.refetch, Boolean(accessToken));
+  usePolling(apiMessagesUnread.refetch, Boolean(accessToken));
 
   // Both of these mark read locally before the request goes out. Clicking a
   // notification navigates away in the same tick, so waiting for the round
