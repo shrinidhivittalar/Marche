@@ -2,9 +2,14 @@ import { BadRequestException, ConflictException, Injectable, Logger } from '@nes
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { getOwnProfileOrThrow, assertOwnership } from '../../profiles/profile-access.util';
-import { PaymentsRepository } from '../repositories/payments.repository';
+import { paginate, type Paginated } from '../../marketplace/pagination';
+import {
+  PaymentsRepository,
+  type PaymentWithConnection,
+} from '../repositories/payments.repository';
 import { RazorpayClient } from '../razorpay/razorpay.client';
 import type { Payment } from '@marche/db';
+import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 
 export interface CreatedOrder {
   razorpayOrderId: string;
@@ -124,6 +129,35 @@ export class PaymentsService {
   async getStatus(userId: string, connectionId: string): Promise<Payment | null> {
     await this.connectionsService.findById(userId, connectionId); // party check
     return this.paymentsRepository.findByConnectionId(connectionId);
+  }
+
+  /**
+   * The caller's own payment history — what a client has paid, or what a
+   * provider has been paid, depending on which side of the marketplace
+   * their profile is on. Backs Transactions, Weekly Summary and Budgets on
+   * the client side, and Finances on the provider side; all four are views
+   * over this one list rather than separate reads.
+   */
+  async listMine(
+    userId: string,
+    pagination: PaginationQueryDto,
+  ): Promise<Paginated<PaymentWithConnection>> {
+    const profile = await getOwnProfileOrThrow(this.profilesRepository, userId);
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+
+    const [data, total] =
+      profile.user.role === 'CLIENT'
+        ? await Promise.all([
+            this.paymentsRepository.listForClient(profile.id, skip, limit),
+            this.paymentsRepository.countForClient(profile.id),
+          ])
+        : await Promise.all([
+            this.paymentsRepository.listForProvider(profile.id, skip, limit),
+            this.paymentsRepository.countForProvider(profile.id),
+          ]);
+
+    return paginate(data, total, page, limit);
   }
 
   private async getOwnConnectionAsClient(userId: string, connectionId: string) {

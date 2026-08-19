@@ -22,18 +22,22 @@ export function StatusBadge({ status }: StatusBadgeProps) {
     case 'Completed':
     case 'Closed':
     case 'COMPLETED':
+    case 'PAID':
       variant = 'success';
-      label = status === 'COMPLETED' ? 'Completed' : status;
+      label = status === 'COMPLETED' ? 'Completed' : status === 'PAID' ? 'Paid' : status;
       break;
     case 'Draft':
     case 'draft':
+    case 'CREATED':
       variant = 'warning';
-      label = status === 'draft' ? 'Draft' : status;
+      label = status === 'draft' ? 'Draft' : status === 'CREATED' ? 'Pending' : status;
       break;
     case 'Cancelled':
     case 'Rejected':
     case 'declined':
+    case 'FAILED':
       variant = 'destructive';
+      label = status === 'FAILED' ? 'Failed' : status;
       break;
     default:
       variant = 'neutral';

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, CreditCard, Clock } from 'lucide-react';
+import { ArrowLeft, Clock } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
@@ -45,6 +45,10 @@ import { JobDetailPage } from './pages/client/JobDetailPage';
 import { ProposalDetailPage } from './pages/client/ProposalDetailPage';
 import { ContractDetailPage } from './pages/client/ContractDetailPage';
 import { YourHiresPage } from './pages/client/freelancers/YourHiresPage';
+import { PaymentsOverviewPage } from './pages/client/PaymentsOverviewPage';
+import { TransactionsPage } from './pages/client/finances/TransactionsPage';
+import { WeeklySummaryPage } from './pages/client/finances/WeeklySummaryPage';
+import { BudgetsPage } from './pages/client/finances/BudgetsPage';
 import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
 import { ReferFreelancersPage } from './pages/client/freelancers/ReferFreelancersPage';
 
@@ -52,6 +56,7 @@ import { ProviderHomePage } from './pages/provider/ProviderHomePage';
 import { SearchJobsPage } from './pages/provider/SearchJobsPage';
 import { MyWorkPage } from './pages/provider/MyWorkPage';
 import { ContractsPage } from './pages/provider/ContractsPage';
+import { FinancesPage } from './pages/provider/FinancesPage';
 import { StatsPage } from './pages/provider/StatsPage';
 import { JobDetailProviderView } from './pages/provider/JobDetailProviderView';
 import { ProviderOnboardingPage } from './pages/provider/ProviderOnboardingPage';
@@ -89,34 +94,10 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/jobs/new': () => <PostJobIntroPage />,
   '/client/jobs/new/manual': () => <CreateJobPage />,
   '/client/profile': () => <EditProfilePage />,
-  '/client/payments': () => (
-    <ComingSoonPage
-      title="Payments"
-      description="Payment history, invoices, and transaction records will be available here soon."
-      icon={CreditCard}
-    />
-  ),
-  '/client/finances/weekly-summary': () => (
-    <ComingSoonPage
-      title="Weekly summary"
-      description="Payment history, invoices, and transaction records will be available here soon."
-      icon={CreditCard}
-    />
-  ),
-  '/client/finances/transactions': () => (
-    <ComingSoonPage
-      title="Transactions"
-      description="Payment history, invoices, and transaction records will be available here soon."
-      icon={CreditCard}
-    />
-  ),
-  '/client/finances/budgets': () => (
-    <ComingSoonPage
-      title="Budgets"
-      description="Payment history, invoices, and transaction records will be available here soon."
-      icon={CreditCard}
-    />
-  ),
+  '/client/payments': () => <PaymentsOverviewPage />,
+  '/client/finances/weekly-summary': () => <WeeklySummaryPage />,
+  '/client/finances/transactions': () => <TransactionsPage />,
+  '/client/finances/budgets': () => <BudgetsPage />,
   '/client/work-diaries': () => (
     <ComingSoonPage
       title="Work Diaries"
@@ -129,13 +110,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/analytics': () => <MyWorkPage />,
   '/provider/profile': () => <EditProfilePage />,
   '/provider/services': () => <MyServicesPage />,
-  '/provider/finances': () => (
-    <ComingSoonPage
-      title="Finances"
-      description="Payment history, invoices, and transaction records will be available here soon."
-      icon={CreditCard}
-    />
-  ),
+  '/provider/finances': () => <FinancesPage />,
   '/provider/contracts': () => <ContractsPage />,
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,
