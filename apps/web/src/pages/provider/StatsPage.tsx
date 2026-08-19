@@ -1,16 +1,26 @@
 import React from 'react';
-import { Lock, Award, Users2, TrendingUp, Zap } from 'lucide-react';
+import { Award, Users2, TrendingUp, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Card } from '@marche/ui';
+import { ComingSoonOverlay } from '../../components/common/ComingSoonOverlay';
 
-const CATEGORY_COLORS = ['bg-primary', 'bg-sky-500', 'bg-amber-500', 'bg-rose-400', 'bg-violet-500', 'bg-emerald-500'];
+const CATEGORY_COLORS = [
+  'bg-primary',
+  'bg-sky-500',
+  'bg-amber-500',
+  'bg-rose-400',
+  'bg-violet-500',
+  'bg-emerald-500',
+];
 
 export const StatsPage: React.FC = () => {
   const { currentUser, proposals, contracts } = useApp();
 
   // Excludes drafts — a draft was never actually submitted, so it shouldn't count toward
   // win rate, the "Submitted" funnel stage, or the category breakdown.
-  const myProposals = proposals.filter((p) => p.vendorId === currentUser.id && p.status !== 'draft');
+  const myProposals = proposals.filter(
+    (p) => p.vendorId === currentUser.id && p.status !== 'draft',
+  );
   const myContracts = contracts.filter((c) => c.vendorId === currentUser.id);
 
   const hiredCount = myProposals.filter((p) => p.status === 'accepted').length;
@@ -49,23 +59,11 @@ export const StatsPage: React.FC = () => {
   const monthlyMax = Math.max(...monthlyEntries.map((m) => m.amount), 1);
 
   return (
-    <div className="relative min-h-[70vh] max-w-5xl mx-auto">
-      {/* Coming Soon overlay */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
-        <Card className="p-8 max-w-sm text-center space-y-3 shadow-lg">
-          <div className="w-12 h-12 mx-auto rounded-xl bg-surface-subtle flex items-center justify-center text-primary">
-            <Lock className="w-6 h-6" />
-          </div>
-          <h2 className="text-lg font-bold text-ink">Coming Soon</h2>
-          <p className="text-xs text-ink-muted leading-relaxed">
-            Proposal history, earnings breakdowns, and performance insights will be available here
-            soon.
-          </p>
-        </Card>
-      </div>
-
-      {/* Blurred preview of the finished Stats screen */}
-      <div className="space-y-8 blur-sm select-none pointer-events-none" aria-hidden="true">
+    <ComingSoonOverlay
+      className="min-h-[70vh] max-w-5xl mx-auto"
+      description="Proposal history, earnings breakdowns, and performance insights will be available here soon."
+    >
+      <div className="space-y-8">
         {/* Header */}
         <div className="pb-6 border-b border-border">
           <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">My Stats</h1>
@@ -86,7 +84,9 @@ export const StatsPage: React.FC = () => {
 
           <Card className="p-5">
             <span className="text-xs font-medium text-ink-muted">Total Earnings</span>
-            <p className="text-2xl font-bold text-ink mt-1">₹{totalEarnings.toLocaleString('en-IN')}</p>
+            <p className="text-2xl font-bold text-ink mt-1">
+              ₹{totalEarnings.toLocaleString('en-IN')}
+            </p>
             <p className="text-[11px] text-ink-muted mt-1">
               Across {myContracts.length} contract{myContracts.length === 1 ? '' : 's'}
             </p>
@@ -129,19 +129,25 @@ export const StatsPage: React.FC = () => {
           <Card className="p-6 space-y-4">
             <h2 className="text-sm font-bold text-ink">Proposals by Category</h2>
             {categoryEntries.length === 0 ? (
-              <p className="text-xs text-ink-muted">Submit a proposal to see your category breakdown.</p>
+              <p className="text-xs text-ink-muted">
+                Submit a proposal to see your category breakdown.
+              </p>
             ) : (
               <div className="space-y-3">
                 {categoryEntries.map(([category, count], idx) => (
                   <div key={category} className="flex items-center gap-3">
-                    <span className="w-24 text-xs font-medium text-ink-muted shrink-0 truncate">{category}</span>
+                    <span className="w-24 text-xs font-medium text-ink-muted shrink-0 truncate">
+                      {category}
+                    </span>
                     <div className="flex-1 h-2 rounded-full bg-bg overflow-hidden">
                       <div
                         className={`h-full ${CATEGORY_COLORS[idx % CATEGORY_COLORS.length]} rounded-full`}
                         style={{ width: `${(count / categoryMax) * 100}%` }}
                       />
                     </div>
-                    <span className="w-6 text-right text-xs font-bold text-ink shrink-0">{count}</span>
+                    <span className="w-6 text-right text-xs font-bold text-ink shrink-0">
+                      {count}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -151,12 +157,16 @@ export const StatsPage: React.FC = () => {
           <Card className="p-6 space-y-4">
             <h2 className="text-sm font-bold text-ink">Earnings by Month</h2>
             {monthlyEntries.length === 0 ? (
-              <p className="text-xs text-ink-muted">Win a contract to start tracking monthly earnings.</p>
+              <p className="text-xs text-ink-muted">
+                Win a contract to start tracking monthly earnings.
+              </p>
             ) : (
               <div className="space-y-3">
                 {monthlyEntries.map((m) => (
                   <div key={m.label} className="flex items-center gap-3">
-                    <span className="w-14 text-xs font-medium text-ink-muted shrink-0">{m.label}</span>
+                    <span className="w-14 text-xs font-medium text-ink-muted shrink-0">
+                      {m.label}
+                    </span>
                     <div className="flex-1 h-2 rounded-full bg-bg overflow-hidden">
                       <div
                         className="h-full bg-primary rounded-full"
@@ -197,17 +207,21 @@ export const StatsPage: React.FC = () => {
             <h3 className="text-sm font-bold text-ink flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4" /> Profile Metrics
             </h3>
-            <p className="text-xs text-ink-muted">Profile views, invites, and impressions over time.</p>
+            <p className="text-xs text-ink-muted">
+              Profile views, invites, and impressions over time.
+            </p>
           </Card>
 
           <Card className="p-6 space-y-2">
             <h3 className="text-sm font-bold text-ink flex items-center gap-1.5">
               <Zap className="w-4 h-4" /> Connects &amp; Rising Talent
             </h3>
-            <p className="text-xs text-ink-muted">Bidding credits and talent-recognition programs.</p>
+            <p className="text-xs text-ink-muted">
+              Bidding credits and talent-recognition programs.
+            </p>
           </Card>
         </div>
       </div>
-    </div>
+    </ComingSoonOverlay>
   );
 };

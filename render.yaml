@@ -77,5 +77,15 @@ services:
       - key: GROQ_API_KEY
         sync: false
 
+      # Required — apps/api/src/payments throws on boot without all three,
+      # same as REDIS_URL above. Test-mode keys from the Razorpay dashboard;
+      # see apps/api/.env.example for where each one comes from.
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
       - key: LOG_LEVEL
         value: info

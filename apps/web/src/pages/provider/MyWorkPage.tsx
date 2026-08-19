@@ -16,6 +16,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
+import { ComingSoonOverlay } from '../../components/common/ComingSoonOverlay';
 import { proposalsApi, connectionsApi } from '../../lib/proposals-api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen } from '../../lib/formatJob';
@@ -273,63 +274,68 @@ export const MyWorkPage: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: Contracts */}
+        {/* TAB 2: Contracts — real connection data, but the contract
+            workspace itself (work diary, direct contracts, invoicing) isn't
+            built yet, so this tab gets the same Coming Soon treatment as
+            /provider/contracts rather than a half-finished experience. */}
         {activeTab === 'contracts' && (
-          <div className="space-y-4">
-            {myContracts.length === 0 ? (
-              <EmptyState
-                title="No active contracts yet"
-                description="When a client accepts your proposal, your contract will appear here."
-                actionLabel="Explore Jobs"
-                onAction={() => navigate('/provider/dashboard')}
-              />
-            ) : (
-              myContracts.map((ctr) => (
-                <div
-                  key={ctr.id}
-                  onClick={() => navigate(`/contracts/${ctr.id}`)}
-                  className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <StatusBadge status={ctr.status} />
+          <ComingSoonOverlay description="A dedicated contracts workspace is coming soon. In the meantime, your won jobs are tracked as connections.">
+            <div className="space-y-4">
+              {myContracts.length === 0 ? (
+                <EmptyState
+                  title="No active contracts yet"
+                  description="When a client accepts your proposal, your contract will appear here."
+                  actionLabel="Explore Jobs"
+                  onAction={() => navigate('/provider/dashboard')}
+                />
+              ) : (
+                myContracts.map((ctr) => (
+                  <div
+                    key={ctr.id}
+                    onClick={() => navigate(`/contracts/${ctr.id}`)}
+                    className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <StatusBadge status={ctr.status} />
+                        </div>
+                        <h3 className="text-base font-bold text-ink">{ctr.job.title}</h3>
+                        <p className="text-xs text-ink-muted mt-0.5">
+                          Client: {ctr.clientProfile.displayName}
+                        </p>
                       </div>
-                      <h3 className="text-base font-bold text-ink">{ctr.job.title}</h3>
-                      <p className="text-xs text-ink-muted mt-0.5">
-                        Client: {ctr.clientProfile.displayName}
-                      </p>
+
+                      <div className="text-right">
+                        <span className="block text-[10px] font-mono uppercase text-ink-muted">
+                          Contract Value
+                        </span>
+                        <span className="text-xl font-bold text-primary">
+                          ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="block text-[10px] font-mono uppercase text-ink-muted">
-                        Contract Value
+                    <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
+                      <span>
+                        Event Date:{' '}
+                        {ctr.job.eventDate
+                          ? new Date(ctr.job.eventDate).toLocaleDateString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : 'Not set'}
                       </span>
-                      <span className="text-xl font-bold text-primary">
-                        ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
+                      <span className="text-primary font-bold hover:underline flex items-center gap-1">
+                        Open Contract Room <ChevronRight className="w-4 h-4" />
                       </span>
                     </div>
                   </div>
-
-                  <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">
-                    <span>
-                      Event Date:{' '}
-                      {ctr.job.eventDate
-                        ? new Date(ctr.job.eventDate).toLocaleDateString('en-IN', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })
-                        : 'Not set'}
-                    </span>
-                    <span className="text-primary font-bold hover:underline flex items-center gap-1">
-                      Open Contract Room <ChevronRight className="w-4 h-4" />
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </ComingSoonOverlay>
         )}
 
         {/* TAB 3: Availability Calendar */}

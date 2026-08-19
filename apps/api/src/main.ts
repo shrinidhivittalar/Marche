@@ -13,7 +13,12 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: true keeps req.body parsed as JSON everywhere (nothing else
+  // changes) while also stashing the exact bytes on req.rawBody. The
+  // Razorpay webhook needs those exact bytes — its signature is an HMAC
+  // over the raw payload, and re-serializing the parsed JSON is not
+  // guaranteed to reproduce byte-for-byte what Razorpay signed.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
 
   // Without this, Nest never calls onModuleDestroy on SIGTERM/SIGINT, so
