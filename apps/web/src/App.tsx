@@ -133,7 +133,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
 ];
 
 function AppContent() {
-  const { route, goBack, currentUser, authLoading } = useApp();
+  const { route, goBack, currentUser, authLoading, accessToken } = useApp();
 
   // Full-bleed views without sidebar. Landing/Sign In/Sign Up always render light —
   // they're pre-authentication brand surfaces, not part of the user's themed workspace.
@@ -193,6 +193,21 @@ function AppContent() {
         data-testid="app-auth-loading"
       >
         <p className="text-ink-muted text-sm">Loading…</p>
+      </div>
+    );
+  }
+
+  // Route rendering below is gated on currentUser.role, not on being signed
+  // in — logout resets currentUser to a default demo profile rather than
+  // clearing it, so the role checks alone can't tell a real session from a
+  // logged-out one. Browser back/forward changes the URL without touching
+  // React state, so without this, going back after logout can land on a
+  // protected route's path and render it with no access token. Catch that
+  // here rather than trusting the URL.
+  if (!accessToken) {
+    return (
+      <div data-theme="light">
+        <AuthSignInPage />
       </div>
     );
   }
