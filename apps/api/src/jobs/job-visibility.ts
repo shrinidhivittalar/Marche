@@ -13,6 +13,12 @@ import type { Prisma } from '@marche/db';
 // value — which is the argument for having one status field instead of a
 // status and a visibility that must agree.
 //
+// isDirect: false is defense-in-depth, not the primary guard — a direct
+// contract (DirectContractsService) goes straight from DRAFT to FILLED and
+// so is already excluded by the status check above. Kept explicit anyway:
+// it says outright that a direct contract is never meant to be discovered,
+// rather than leaving that as an inference from a status transition.
+//
 // The user-level checks matter as much as the job-level ones. A client can
 // be suspended or delete their account long after publishing, and their
 // requirements must disappear without anyone having to remember to cancel
@@ -27,6 +33,7 @@ import type { Prisma } from '@marche/db';
 export function publicJobWhere(extra?: Prisma.JobWhereInput): Prisma.JobWhereInput {
   const visible: Prisma.JobWhereInput = {
     status: 'PUBLISHED',
+    isDirect: false,
     deletedAt: null,
     clientProfile: {
       deletedAt: null,

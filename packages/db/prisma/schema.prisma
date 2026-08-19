@@ -45,9 +45,9 @@ model User {
   notifications      Notification[]
   reviewsWritten     Review[]
   sentMessages       Message[]
-  disputesRaised     Dispute[] @relation("DisputesRaised")
-  disputesReceived   Dispute[] @relation("DisputesReceived")
-  disputesResolved   Dispute[] @relation("DisputesResolved")
+  disputesRaised     Dispute[]           @relation("DisputesRaised")
+  disputesReceived   Dispute[]           @relation("DisputesReceived")
+  disputesResolved   Dispute[]           @relation("DisputesResolved")
 
   @@map("users")
 }
@@ -210,8 +210,8 @@ model Profile {
   primaryGoal     ProviderGoal?
   workPreferences ProviderWorkPreference[]
   // Client-side onboarding answers, same story.
-  orgSize String?
-  website String?
+  orgSize         String?
+  website         String?
 
   visibility         ProfileVisibility  @default(PUBLIC)
   availabilityStatus AvailabilityStatus @default(AVAILABLE)
@@ -238,8 +238,8 @@ model Profile {
   // relation to Profile); the two Connection sides do, because a Profile can
   // sit on either end of the same table.
   proposals           Proposal[]
-  clientConnections   Connection[] @relation("ClientConnections")
-  providerConnections Connection[] @relation("ProviderConnections")
+  clientConnections   Connection[]    @relation("ClientConnections")
+  providerConnections Connection[]    @relation("ProviderConnections")
   reviewsReceived     Review[]
   savedProviders      SavedProvider[] @relation("ClientSavedProviders")
   savedByClients      SavedProvider[] @relation("ProviderSavedByClients")
@@ -620,6 +620,14 @@ model Job {
 
   status JobStatus @default(DRAFT)
 
+  // True only for a job created by DirectContractsService — a client hiring
+  // a specific provider by profile, skipping public discovery entirely.
+  // publicJobWhere (job-visibility.ts) excludes these from every discovery
+  // path; nothing else about the row differs; it still carries a real
+  // Proposal and Connection, so Payments/Reviews/Disputes/Work Diary all
+  // work on it unchanged.
+  isDirect Boolean @default(false)
+
   // Set on first publish and never rewritten, so cancelling and reposting
   // cannot bump a job up the "newest" sort. Same rule as Service.
   publishedAt DateTime?
@@ -863,10 +871,10 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reviews   Review[]
-  messages  Message[]
-  disputes  Dispute[]
-  payment   Payment?
+  reviews  Review[]
+  messages Message[]
+  disputes Dispute[]
+  payment  Payment?
 
   // Serve "my connections" from either side.
   @@index([clientProfileId])

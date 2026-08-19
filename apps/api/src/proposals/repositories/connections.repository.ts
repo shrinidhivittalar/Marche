@@ -12,7 +12,17 @@ const CONNECTION_FIELDS = {
   completedAt: true,
   createdAt: true,
   job: {
-    select: { id: true, title: true, status: true, eventDate: true, location: true },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      eventDate: true,
+      location: true,
+      // Lets a caller distinguish a direct contract from a marketplace hire
+      // (see DirectContractsService) — the provider Contracts page's Direct
+      // Contracts tab filters on this rather than needing a second endpoint.
+      isDirect: true,
+    },
   },
   proposal: {
     select: { id: true, proposedPrice: true, deliveryDays: true, submittedAt: true },

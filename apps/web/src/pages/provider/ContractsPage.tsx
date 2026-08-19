@@ -10,10 +10,10 @@ import { paymentsApi } from '../../lib/payments-api';
 
 type ContractsTab = 'active' | 'all' | 'diary' | 'direct';
 
-// Active/All are real Connection data (same rows MyWorkPage's Contracts tab
-// reads). Work Diary and Direct Contracts stay honest empty states — unlike
-// the rest of this page, neither has a real module behind it yet, and
-// nothing here invents one.
+// Active/All/Direct are real Connection data (same rows MyWorkPage's
+// Contracts tab reads) — Direct Contracts just filters on job.isDirect,
+// the flag DirectContractsService sets. Work Diary stays an honest empty
+// state here — see this file's own header comment there.
 export const ContractsPage: React.FC = () => {
   const { accessToken, navigate } = useApp();
   const token = accessToken;
@@ -24,6 +24,7 @@ export const ContractsPage: React.FC = () => {
   });
   const allContracts = connections.data?.items ?? [];
   const activeContracts = allContracts.filter((c) => c.status === 'ACTIVE');
+  const directContracts = allContracts.filter((c) => c.job.isDirect);
 
   const payments = useApiResource(() => paymentsApi.mine(token as string, 1, 100), [token], {
     enabled: Boolean(token),
@@ -33,7 +34,12 @@ export const ContractsPage: React.FC = () => {
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
   const loading = connections.loading || payments.loading;
-  const list = activeTab === 'active' ? activeContracts : allContracts;
+  const list =
+    activeTab === 'active'
+      ? activeContracts
+      : activeTab === 'direct'
+        ? directContracts
+        : allContracts;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -69,8 +75,8 @@ export const ContractsPage: React.FC = () => {
         ))}
       </div>
 
-      {/* TAB 1 & 2: Active / All Contracts — real connections */}
-      {(activeTab === 'active' || activeTab === 'all') && (
+      {/* TAB 1, 2 & 4: Active / All / Direct Contracts — real connections */}
+      {(activeTab === 'active' || activeTab === 'all' || activeTab === 'direct') && (
         <div className="space-y-6">
           {activeTab === 'active' && (
             <div className="flex items-center gap-2 text-sm">
@@ -101,12 +107,16 @@ export const ContractsPage: React.FC = () => {
               title={
                 activeTab === 'active'
                   ? 'There are no active contracts.'
-                  : 'No contract history yet'
+                  : activeTab === 'direct'
+                    ? 'No direct contracts'
+                    : 'No contract history yet'
               }
               description={
                 activeTab === 'active'
                   ? "Contracts you're actively working on will appear here."
-                  : 'Completed and cancelled contracts will show up here.'
+                  : activeTab === 'direct'
+                    ? 'A client hiring you directly, skipping the public job posting, will show up here.'
+                    : 'Completed and cancelled contracts will show up here.'
               }
             />
           )}
@@ -163,14 +173,6 @@ export const ContractsPage: React.FC = () => {
         <EmptyState
           title="No work diary entries"
           description="Hourly time-tracking isn't available yet. Coming soon."
-        />
-      )}
-
-      {/* TAB 4: Direct Contracts — genuinely not built yet */}
-      {activeTab === 'direct' && (
-        <EmptyState
-          title="No direct contracts"
-          description="Contracts made directly with a client outside the marketplace aren't available yet. Coming soon."
         />
       )}
     </div>

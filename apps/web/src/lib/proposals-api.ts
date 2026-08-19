@@ -101,6 +101,7 @@ export interface ApiConnection {
     status: JobStatus;
     eventDate: string | null;
     location: string | null;
+    isDirect: boolean;
   };
   proposal: {
     id: string;
