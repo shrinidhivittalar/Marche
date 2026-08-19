@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, NotebookPen } from 'lucide-react';
 import { Skeleton } from '@marche/ui';
 import { EmptyState } from '../../components/common/EmptyState';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -7,13 +7,15 @@ import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { connectionsApi } from '../../lib/proposals-api';
 import { paymentsApi } from '../../lib/payments-api';
+import { workDiaryApi } from '../../lib/work-diary-api';
 
 type ContractsTab = 'active' | 'all' | 'diary' | 'direct';
 
-// Active/All/Direct are real Connection data (same rows MyWorkPage's
-// Contracts tab reads) — Direct Contracts just filters on job.isDirect,
-// the flag DirectContractsService sets. Work Diary stays an honest empty
-// state here — see this file's own header comment there.
+// All four tabs are real now. Active/All/Direct read the same Connection
+// rows MyWorkPage's Contracts tab does — Direct Contracts just filters on
+// job.isDirect, the flag DirectContractsService sets. Work Diary reads the
+// aggregate work-diary/me endpoint, the same one ContractDetailPage's
+// per-connection card and /client/work-diaries both use.
 export const ContractsPage: React.FC = () => {
   const { accessToken, navigate } = useApp();
   const token = accessToken;
@@ -32,6 +34,11 @@ export const ContractsPage: React.FC = () => {
   const earningsAvailable = (payments.data?.items ?? [])
     .filter((p) => p.status === 'PAID')
     .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const workDiary = useApiResource(() => workDiaryApi.mine(token as string, 1, 100), [token], {
+    enabled: Boolean(token) && activeTab === 'diary',
+  });
+  const diaryEntries = workDiary.data?.items ?? [];
 
   const loading = connections.loading || payments.loading;
   const list =
@@ -168,12 +175,51 @@ export const ContractsPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: Work Diary — genuinely not built yet, see this file's header comment */}
+      {/* TAB 3: Work Diary — real entries, across every connection */}
       {activeTab === 'diary' && (
-        <EmptyState
-          title="No work diary entries"
-          description="Hourly time-tracking isn't available yet. Coming soon."
-        />
+        <div className="space-y-3">
+          {workDiary.loading && (
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="bg-white border border-border rounded-2xl p-5">
+                  <Skeleton className="h-4 w-40 mb-2" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!workDiary.loading && diaryEntries.length === 0 && (
+            <EmptyState
+              title="No work diary entries"
+              description="Dated updates you or a client post on a booking will show up here."
+            />
+          )}
+
+          {diaryEntries.map((entry) => (
+            <div
+              key={entry.id}
+              onClick={() => navigate(`/contracts/${entry.connection.id}`)}
+              className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer space-y-2"
+            >
+              <div className="flex items-center gap-2 text-xs text-ink-muted">
+                <NotebookPen className="w-3.5 h-3.5" />
+                <span className="font-semibold text-ink">{entry.connection.job.title}</span>
+                <span>·</span>
+                <span>{entry.author.name}</span>
+                <span>·</span>
+                <span>
+                  {new Date(entry.createdAt).toLocaleDateString('en-IN', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+              <p className="text-sm text-ink">{entry.note}</p>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

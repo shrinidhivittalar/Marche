@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
@@ -30,7 +30,6 @@ const ADMIN_ROOT_ROUTES = new Set([
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
-import { ComingSoonPage } from './pages/ComingSoonPage';
 import {
   AuthSignInPage,
   AuthSignUpPage,
@@ -49,6 +48,7 @@ import { PaymentsOverviewPage } from './pages/client/PaymentsOverviewPage';
 import { TransactionsPage } from './pages/client/finances/TransactionsPage';
 import { WeeklySummaryPage } from './pages/client/finances/WeeklySummaryPage';
 import { BudgetsPage } from './pages/client/finances/BudgetsPage';
+import { WorkDiariesPage } from './pages/client/WorkDiariesPage';
 import { SavedTalentPage } from './pages/client/freelancers/SavedTalentPage';
 import { ReferFreelancersPage } from './pages/client/freelancers/ReferFreelancersPage';
 
@@ -98,13 +98,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/finances/weekly-summary': () => <WeeklySummaryPage />,
   '/client/finances/transactions': () => <TransactionsPage />,
   '/client/finances/budgets': () => <BudgetsPage />,
-  '/client/work-diaries': () => (
-    <ComingSoonPage
-      title="Work Diaries"
-      description="Time-tracking and work diary records aren't available yet in this preview."
-      icon={Clock}
-    />
-  ),
+  '/client/work-diaries': () => <WorkDiariesPage />,
   '/provider/dashboard': () => <ProviderHomePage />,
   '/provider/search': () => <SearchJobsPage />,
   '/provider/analytics': () => <MyWorkPage />,
