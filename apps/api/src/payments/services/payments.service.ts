@@ -100,7 +100,12 @@ export class PaymentsService {
       throw new BadRequestException('Payment signature could not be verified');
     }
 
-    return this.paymentsRepository.markPaid(payment.id, razorpayPaymentId, razorpaySignature);
+    // Lost the race to the webhook (already PAID by the time this UPDATE
+    // ran) — same idempotent outcome as the early return above, just
+    // discovered a moment later. Re-read rather than trust the pre-write
+    // `payment` value, which is now stale.
+    await this.paymentsRepository.markPaid(payment.id, razorpayPaymentId, razorpaySignature);
+    return (await this.paymentsRepository.findByConnectionId(connectionId))!;
   }
 
   /**

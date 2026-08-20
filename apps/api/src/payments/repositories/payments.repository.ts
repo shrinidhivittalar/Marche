@@ -113,9 +113,25 @@ export class PaymentsRepository {
     });
   }
 
-  markPaid(id: string, razorpayPaymentId: string, razorpaySignature: string): Promise<Payment> {
-    return this.prisma.client.payment.update({
-      where: { id },
+  // Conditional UPDATE, same reasoning as ProposalsService.accept's
+  // claimFilled / transitionFromSubmitted: the status check travels inside
+  // the UPDATE, so the browser-side verify callback and the webhook racing
+  // each other are serialised by Postgres on the row — whichever gets there
+  // second matches zero rows instead of overwriting the first's write. That
+  // matters here specifically because the webhook calls this with an empty
+  // signature (it has none to offer); without the guard it could silently
+  // blank out a real one the callback had already recorded.
+  //
+  // Returns the number of rows moved: 1 for whichever call won the race, 0
+  // for the other (a no-op, not an error — the row is already PAID either
+  // way, which is what both callers actually want).
+  async markPaid(
+    id: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+  ): Promise<number> {
+    const result = await this.prisma.client.payment.updateMany({
+      where: { id, status: { not: 'PAID' } },
       data: {
         status: 'PAID',
         razorpayPaymentId,
@@ -123,6 +139,7 @@ export class PaymentsRepository {
         paidAt: new Date(),
       },
     });
+    return result.count;
   }
 
   markFailed(id: string): Promise<Payment> {
