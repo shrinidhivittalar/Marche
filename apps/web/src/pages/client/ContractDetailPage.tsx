@@ -60,6 +60,11 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   });
 
   const isCompleted = connection.data?.status === 'COMPLETED';
+  // ConnectionsService.sweepAutoComplete can flip this ACTIVE -> COMPLETED
+  // server-side (the event date passed, grace period lapsed) independent of
+  // this tab — same reasoning as the payment card's poll below. Stops once
+  // actually COMPLETED; nothing left to catch after that.
+  usePolling(connection.refetch, Boolean(token) && !isCompleted);
   const myReview = useApiResource(
     () => (isCompleted ? reviewsApi.mine(token, id) : Promise.resolve(null)),
     [token, id, isCompleted],

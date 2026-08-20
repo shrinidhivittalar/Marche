@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Receipt } from 'lucide-react';
-import { Card, Skeleton } from '@marche/ui';
+import { Button, Card, Skeleton } from '@marche/ui';
 import { StatusBadge } from '../../../components/common/StatusBadge';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { useApp } from '../../../context/AppContext';
@@ -14,8 +14,9 @@ import { formatDate, formatMoney } from '../../../lib/finance';
 export const TransactionsPage: React.FC = () => {
   const { accessToken } = useApp();
   const token = accessToken;
+  const [page, setPage] = useState(1);
 
-  const payments = useApiResource(() => paymentsApi.mine(token as string), [token], {
+  const payments = useApiResource(() => paymentsApi.mine(token as string, page), [token, page], {
     enabled: Boolean(token),
   });
   const items = payments.data?.items ?? [];
@@ -80,6 +81,30 @@ export const TransactionsPage: React.FC = () => {
             ))}
           </div>
         </Card>
+      )}
+
+      {payments.data && payments.data.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3" data-testid="pagination">
+          <Button
+            variant="secondary"
+            disabled={!payments.data.hasPrevious}
+            data-testid="page-prev"
+            onClick={() => setPage((n) => Math.max(1, n - 1))}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-ink-muted" data-testid="page-indicator">
+            Page {payments.data.page} of {payments.data.totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={!payments.data.hasNext}
+            data-testid="page-next"
+            onClick={() => setPage((n) => n + 1)}
+          >
+            Next
+          </Button>
+        </div>
       )}
     </div>
   );
