@@ -32,11 +32,6 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_TALENT,
 } from '../data/mockData';
-import {
-  deriveSlotFromEvent,
-  isVendorSlotAvailable,
-  markVendorSlotBooked,
-} from '../lib/availability';
 import { isBidWithinBudget } from '../lib/formatBudget';
 import {
   BackendUser,
@@ -175,8 +170,6 @@ interface AppContextType {
     },
   ) => Proposal;
 
-  hireVendor: (jobId: string, proposalId: string) => { contract: Contract };
-
   vendorMarkCompleted: (contractId: string) => void;
   clientConfirmCompletion: (contractId: string) => void;
   submitReview: (data: { contractId: string; rating: number; comment: string }) => Review;
@@ -212,8 +205,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'marche_app_state_v8';
-const ACK_NUMBER_MIN = 1000;
-const ACK_NUMBER_RANGE = 9000; // yields a random 4-digit suffix (1000-9999)
 const TERMS_VERSION = 'marche-terms-v1';
 // Mirrors the access-token TTL in apps/api/src/identity/services/auth.service.ts.
 // Renewed a minute early so a request in flight when the timer fires is still
@@ -1061,112 +1052,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newProposal;
   };
 
-  // 3. Hire Vendor & Confirm Booking
-  const hireVendor = (jobId: string, proposalId: string): { contract: Contract } => {
-    const req = jobs.find((r) => r.id === jobId);
-    const prop = proposals.find((p) => p.id === proposalId);
-
-    if (!req || !prop) {
-      throw new Error('Job or proposal not found');
-    }
-
-    const slot = deriveSlotFromEvent(req.timingMode, req.eventStartTime);
-    if (!isVendorSlotAvailable(prop.vendorId, req.eventDate, slot)) {
-      throw new Error('This vendor is no longer available on the selected date.');
-    }
-
-    const contractId = generateId('ctr');
-    const ackNumber = `MARCHE-ACK-${new Date().getFullYear()}-${Math.floor(ACK_NUMBER_MIN + Math.random() * ACK_NUMBER_RANGE)}`;
-
-    const newContract: Contract = {
-      id: contractId,
-      jobId: req.id,
-      jobTitle: req.title,
-      category: req.category,
-      clientId: req.clientId,
-      clientName: req.clientName,
-      clientAvatar: req.clientAvatar,
-      vendorId: prop.vendorId,
-      vendorName: prop.vendorName,
-      vendorAvatar: prop.vendorAvatar,
-      proposalId: prop.id,
-      amount: prop.bidAmount,
-      eventDate: req.eventDate,
-      timingMode: req.timingMode,
-      eventStartTime: req.eventStartTime,
-      eventEndTime: req.eventEndTime,
-      location: req.location,
-      bookingState: 'Confirmed',
-      createdAt: new Date().toISOString(),
-      acknowledgementNumber: ackNumber,
-      agreement: {
-        termsVersion: TERMS_VERSION,
-        acceptedAt: new Date().toISOString(),
-        acceptedById: currentUser.id,
-        acceptedByName: currentUser.name,
-        acceptedByRole: currentUser.role,
-        jobTitle: req.title,
-        category: req.category,
-        location: req.location,
-        eventDate: req.eventDate,
-        timingMode: req.timingMode,
-        eventStartTime: req.eventStartTime,
-        eventEndTime: req.eventEndTime,
-        amount: prop.bidAmount,
-        proposalId: prop.id,
-        acknowledgementNumber: ackNumber,
-      },
-    };
-
-    // Update contract state
-    setContracts((prev) => [newContract, ...prev]);
-
-    // Auto-block the vendor's availability calendar for the confirmed event slot
-    markVendorSlotBooked(prop.vendorId, req.eventDate, slot);
-
-    // A hired vendor is no longer just "saved for later"
-    setSavedTalentIds((prev) => prev.filter((id) => id !== prop.vendorId));
-
-    // Update proposal state
-    setProposals((prev) =>
-      prev.map((p) => {
-        if (p.id === proposalId) return { ...p, status: 'accepted' };
-        if (p.jobId === jobId) return { ...p, status: 'declined' };
-        return p;
-      }),
-    );
-
-    // Update job state
-    setJobs((prev) => prev.map((r) => (r.id === jobId ? { ...r, status: 'Confirmed' } : r)));
-
-    // Write audit log
-    addAuditLog(
-      'Vendor Hired & Contract Confirmed',
-      `Contract ${contractId} with ${prop.vendorName}`,
-      'Open',
-      'Confirmed',
-    );
-
-    addAuditLog(
-      'Contract Terms Accepted',
-      `Contract ${contractId}`,
-      'Pending acceptance',
-      TERMS_VERSION,
-      `Accepted by ${currentUser.name}`,
-    );
-
-    // Notifications
-    addNotification(
-      prop.vendorId,
-      'You Have Been Hired!',
-      `Congratulations! ${req.clientName} accepted your proposal (₹${prop.bidAmount.toLocaleString('en-IN')}) for "${req.title}". Your booking is confirmed.`,
-      'contract',
-      `/contracts/${contractId}`,
-    );
-
-    return { contract: newContract };
-  };
-
   // 4. Vendor Marks Event Completed
   const vendorMarkCompleted = (contractId: string) => {
     const ctr = contracts.find((c) => c.id === contractId);
@@ -1618,7 +1503,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         publishJobDraft,
         submitProposal,
         saveProposalDraft,
-        hireVendor,
         vendorMarkCompleted,
         clientConfirmCompletion,
         submitReview,

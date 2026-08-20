@@ -12,7 +12,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Button, Input } from '@marche/ui';
+import { Button, Input, Skeleton } from '@marche/ui';
 import { useApiResource } from '../hooks/useApiResource';
 import { usePolling } from '../hooks/usePolling';
 import { connectionsApi, type ApiConnection } from '../lib/proposals-api';
@@ -191,7 +191,22 @@ export const MessagesPage: React.FC = () => {
     .filter((c) => activeFilter !== 'favorites' || favoriteConversationIds.includes(c.id));
 
   if (connections.loading) {
-    return <p className="text-xs text-ink-muted py-12 text-center">Loading messages…</p>;
+    return (
+      <div className="space-y-3" data-testid="messages-loading">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="p-3.5 rounded-2xl border border-border bg-bg flex items-start gap-3"
+          >
+            <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-3 w-2/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
