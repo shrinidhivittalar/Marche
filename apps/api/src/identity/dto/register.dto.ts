@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsIn, IsString, Matches, MinLength } from 'class-validator';
 import { PASSWORD_PATTERN, PASSWORD_PATTERN_MESSAGE } from './password.constants';
 
@@ -6,6 +7,7 @@ export type RegisterableRole = 'CLIENT' | 'PROVIDER';
 
 export class RegisterDto {
   @ApiProperty({ example: 'jane@example.com' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   email!: string;
 

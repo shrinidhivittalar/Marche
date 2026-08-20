@@ -45,11 +45,14 @@ test.describe('messages', () => {
 
     // Client sends a message — this is what the provider needs to see as
     // unread, then have it clear on its own once their Messages page opens.
-    // Confirmed via the conversation-row preview rather than the active
-    // thread panel: whether the sender's own open thread re-renders the
-    // just-sent message is a separate, pre-existing behavior unrelated to
-    // this fix (reproduces identically with this fix disabled) — flagged
-    // separately rather than folded into this regression test.
+    // Also covers a second audit finding: the sender's own active thread
+    // panel used to keep showing the pre-send state after sending, because
+    // usePolling let ticks overlap the manual post-send refetch and
+    // useApiResource's generation guard discarded whichever response landed
+    // second — under this dev setup requests routinely take longer than the
+    // poll interval, so every response lost the race and the thread never
+    // updated. Fixed by having usePolling skip a tick while the previous one
+    // is still in flight.
     await page.goto('/messages');
     await expect(page.getByTestId('conversation-row').first()).toBeVisible({ timeout: 40_000 });
     await page.getByTestId('message-input').fill('Looking forward to working together!');
@@ -57,6 +60,10 @@ test.describe('messages', () => {
     await expect(page.getByTestId('conversation-row').first()).toContainText(
       'Looking forward to working together!',
       { timeout: 20_000 },
+    );
+    await expect(page.getByTestId('message-bubble').last()).toContainText(
+      'Looking forward to working together!',
+      { timeout: 10_000 },
     );
 
     // Confirm the provider actually starts unread, from a screen that
