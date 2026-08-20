@@ -235,11 +235,18 @@ describe('ConnectionsRepository', () => {
 
     await connections.markCompleted('connection_1');
 
-    expect(connection.update.mock.calls[0][0]).toMatchObject({
-      where: { id: 'connection_1' },
+    expect(connection.updateMany.mock.calls[0][0]).toMatchObject({
+      where: { id: 'connection_1', status: 'ACTIVE' },
       data: { status: 'COMPLETED' },
     });
-    expect(connection.update.mock.calls[0][0].data.completedAt).toBeInstanceOf(Date);
+    expect(connection.updateMany.mock.calls[0][0].data.completedAt).toBeInstanceOf(Date);
+  });
+
+  it('carries the status test inside the update, so a concurrent sweep and a manual confirm cannot both win', async () => {
+    const { connections, connection } = build();
+    connection.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(connections.markCompleted('connection_1')).resolves.toBe(0);
   });
 
   it('sweeps only ACTIVE connections whose event happened before the grace cutoff', async () => {

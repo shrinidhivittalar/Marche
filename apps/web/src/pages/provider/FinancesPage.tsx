@@ -5,6 +5,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
+import { fetchAllPages } from '../../lib/api-fetch';
 import { paymentsApi } from '../../lib/payments-api';
 import { formatDate, formatMoney } from '../../lib/finance';
 
@@ -19,10 +20,14 @@ export const FinancesPage: React.FC = () => {
   const { accessToken } = useApp();
   const token = accessToken;
 
-  const payments = useApiResource(() => paymentsApi.mine(token as string, 1, 100), [token], {
-    enabled: Boolean(token),
-  });
-  const items = payments.data?.items ?? [];
+  // totalEarned/totalPending sum over every payment, not a page's worth — a
+  // 100-row cap would silently understate them past that many.
+  const payments = useApiResource(
+    () => fetchAllPages((page) => paymentsApi.mine(token as string, page, 100)),
+    [token],
+    { enabled: Boolean(token) },
+  );
+  const items = payments.data ?? [];
   const paid = items.filter((p) => p.status === 'PAID');
   const pending = items.filter((p) => p.status === 'CREATED');
   const totalEarned = paid.reduce((sum, p) => sum + Number(p.amount), 0);

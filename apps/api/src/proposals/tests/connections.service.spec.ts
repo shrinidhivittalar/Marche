@@ -57,14 +57,39 @@ describe('ConnectionsService', () => {
   describe('confirmComplete', () => {
     it('completes when the caller is the client and the event date has passed', async () => {
       const { service, connectionsRepository } = build();
-      connectionsRepository.findById.mockResolvedValue(activeConnection());
-      connectionsRepository.markCompleted.mockResolvedValue(
-        activeConnection({ status: 'COMPLETED' }),
-      );
+      connectionsRepository.findById
+        .mockResolvedValueOnce(activeConnection())
+        .mockResolvedValueOnce(activeConnection({ status: 'COMPLETED' }));
+      connectionsRepository.markCompleted.mockResolvedValue(1);
 
       const result = await service.confirmComplete('user_1', 'connection_1');
 
       expect(connectionsRepository.markCompleted).toHaveBeenCalledWith('connection_1');
+      expect(result.status).toBe('COMPLETED');
+    });
+
+    it('sweeps auto-completion before reading, so a stalled confirm on an already-swept connection is idempotent, not a re-write', async () => {
+      const { service, connectionsRepository } = build();
+      connectionsRepository.findById.mockResolvedValue(activeConnection());
+
+      await service.confirmComplete('user_1', 'connection_1');
+
+      expect(connectionsRepository.sweepAutoComplete).toHaveBeenCalled();
+    });
+
+    it('returns the current row even if this call lost the race to a concurrent sweep', async () => {
+      // markCompleted's conditional UPDATE matches zero rows when another
+      // caller (a concurrent sweep, or another confirm) already completed it
+      // first — this call must still report COMPLETED, from a fresh read,
+      // not error or report ACTIVE.
+      const { service, connectionsRepository } = build();
+      connectionsRepository.findById
+        .mockResolvedValueOnce(activeConnection())
+        .mockResolvedValueOnce(activeConnection({ status: 'COMPLETED' }));
+      connectionsRepository.markCompleted.mockResolvedValue(0);
+
+      const result = await service.confirmComplete('user_1', 'connection_1');
+
       expect(result.status).toBe('COMPLETED');
     });
 

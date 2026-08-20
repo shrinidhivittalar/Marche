@@ -5,6 +5,7 @@ import { StatusBadge } from '../../../components/common/StatusBadge';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { useApp } from '../../../context/AppContext';
 import { useApiResource } from '../../../hooks/useApiResource';
+import { fetchAllPages } from '../../../lib/api-fetch';
 import { paymentsApi } from '../../../lib/payments-api';
 import {
   filterPaymentsByDateRange,
@@ -19,10 +20,16 @@ export const WeeklySummaryPage: React.FC = () => {
   const { accessToken } = useApp();
   const token = accessToken;
 
-  const payments = useApiResource(() => paymentsApi.mine(token as string), [token], {
-    enabled: Boolean(token),
-  });
-  const allItems = payments.data?.items ?? [];
+  // A week can be arbitrarily far back (weekOffset has no lower bound), so
+  // this needs every payment, not just the newest page — one capped page
+  // would silently show an empty/incomplete week once there are more than a
+  // page's worth of payments.
+  const payments = useApiResource(
+    () => fetchAllPages((page) => paymentsApi.mine(token as string, page, 100)),
+    [token],
+    { enabled: Boolean(token) },
+  );
+  const allItems = payments.data ?? [];
 
   const [weekOffset, setWeekOffset] = useState(0);
   const range = shiftWeek(getCurrentWeekRange(), weekOffset);

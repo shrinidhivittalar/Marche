@@ -232,6 +232,7 @@ export const ProviderOnboardingPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionPending, setActionPending] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -252,11 +253,14 @@ export const ProviderOnboardingPage: React.FC = () => {
   // inline rather than letting it vanish.
   const runAction = async (action: () => Promise<unknown>) => {
     setActionError(null);
+    setActionPending(true);
     try {
       await action();
       await profile.refetch();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Something went wrong.');
+    } finally {
+      setActionPending(false);
     }
   };
 
@@ -506,7 +510,7 @@ export const ProviderOnboardingPage: React.FC = () => {
             <SkillsCard
               profile={p}
               availableSkills={availableSkills}
-              disabled={profile.loading}
+              disabled={profile.loading || actionPending}
               onAdd={(skillId) => void runAction(() => profilesApi.addSkill(token, skillId))}
               onAddNamed={(name) => void runAction(() => profilesApi.addSkillByName(token, name))}
               onRemove={(userSkillId) =>
@@ -563,7 +567,7 @@ export const ProviderOnboardingPage: React.FC = () => {
             {actionError && <p className="text-sm text-danger">{actionError}</p>}
             <ExperienceCard
               profile={p}
-              disabled={profile.loading}
+              disabled={profile.loading || actionPending}
               onAdd={(body) => void runAction(() => profilesApi.addExperience(token, body))}
               onRemove={(id) => void runAction(() => profilesApi.removeExperience(token, id))}
             />
@@ -582,7 +586,7 @@ export const ProviderOnboardingPage: React.FC = () => {
             {actionError && <p className="text-sm text-danger">{actionError}</p>}
             <EducationCard
               profile={p}
-              disabled={profile.loading}
+              disabled={profile.loading || actionPending}
               onAdd={(body) => void runAction(() => profilesApi.addEducation(token, body))}
               onRemove={(id) => void runAction(() => profilesApi.removeEducation(token, id))}
             />
@@ -604,7 +608,7 @@ export const ProviderOnboardingPage: React.FC = () => {
             {actionError && <p className="text-sm text-danger">{actionError}</p>}
             <LanguagesCard
               profile={p}
-              disabled={profile.loading}
+              disabled={profile.loading || actionPending}
               onAdd={(body) => void runAction(() => profilesApi.addLanguage(token, body))}
               onRemove={(id) => void runAction(() => profilesApi.removeLanguage(token, id))}
             />

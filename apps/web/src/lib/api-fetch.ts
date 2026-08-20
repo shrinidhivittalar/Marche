@@ -39,6 +39,27 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
+// For a screen that aggregates over everything (a total, a weekly filter, a
+// per-category sum) rather than browsing a list — one capped page silently
+// understates the real total once a caller has more rows than the cap.
+// Walks every page of a `Page<T>`-shaped resource (marketplace-api.ts's
+// `hasNext`/`items` shape) and concatenates them. Not for a screen that
+// paginates for real (Transactions, Browse) — those want one page at a time,
+// not the whole list loaded up front.
+export async function fetchAllPages<T>(
+  fetchPage: (page: number) => Promise<{ items: T[]; hasNext: boolean }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let page = 1;
+  for (;;) {
+    const result = await fetchPage(page);
+    items.push(...result.items);
+    if (!result.hasNext) break;
+    page += 1;
+  }
+  return items;
+}
+
 // Empty values are dropped rather than sent as blank params: `?location=`
 // would otherwise reach the API as a filter on the empty string.
 export function toQuery(params: Record<string, unknown>): string {

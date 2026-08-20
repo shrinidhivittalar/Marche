@@ -10,7 +10,7 @@ import type { ApiJob } from './jobs-api';
 
 export function formatMoney(amount: string | number): string {
   const n = typeof amount === 'string' ? Number(amount) : amount;
-  return `₹${n.toLocaleString('en-IN')}`;
+  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(iso: string): string {

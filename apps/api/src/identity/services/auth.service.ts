@@ -140,10 +140,11 @@ export class AuthService {
       metadata: { role: user.role },
     });
 
-    // After commit, not before — same rule as every other post-transaction
-    // side effect here. Swallows its own failure (ReferralsService), so a
-    // bookkeeping miss can never turn a successful registration into one.
-    await this.referralsService.handleUserJoined(user.email);
+    // Referral JOINED status is handled on email verification (see
+    // verifyEmail below), not here — registering alone doesn't prove the
+    // address belongs to whoever submitted it, and marking a referral
+    // joined off an unverified registration would let anyone spoof a
+    // referral by registering with an email they don't own.
 
     return REGISTER_ACKNOWLEDGEMENT;
   }
@@ -339,12 +340,17 @@ export class AuthService {
       throw new UnauthorizedException('This verification link is invalid or has expired');
     }
 
-    await this.usersRepository.markEmailVerified(verification.userId);
+    const user = await this.usersRepository.markEmailVerified(verification.userId);
     await this.verificationTokensRepository.deleteById(verification.id);
     await this.auditService.record({
       eventType: AUTH_EVENTS.EMAIL_VERIFIED,
       userId: verification.userId,
     });
+
+    // Moved here from register(): this is the point the address is
+    // actually proven to belong to whoever signed up, which is what a
+    // referral's JOINED status is supposed to mean.
+    await this.referralsService.handleUserJoined(user.email);
   }
 
   private async issueVerificationToken(user: User): Promise<void> {

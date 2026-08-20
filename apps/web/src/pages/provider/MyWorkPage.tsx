@@ -259,7 +259,9 @@ export const MyWorkPage: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-ink-muted line-clamp-2 leading-relaxed mb-4">
-                  {proposal.coverMessage}
+                  {proposal.job.isDirect
+                    ? 'Direct offer — outside the marketplace.'
+                    : proposal.coverMessage}
                 </p>
 
                 <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-ink-muted">

@@ -95,6 +95,9 @@ export class ConnectionsService {
    */
   async confirmComplete(userId: string, connectionId: string) {
     const profile = await this.getOwnProfile(userId);
+    // Same as findById/listMine — a connection whose grace period already
+    // lapsed should read as COMPLETED here too, not just on the read paths.
+    await this.connectionsRepository.sweepAutoComplete();
     const connection = await this.connectionsRepository.findById(connectionId);
 
     if (!connection) {
@@ -119,7 +122,13 @@ export class ConnectionsService {
       throw new ConflictException('Cannot confirm complete before the event date');
     }
 
-    return this.connectionsRepository.markCompleted(connectionId);
+    // markCompleted's own count is discarded: whether this call won the race
+    // against a concurrent sweep or lost it, the connection is COMPLETED
+    // either way, and the re-read below returns the row as it actually
+    // stands — not a stale pre-write copy, and not this call's write if
+    // another one already landed first.
+    await this.connectionsRepository.markCompleted(connectionId);
+    return (await this.connectionsRepository.findById(connectionId))!;
   }
 
   /**

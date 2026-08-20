@@ -111,14 +111,25 @@ export class ConnectionsRepository {
     });
   }
 
-  // Client confirmation, or the sweep below — either is "complete" the same
-  // way, so both call this rather than each writing the row independently.
-  markCompleted(id: string) {
-    return this.prisma.client.connection.update({
-      where: { id },
+  // Called by ConnectionsService.confirmComplete (the client-confirmation
+  // path). sweepAutoComplete below is the other way a connection completes,
+  // but it writes the same shape directly via updateMany rather than calling
+  // this — it flips a batch of rows in one query, which a single-row update
+  // taking an id can't do.
+  //
+  // Conditional UPDATE, same reasoning as PaymentsRepository.markPaid: the
+  // status check travels inside the UPDATE, so a sweep and a manual confirm
+  // racing each other are serialised by Postgres on the row — the loser
+  // matches zero rows instead of re-stamping completedAt to a later time
+  // than when the connection actually completed. Returns the row count, not
+  // the row; ConnectionsService re-reads either way, since a 0 here still
+  // means "COMPLETED now", just written by the other caller.
+  async markCompleted(id: string): Promise<number> {
+    const result = await this.prisma.client.connection.updateMany({
+      where: { id, status: 'ACTIVE' },
       data: { status: 'COMPLETED', completedAt: new Date() },
-      select: CONNECTION_FIELDS,
     });
+    return result.count;
   }
 
   // Flips every ACTIVE connection whose event happened more than the grace

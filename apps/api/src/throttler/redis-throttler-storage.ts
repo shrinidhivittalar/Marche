@@ -55,10 +55,18 @@ interface MemoryEntry {
   blockedUntil: number;
 }
 
+// How often the fallback Map is swept for entries whose hit-window and
+// block have both lapsed. Redis expires its keys on its own (PEXPIRE); the
+// in-memory stand-in has no such thing, so without this every distinct
+// IP/email key ever throttled would stay in the Map forever — an unbounded
+// leak on any process that runs long enough without Redis.
+const MEMORY_SWEEP_INTERVAL_MS = 60_000;
+
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy {
   private readonly logger = new Logger(RedisThrottlerStorage.name);
   private readonly client: Redis | null;
+  private readonly sweepInterval: NodeJS.Timeout | null;
 
   // Per-process fallback, used only when REDIS_URL isn't set (see the
   // warning below) — deliberately not the primary path. Limits kept here
@@ -71,12 +79,24 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
   constructor(redisUrl: string | undefined) {
     if (redisUrl) {
       this.client = new Redis(redisUrl);
+      this.sweepInterval = null;
     } else {
       this.client = null;
       this.logger.warn(
         'REDIS_URL is not set — rate limiting is falling back to per-process, in-memory storage. ' +
           'Limits reset on every redeploy and are not shared across instances; see .env.example.',
       );
+      this.sweepInterval = setInterval(() => this.sweepMemoryStore(), MEMORY_SWEEP_INTERVAL_MS);
+      this.sweepInterval.unref?.();
+    }
+  }
+
+  private sweepMemoryStore(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.memoryStore) {
+      if (entry.expiresAt <= now && entry.blockedUntil <= now) {
+        this.memoryStore.delete(key);
+      }
     }
   }
 
@@ -164,5 +184,6 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
 
   async onModuleDestroy() {
     this.client?.disconnect();
+    if (this.sweepInterval) clearInterval(this.sweepInterval);
   }
 }

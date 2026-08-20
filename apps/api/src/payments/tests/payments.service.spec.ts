@@ -14,7 +14,7 @@ function build() {
     findByOrderId: jest.fn(),
     create: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'CREATED' }),
     retry: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'CREATED' }),
-    markPaid: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'PAID' }),
+    markPaid: jest.fn().mockResolvedValue(1),
     markFailed: jest.fn().mockResolvedValue({ id: 'payment_1', status: 'FAILED' }),
     listForClient: jest.fn().mockResolvedValue([]),
     countForClient: jest.fn().mockResolvedValue(0),
@@ -134,6 +134,42 @@ describe('PaymentsService', () => {
 
       expect(razorpay.verifyPaymentSignature).not.toHaveBeenCalled();
       expect(paymentsRepository.markPaid).not.toHaveBeenCalled();
+    });
+
+    it('losing the race to the webhook still returns the current, already-PAID row rather than overwriting it', async () => {
+      // Regression coverage for the "Could be better" audit finding:
+      // verifyCallback and handleWebhookEvent both used to read-then-write
+      // with no locking, so the real, browser-verified signature could be
+      // clobbered by the webhook's empty one if both fired concurrently.
+      // markPaid is now a conditional UPDATE (WHERE status != 'PAID') — the
+      // loser's write matches zero rows, which paymentsRepository.markPaid
+      // reports back as a count. This simulates that loss: the webhook won
+      // in between the CREATED read below and this call, so the conditional
+      // UPDATE here affects 0 rows.
+      const { service, paymentsRepository, razorpay } = build();
+      paymentsRepository.findByConnectionId
+        .mockResolvedValueOnce({ id: 'payment_1', status: 'CREATED', razorpayOrderId: 'order_1' })
+        .mockResolvedValueOnce({
+          id: 'payment_1',
+          status: 'PAID',
+          razorpayPaymentId: 'pay_webhook',
+          razorpaySignature: '',
+        });
+      paymentsRepository.markPaid.mockResolvedValue(0);
+
+      const result = await service.verifyCallback(
+        'user_client',
+        'connection_1',
+        'order_1',
+        'pay_1',
+        'sig_1',
+      );
+
+      expect(razorpay.verifyPaymentSignature).toHaveBeenCalled();
+      expect(paymentsRepository.markPaid).toHaveBeenCalledWith('payment_1', 'pay_1', 'sig_1');
+      // Re-read after the conditional write, not the stale pre-write value —
+      // reflects the webhook's write, which actually won.
+      expect(result.razorpayPaymentId).toBe('pay_webhook');
     });
 
     it("rejects an order id that does not match the connection's own payment", async () => {

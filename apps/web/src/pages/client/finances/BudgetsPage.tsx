@@ -4,6 +4,7 @@ import { Card, Skeleton } from '@marche/ui';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { useApp } from '../../../context/AppContext';
 import { useApiResource } from '../../../hooks/useApiResource';
+import { fetchAllPages } from '../../../lib/api-fetch';
 import { paymentsApi } from '../../../lib/payments-api';
 import { jobsApi } from '../../../lib/jobs-api';
 import { formatMoney, getBudgetSummaries } from '../../../lib/finance';
@@ -12,15 +13,21 @@ export const BudgetsPage: React.FC = () => {
   const { accessToken } = useApp();
   const token = accessToken;
 
-  const jobs = useApiResource(() => jobsApi.mine(token as string, 1, 100), [token], {
-    enabled: Boolean(token),
-  });
-  const payments = useApiResource(() => paymentsApi.mine(token as string, 1, 100), [token], {
-    enabled: Boolean(token),
-  });
+  // Planned/committed totals sum over every job/payment, not a page's worth
+  // — a 100-row cap would silently understate them past that many.
+  const jobs = useApiResource(
+    () => fetchAllPages((page) => jobsApi.mine(token as string, page, 100)),
+    [token],
+    { enabled: Boolean(token) },
+  );
+  const payments = useApiResource(
+    () => fetchAllPages((page) => paymentsApi.mine(token as string, page, 100)),
+    [token],
+    { enabled: Boolean(token) },
+  );
 
   const loading = jobs.loading || payments.loading;
-  const budgets = getBudgetSummaries(jobs.data?.items ?? [], payments.data?.items ?? []);
+  const budgets = getBudgetSummaries(jobs.data ?? [], payments.data ?? []);
   const planned = budgets.reduce((total, b) => total + b.planned, 0);
   const committed = budgets.reduce((total, b) => total + b.committed, 0);
 

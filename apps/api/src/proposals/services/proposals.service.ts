@@ -113,6 +113,21 @@ export class ProposalsService {
 
   async withdraw(userId: string, proposalId: string): Promise<void> {
     const { proposal } = await this.getOwnProposal(userId, proposalId);
+    const job = await this.jobsRepository.findById(proposal.jobId);
+
+    // A direct contract's "proposal" is the client's own offer to this
+    // provider (DirectContractsService), not something the provider
+    // authored — deciding it belongs to DirectContractsService.accept/
+    // decline, which notifies the client correctly ("declined") and keeps
+    // it off the ordinary proposal lifecycle. Without this, a provider
+    // could withdraw() a direct offer here instead, firing
+    // proposalWithdrawn (misleadingly implying the client's own offer was
+    // "withdrawn") rather than directContractDeclined.
+    if (job?.isDirect) {
+      throw new ForbiddenException(
+        'A direct contract offer is accepted or declined via the direct-contracts endpoints, not withdrawn',
+      );
+    }
 
     const moved = await this.proposalsRepository.transitionFromSubmitted(
       this.proposalsRepository.client,
@@ -128,7 +143,6 @@ export class ProposalsService {
       throw new ConflictException(await this.decidedMessage(proposal.id));
     }
 
-    const job = await this.jobsRepository.findById(proposal.jobId);
     if (job) {
       await this.notifyRecipient(job.clientProfileId, (recipientUserId) =>
         this.notificationsService.proposalWithdrawn(recipientUserId, {
