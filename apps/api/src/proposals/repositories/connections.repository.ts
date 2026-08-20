@@ -111,8 +111,11 @@ export class ConnectionsRepository {
     });
   }
 
-  // Client confirmation, or the sweep below — either is "complete" the same
-  // way, so both call this rather than each writing the row independently.
+  // Called by ConnectionsService.confirmComplete (the client-confirmation
+  // path). sweepAutoComplete below is the other way a connection completes,
+  // but it writes the same shape directly via updateMany rather than calling
+  // this — it flips a batch of rows in one query, which a single-row update
+  // taking an id can't do.
   markCompleted(id: string) {
     return this.prisma.client.connection.update({
       where: { id },

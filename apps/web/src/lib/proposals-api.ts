@@ -36,7 +36,7 @@ export type ProposalStatus = 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
 // The fields both sides of a proposal see. Prices arrive as strings from
 // Prisma's Decimal and are kept as strings, formatted for display rather
 // than parsed into a float that loses paise.
-interface ProposalCore {
+export interface ProposalCore {
   id: string;
   coverMessage: string;
   proposedPrice: string;

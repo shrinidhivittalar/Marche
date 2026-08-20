@@ -4,7 +4,7 @@
 // produces underneath is an ordinary Proposal, pending the named
 // provider's own accept/decline.
 import { apiFetch } from './api-fetch';
-import type { ApiConnection } from './proposals-api';
+import type { ApiConnection, ProposalCore } from './proposals-api';
 
 export interface CreateDirectContractBody {
   providerProfileId: string;
@@ -20,7 +20,7 @@ export interface CreateDirectContractBody {
 export const directContractsApi = {
   /** Sends the offer. Nothing is binding until the provider accepts it below. */
   create: (token: string, body: CreateDirectContractBody) =>
-    apiFetch<{ id: string }>('/direct-contracts', token, {
+    apiFetch<ProposalCore>('/direct-contracts', token, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
