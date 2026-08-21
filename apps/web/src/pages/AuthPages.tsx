@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { animate } from 'animejs';
 import {
   ArrowRight,
   ShieldCheck,
@@ -10,7 +11,6 @@ import {
   Mail,
   User,
   Building,
-  ArrowLeft,
   XCircle,
   Loader2,
 } from 'lucide-react';
@@ -18,20 +18,21 @@ import { useApp } from '../context/AppContext';
 import { Button, Input } from '@marche/ui';
 import { ApiError } from '../lib/api';
 
-function AuthBrandPanel() {
-  return (
-    <div className="hidden lg:flex lg:w-[45%] xl:w-[42%] shrink-0 relative overflow-hidden border-r border-border bg-[#eef2ec] items-center justify-center">
-      <img
-        src="/images/auth-hero.png"
-        alt="Marché — search services, browse popular categories, and connect with top-rated event professionals"
-        className="w-full h-full object-contain"
-      />
-    </div>
-  );
+// Shared by every auth screen's card — a small fade+slide entrance rather
+// than the landing page's bigger choreography, since these are functional
+// screens someone is trying to get through, not a marketing moment.
+function animateAuthCard() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  animate('.auth-card', {
+    opacity: [0, 1],
+    translateY: [16, 0],
+    duration: reduceMotion ? 0 : 450,
+    ease: 'outQuad',
+  });
 }
 
 export const AuthSignInPage: React.FC = () => {
-  const { navigate, goBack, loginWithCredentials, requestPasswordReset } = useApp();
+  const { navigate, loginWithCredentials, requestPasswordReset } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,28 +72,31 @@ export const AuthSignInPage: React.FC = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#eef2ec] flex font-sans">
-      <AuthBrandPanel />
-      <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-y-auto">
-        {/* Top Bar Navigation */}
-        <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
-          <button
-            onClick={goBack}
-            aria-label="Back"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-        </div>
+  useEffect(() => {
+    animateAuthCard();
+  }, []);
 
+  return (
+    <div
+      className="min-h-screen bg-bg flex font-sans"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    >
+      <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-y-auto">
         {/* Main Card */}
         <div className="flex-1 flex items-center justify-center py-6">
-          <div className="w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-4">
+          <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card shadow-2xl space-y-4">
             <div className="text-center space-y-1">
-              <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
+              <button
+                type="button"
+                onClick={() => navigate('/landing')}
+                aria-label="Go to home"
+                className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1 cursor-pointer hover:bg-primary-hover transition-colors"
+              >
                 M
-              </div>
+              </button>
               <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
                 Welcome back
               </h1>
@@ -157,7 +161,7 @@ export const AuthSignInPage: React.FC = () => {
               </div>
 
               {forgotSent && (
-                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-[11px] flex items-center gap-2">
+                <div className="p-2.5 bg-primary-subtle border border-primary/20 text-primary rounded-xl text-[11px] flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span>
                     If an account exists for that email, reset instructions have been sent.
@@ -267,7 +271,7 @@ export const AuthSignInPage: React.FC = () => {
 };
 
 export const AuthSignUpPage: React.FC = () => {
-  const { navigate, goBack, acceptLegalTerms, registerAccount } = useApp();
+  const { navigate, acceptLegalTerms, registerAccount } = useApp();
   const [role, setRole] = useState<'client' | 'vendor'>('client');
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
@@ -302,10 +306,20 @@ export const AuthSignUpPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    animateAuthCard();
+  }, [registered]);
+
   if (registered) {
     return (
-      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
-        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+      <div
+        className="min-h-screen bg-bg flex items-center justify-center font-sans p-4"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
+      >
+        <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card shadow-2xl text-center space-y-3">
           <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />
           <h1 className="text-xl font-extrabold text-ink tracking-tight">Check your email</h1>
           {/* Wording has to hold for both outcomes the API allows: a new
@@ -326,27 +340,26 @@ export const AuthSignUpPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef2ec] flex font-sans">
-      <AuthBrandPanel />
+    <div
+      className="min-h-screen bg-bg flex font-sans"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    >
       <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-y-auto">
-        {/* Top Bar Navigation */}
-        <div className="shrink-0 max-w-7xl w-full mx-auto flex items-center justify-between">
-          <button
-            onClick={goBack}
-            aria-label="Back"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-ink-muted hover:text-ink hover:bg-surface transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-        </div>
-
         {/* Main Card */}
         <div className="flex-1 flex items-center justify-center py-6">
-          <div className="w-full max-w-lg bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-3.5">
+          <div className="auth-card opacity-0 w-full max-w-lg bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card shadow-2xl space-y-3.5">
             <div className="text-center space-y-1">
-              <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
+              <button
+                type="button"
+                onClick={() => navigate('/landing')}
+                aria-label="Go to home"
+                className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1 cursor-pointer hover:bg-primary-hover transition-colors"
+              >
                 M
-              </div>
+              </button>
               <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
                 Create your account
               </h1>
@@ -592,9 +605,19 @@ export const AuthVerifyEmailPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    animateAuthCard();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
-      <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+    <div
+      className="min-h-screen bg-bg flex items-center justify-center font-sans p-4"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    >
+      <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card shadow-2xl text-center space-y-3">
         {status === 'verifying' && (
           <>
             <Loader2 className="w-10 h-10 text-primary mx-auto animate-spin" />
@@ -655,10 +678,20 @@ export const AuthResetPasswordPage: React.FC = () => {
     if (token) window.history.replaceState({}, '', window.location.pathname);
   }, [token]);
 
+  useEffect(() => {
+    animateAuthCard();
+  }, [token, done]);
+
   if (!token) {
     return (
-      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
-        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+      <div
+        className="min-h-screen bg-bg flex items-center justify-center font-sans p-4"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
+      >
+        <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card shadow-2xl text-center space-y-3">
           <XCircle className="w-10 h-10 text-danger mx-auto" />
           <h1 className="text-xl font-extrabold text-ink tracking-tight">Invalid link</h1>
           <p className="text-xs text-ink-muted leading-relaxed">
@@ -674,8 +707,14 @@ export const AuthResetPasswordPage: React.FC = () => {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
-        <div className="w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card text-center space-y-3">
+      <div
+        className="min-h-screen bg-bg flex items-center justify-center font-sans p-4"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
+      >
+        <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-6 shadow-marche-card shadow-2xl text-center space-y-3">
           <CheckCircle2 className="w-10 h-10 text-primary mx-auto" />
           <h1 className="text-xl font-extrabold text-ink tracking-tight">Password updated</h1>
           <p className="text-xs text-ink-muted leading-relaxed">
@@ -716,8 +755,14 @@ export const AuthResetPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#eef2ec] flex items-center justify-center font-sans p-4">
-      <div className="w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card space-y-4">
+    <div
+      className="min-h-screen bg-bg flex items-center justify-center font-sans p-4"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    >
+      <div className="auth-card opacity-0 w-full max-w-md bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-marche-card shadow-2xl space-y-4">
         <div className="text-center space-y-1">
           <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg mx-auto shadow-xs mb-1">
             M

@@ -153,7 +153,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       <div className="space-y-6 w-full">
         {toastMessage && (
           <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-primary-hover" />
             <span>{toastMessage}</span>
           </div>
         )}
@@ -327,7 +327,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       <div className="space-y-6 max-w-4xl mx-auto">
         {toastMessage && (
           <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-primary-hover" />
             <span>{toastMessage}</span>
           </div>
         )}
@@ -421,7 +421,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
     <div className="space-y-5 w-full transition-all">
       {toastMessage && (
         <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <CheckCircle2 className="w-4 h-4 text-primary-hover" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -441,14 +441,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       {/* Header Section: greeting + KPI cards share one row, like the reference */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1 shrink-0">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-red-700">
-            Dashboard
-          </div>
           <h1
             className="text-3xl sm:text-4xl text-ink tracking-tight uppercase leading-none"
             style={{ fontFamily: 'Anton, sans-serif' }}
           >
-            Good Morning,
+            Welcome back,
             <br />
             <span className="text-red-700">{currentUser.name.split(' ')[0]}.</span>
           </h1>
