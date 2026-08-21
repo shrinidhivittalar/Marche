@@ -62,7 +62,7 @@ export const AdminAuditDashboard: React.FC = () => {
               placeholder="Search event type or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink focus:outline-none focus:border-primary"
+              className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
             />
           </div>
         </div>

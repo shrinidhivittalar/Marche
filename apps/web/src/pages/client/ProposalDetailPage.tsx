@@ -207,12 +207,12 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       </div>
 
       {(connection || offer.status === 'ACCEPTED') && (
-        <Card className="p-5 border-emerald-300 bg-emerald-50 space-y-1">
-          <p className="text-xs font-semibold text-emerald-900 flex items-center gap-2">
+        <Card className="p-5 border-border bg-surface-subtle space-y-1">
+          <p className="text-xs font-semibold text-primary flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
             You hired {provider.displayName}.
           </p>
-          <p className="text-[11px] text-emerald-800">
+          <p className="text-[11px] text-ink-muted">
             The requirement is now filled, every other proposal on it has been declined, and you are
             connected to this provider.
           </p>
@@ -222,7 +222,7 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       {connection && !paymentStatus.loading && (
         <Card className="p-6 space-y-3" data-testid="payment-card">
           {paid ? (
-            <p className="text-xs font-semibold text-emerald-700 flex items-center gap-2">
+            <p className="text-xs font-semibold text-primary flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
               Payment received — {formatOffer(offer)} paid for this booking.
             </p>

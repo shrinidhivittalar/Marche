@@ -251,13 +251,13 @@ export const MessagesPage: React.FC = () => {
               <h2 className="text-base font-bold text-ink">Messages</h2>
 
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="Search messages or providers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-surface border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-ink-muted focus:outline-none focus:border-primary"
+                  className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
                 />
               </div>
 
@@ -394,7 +394,7 @@ export const MessagesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-emerald-200 dark:border-emerald-500/20">
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20">
                   <Shield className="w-3.5 h-3.5" />
                   <span className="truncate max-w-[200px]">{activeConv.jobTitle}</span>
                 </div>
