@@ -157,14 +157,14 @@ export const SearchJobsPage: React.FC = () => {
       </div>
 
       <div className="relative max-w-xl">
-        <Search className="w-4 h-4 absolute left-3.5 top-3 text-ink-muted pointer-events-none" />
+        <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
         <Input
           type="text"
           placeholder="Search requirements..."
           value={searchQuery}
           onChange={(e) => changeFilter(() => setSearchQuery(e.target.value))}
           data-testid="job-search-input"
-          className="w-full bg-surface border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+          className="w-full bg-[#1a1512] border-none rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
         />
       </div>
 

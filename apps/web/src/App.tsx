@@ -266,7 +266,13 @@ function AppContent() {
   const showMobileBack = !rootRoutes.has(route);
 
   return (
-    <div className="h-screen bg-bg text-ink flex font-sans overflow-hidden">
+    <div
+      className="h-screen bg-bg text-ink flex font-sans overflow-hidden"
+      style={{
+        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    >
       <Sidebar />
       <main className="flex-1 overflow-y-auto p-6 lg:p-10 relative">
         {showMobileBack && (

@@ -426,7 +426,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? window.location.pathname
       : '/';
   });
-
   const [jobs, setJobs] = useState<Job[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_jobs`);
     return saved ? JSON.parse(saved) : INITIAL_JOBS;

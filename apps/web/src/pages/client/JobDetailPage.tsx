@@ -41,7 +41,7 @@ const STATUS_COPY: Record<JobStatus, { label: string; className: string; hint: s
   },
   PUBLISHED: {
     label: 'Published',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    className: 'bg-surface-subtle text-ink-muted border-border',
     hint: 'Providers can find this and send you proposals.',
   },
   FILLED: {

@@ -96,7 +96,6 @@ export const Sidebar: React.FC = () => {
 
   const clientNav = [
     { label: 'Home', path: '/client/dashboard', icon: LayoutDashboard },
-    { label: 'Search', path: '/client/search', icon: Search },
     { label: 'Jobs', path: '/client/jobs', icon: Briefcase },
     { label: 'Freelancers', path: '/client/freelancers/hired', icon: Users },
     { label: 'Messages', path: '/messages', icon: MessageSquare, badge: apiMessagesUnreadCount },
@@ -151,15 +150,19 @@ export const Sidebar: React.FC = () => {
       collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
     } ${
       variant === 'danger'
-        ? 'text-rose-600 hover:bg-rose-50'
-        : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
+        ? 'text-red-400 hover:bg-red-500/10'
+        : 'text-zinc-400 hover:text-white hover:bg-white/10'
     }`;
 
   return (
     <aside
       className={`${
         collapsed ? 'w-[68px]' : 'w-60'
-      } bg-bg border-r border-border min-h-screen p-3 hidden md:flex md:flex-col justify-between shrink-0 transition-[width] duration-200`}
+      } bg-[#1a1512] rounded-3xl m-3 p-3 hidden md:flex md:flex-col justify-between shrink-0 transition-[width] duration-200`}
+      style={{
+        height: 'calc(100vh - 1.5rem)',
+        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)',
+      }}
     >
       <div className="space-y-4">
         {/* Brand & Collapse Toggle */}
@@ -170,21 +173,29 @@ export const Sidebar: React.FC = () => {
             onClick={() => navigate(homePath)}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg tracking-tight group-hover:bg-primary-hover transition-colors shadow-xs shrink-0">
+            <div
+              className="w-8 h-8 rounded-xl bg-red-700 text-white flex items-center justify-center text-lg tracking-tight group-hover:bg-red-800 transition-colors shadow-xs shrink-0"
+              style={{ fontFamily: 'Anton, sans-serif' }}
+            >
               M
             </div>
             {!collapsed && (
-              <span className="text-lg font-extrabold tracking-tight text-ink">MARCHÉ</span>
+              <span
+                className="text-lg tracking-tight text-white uppercase"
+                style={{ fontFamily: 'Anton, sans-serif' }}
+              >
+                Marché
+              </span>
             )}
           </button>
 
           <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-1'}`}>
-            <ThemeToggle className="!size-auto p-2 rounded-lg hover:bg-surface-subtle" />
+            <ThemeToggle className="!size-auto p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10" />
 
             <button
               onClick={toggleCollapsed}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="flex items-center p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-subtle transition-colors cursor-pointer"
+              className="flex items-center p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               {collapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -211,18 +222,18 @@ export const Sidebar: React.FC = () => {
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
             } ${
               isActive
-                ? 'bg-surface text-primary font-bold border border-border shadow-2xs'
-                : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
+                ? 'bg-red-700 text-white font-bold'
+                : 'text-zinc-400 hover:text-white hover:bg-white/10'
             }`;
             const navButtonContent = (
               <>
                 <div className={`flex items-center relative ${collapsed ? '' : 'gap-3'}`}>
                   <Icon
-                    className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`}
+                    className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`}
                   />
                   {!collapsed && <span>{item.label}</span>}
                   {collapsed && item.badge && item.badge > 0 ? (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-600 ring-2 ring-[#1a1512]" />
                   ) : null}
                 </div>
                 {!collapsed && item.badge && item.badge > 0 ? (
@@ -234,7 +245,7 @@ export const Sidebar: React.FC = () => {
                           ? 'messages-unread-badge'
                           : undefined
                     }
-                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-primary text-primary-foreground"
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-700 text-white"
                   >
                     {item.badge}
                   </span>
@@ -392,24 +403,24 @@ export const Sidebar: React.FC = () => {
                   <button onClick={() => toggleSection(item.label)} className={navButtonClass}>
                     <div className="flex items-center gap-3">
                       <Icon
-                        className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-primary' : 'text-ink-muted'}`}
+                        className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`}
                       />
                       <span>{item.label}</span>
                     </div>
                     <ChevronDown
-                      className={`w-3.5 h-3.5 text-ink-muted shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     />
                   </button>
                   {isExpanded && (
-                    <div className="ml-[26px] mt-1 mb-1 space-y-0.5 border-l border-border pl-3">
+                    <div className="ml-[26px] mt-1 mb-1 space-y-0.5 border-l border-white/10 pl-3">
                       {sectionLinks.map((link) => (
                         <button
                           key={link.path}
                           onClick={() => navigate(link.path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                             route === link.path
-                              ? 'bg-surface text-primary font-bold border border-border shadow-2xs'
-                              : 'text-ink-muted hover:text-ink hover:bg-surface-subtle'
+                              ? 'bg-red-700 text-white font-bold'
+                              : 'text-zinc-400 hover:text-white hover:bg-white/10'
                           }`}
                         >
                           {link.label}
@@ -436,7 +447,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* User Identity Chip (inline accordion, not a popover) — bottom of sidebar */}
-      <div className="pt-3 border-t border-border">
+      <div className="pt-3 border-t border-white/10">
         {identityOpen && (
           <div className="mb-1 space-y-0.5">
             <button onClick={() => navigate(profilePath)} className={identityItemClass()}>
@@ -465,19 +476,19 @@ export const Sidebar: React.FC = () => {
           onClick={() => setIdentityOpen((prev) => !prev)}
           title={collapsed ? currentUser.name : undefined}
           className={`w-full flex items-center rounded-xl transition-colors cursor-pointer ${
-            collapsed ? 'justify-center p-2' : 'justify-between px-2.5 py-2 hover:bg-surface-subtle'
+            collapsed ? 'justify-center p-2' : 'justify-between px-2.5 py-2 hover:bg-white/10'
           }`}
         >
           <div className={`flex items-center min-w-0 ${collapsed ? '' : 'gap-2.5'}`}>
             <img
               src={currentUser.avatar}
               alt={currentUser.name}
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-border shrink-0"
+              className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20 shrink-0"
             />
             {!collapsed && (
               <div className="min-w-0 text-left">
-                <p className="text-xs font-bold text-ink truncate">{currentUser.name}</p>
-                <p className="text-[10px] text-ink-muted truncate">
+                <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
+                <p className="text-[10px] text-zinc-400 truncate">
                   {currentUser.companyOrTitle || currentUser.role}
                 </p>
               </div>
@@ -485,7 +496,7 @@ export const Sidebar: React.FC = () => {
           </div>
           {!collapsed && (
             <ChevronDown
-              className={`w-3.5 h-3.5 text-ink-muted shrink-0 transition-transform ${
+              className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform ${
                 identityOpen ? 'rotate-180' : ''
               }`}
             />

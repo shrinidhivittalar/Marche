@@ -22,7 +22,7 @@ export function NotificationIcon({ type, size = 'md' }: NotificationIconProps) {
         category === 'proposal'
           ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
           : category === 'connection'
-            ? 'bg-emerald-100 dark:bg-emerald-500/15 text-primary'
+            ? 'bg-primary/10 text-primary'
             : 'bg-surface-subtle text-ink'
       }`}
     >

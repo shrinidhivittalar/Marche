@@ -8,9 +8,14 @@ import {
   ChevronRight,
   FileSignature,
   ArrowUpDown,
+  Briefcase,
+  Users,
+  Activity,
+  Clock,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MyRequirements } from '../../components/jobs/MyRequirements';
+import { TopSearchBar } from '../../components/layout/TopSearchBar';
 import { Button, Card, Input } from '@marche/ui';
 import {
   isProfileComplete as computeIsProfileComplete,
@@ -30,18 +35,17 @@ const REQUIREMENT_STATUS: Record<JobStatus, { label: string; className: string }
     className: 'bg-surface-subtle text-ink-muted border-border',
   },
   PUBLISHED: {
-    label: 'Published',
-    className:
-      'bg-emerald-50 dark:bg-emerald-500/10 text-primary border-emerald-200 dark:border-emerald-500/20',
+    label: 'In Progress',
+    className: 'bg-surface-subtle text-ink-muted border-border',
   },
   FILLED: {
     label: 'Filled',
-    className: 'bg-primary-subtle text-primary border-primary/20',
+    className: 'bg-red-50 text-red-700 border-red-200',
   },
   CANCELLED: {
     label: 'Cancelled',
     className:
-      'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20',
+      'bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-rose-400 border-red-200 dark:border-red-500/20',
   },
 };
 
@@ -149,7 +153,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       <div className="space-y-6 w-full">
         {toastMessage && (
           <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-primary-hover" />
             <span>{toastMessage}</span>
           </div>
         )}
@@ -193,13 +197,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
             {/* Search, Filters, Sort */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-ink-muted pointer-events-none" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
                 <Input
                   type="text"
                   placeholder="Search by contract, freelancer, or agency name"
                   value={contractSearch}
                   onChange={(e) => setContractSearch(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-zinc-400 focus:outline-none focus:border-primary transition-all"
+                  className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
                 />
               </div>
 
@@ -235,7 +239,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
 
             {filteredContracts.length === 0 ? (
               <div className="bg-surface border border-border rounded-3xl p-16 text-center space-y-4 shadow-xs">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-primary flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
                   <FileSignature className="w-8 h-8" />
                 </div>
                 <div className="max-w-md mx-auto space-y-1.5">
@@ -272,7 +276,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                       <span className="text-xs font-mono font-bold text-primary truncate">
                         REF: {ctr.id.slice(0, 8)}
                       </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-primary text-[10px] font-extrabold">
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-extrabold">
                         {ctr.status}
                       </span>
                     </div>
@@ -323,7 +327,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
       <div className="space-y-6 max-w-4xl mx-auto">
         {toastMessage && (
           <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-primary-hover" />
             <span>{toastMessage}</span>
           </div>
         )}
@@ -379,7 +383,20 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // drift out of date the way a cached column would.
   const requirements = myRequirements.data?.items ?? [];
   const requirementTotal = myRequirements.data?.total ?? requirements.length;
-  const totalProposalsReceived = requirements.reduce((sum, r) => sum + (r.proposalCount ?? 0), 0);
+  // The "Active Jobs" panel's own label — only requirements actually live to
+  // providers. Filled/cancelled/draft ones belong under "View all", not here;
+  // showing them under an "Active Jobs" heading was the bug the previous pass
+  // introduced (relabelled the section without filtering the list to match).
+  const activeRequirements = requirements.filter((r) => r.status === 'PUBLISHED');
+  // Proposals still awaiting a decision — only on jobs still live. A filled
+  // or cancelled job's proposals are already resolved, so they don't belong
+  // in a "New Proposals" count; summing every proposal ever received
+  // (including on closed jobs) is what made this stat contradict "Needs
+  // Attention" showing nothing to review.
+  const pendingProposalsSum = activeRequirements.reduce(
+    (sum, r) => sum + (r.proposalCount ?? 0),
+    0,
+  );
   // Still open and waiting on the client: published, with at least one
   // proposal nobody has decided on yet.
   const pendingProposalsCount = requirements.filter(
@@ -404,31 +421,130 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
     <div className="space-y-5 w-full transition-all">
       {toastMessage && (
         <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <CheckCircle2 className="w-4 h-4 text-primary-hover" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-            Dashboard Overview
-          </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
-            Good Morning, {currentUser.name.split(' ')[0]} 👋
+      {/* Top bar: search + primary action, pinned top-right */}
+      <div className="flex items-center justify-end gap-2">
+        <TopSearchBar />
+        <button
+          onClick={() => navigate('/client/jobs/new')}
+          className="flex items-center gap-2 px-4 py-2.5 bg-red-700 text-white hover:bg-red-800 rounded-xl text-xs font-bold uppercase tracking-wide transition-all shadow-sm hover:shadow-md cursor-pointer shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Post a Job</span>
+        </button>
+      </div>
+
+      {/* Header Section: greeting + KPI cards share one row, like the reference */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="space-y-1 shrink-0">
+          <h1
+            className="text-3xl sm:text-4xl text-ink tracking-tight uppercase leading-none"
+            style={{ fontFamily: 'Anton, sans-serif' }}
+          >
+            Welcome back,
+            <br />
+            <span className="text-red-700">{currentUser.name.split(' ')[0]}.</span>
           </h1>
-          <p className="text-xs font-medium text-ink-muted">{getInsightText()}</p>
+          <p className="text-xs font-medium text-ink-muted pt-1">{getInsightText()}</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => navigate('/client/jobs/new')}
-            className="flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+        {/* Compact KPI Cards Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:w-auto lg:flex-1 lg:max-w-2xl">
+          {/* Active Jobs */}
+          <div
+            onClick={() => navigate('/client/jobs')}
+            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Job</span>
-          </button>
+            <div className="flex items-center justify-between">
+              <span
+                className="text-4xl text-red-800 transition-colors tabular-nums"
+                style={{ fontFamily: 'Anton, sans-serif' }}
+              >
+                {String(activeJobsCount).padStart(2, '0')}
+              </span>
+              <Briefcase className="w-4 h-4 text-ink-muted" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink">Active Jobs</p>
+              <p className="text-[11px] text-ink-muted">
+                {activeJobsCount === 1
+                  ? '1 brief in progress'
+                  : `${activeJobsCount} briefs in progress`}
+              </p>
+            </div>
+          </div>
+
+          {/* New Proposals */}
+          <div
+            onClick={() => navigate('/client/jobs')}
+            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="text-4xl text-red-800 transition-colors tabular-nums"
+                style={{ fontFamily: 'Anton, sans-serif' }}
+              >
+                {String(pendingProposalsSum).padStart(2, '0')}
+              </span>
+              <Users className="w-4 h-4 text-ink-muted" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink">
+                New Proposals
+              </p>
+              <p className="text-[11px] text-ink-muted">
+                {pendingProposalsSum > 0 ? 'Require your review' : 'All reviewed'}
+              </p>
+            </div>
+          </div>
+
+          {/* Active Projects */}
+          <div
+            onClick={() => navigate('/client/jobs')}
+            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="text-4xl text-red-800 transition-colors tabular-nums"
+                style={{ fontFamily: 'Anton, sans-serif' }}
+              >
+                {String(inProgressContracts.length).padStart(2, '0')}
+              </span>
+              <Activity className="w-4 h-4 text-ink-muted" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink">
+                Active Project
+              </p>
+              <p className="text-[11px] text-ink-muted">Work in progress</p>
+            </div>
+          </div>
+
+          {/* Completed Projects */}
+          <div
+            onClick={() => navigate('/client/jobs')}
+            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="text-4xl text-red-800 transition-colors tabular-nums"
+                style={{ fontFamily: 'Anton, sans-serif' }}
+              >
+                {String(completedContracts.length).padStart(2, '0')}
+              </span>
+              <CheckCircle2 className="w-4 h-4 text-ink-muted" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-ink">
+                Completed Projects
+              </p>
+              <p className="text-[11px] text-ink-muted">Delivered successfully</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -453,7 +569,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               </span>
               <User className="w-4 h-4 text-ink-muted" />
             </div>
-            <p className="text-xs font-bold text-primary underline underline-offset-2">
+            <p className="text-xs font-bold text-red-700 underline underline-offset-2">
               Complete your profile
             </p>
             <p className="text-[11px] text-ink-muted leading-relaxed">
@@ -464,166 +580,199 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         </div>
       )}
 
-      {/* Compact KPI Cards Grid (4 cards in a single row on desktop) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Active Jobs */}
-        <div
-          onClick={() => navigate('/client/jobs')}
-          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink-muted">Active Jobs</span>
-            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-500/20">
-              Active
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-extrabold text-ink group-hover:text-primary transition-colors">
-              {activeJobsCount}
-            </p>
-            <span className="text-[11px] text-ink-muted">
-              {activeJobsCount === 1 ? '1 brief' : `${activeJobsCount} briefs`}
-            </span>
-          </div>
-        </div>
-
-        {/* New Proposals */}
-        <div
-          onClick={() => navigate('/client/jobs')}
-          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink-muted">New Proposals</span>
-            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-200/50 dark:border-amber-500/20">
-              {pendingProposalsCount > 0 ? `${pendingProposalsCount} pending` : 'Reviewed'}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-extrabold text-ink group-hover:text-primary transition-colors">
-              {totalProposalsReceived}
-            </p>
-            <span className="text-[11px] text-ink-muted">Received</span>
-          </div>
-        </div>
-
-        {/* Active Projects */}
-        <div
-          onClick={() => navigate('/client/jobs')}
-          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink-muted">Active Projects</span>
-            <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-200/50 dark:border-blue-500/20">
-              In progress
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-extrabold text-ink group-hover:text-primary transition-colors">
-              {inProgressContracts.length}
-            </p>
-            <span className="text-[11px] text-ink-muted">Active</span>
-          </div>
-        </div>
-
-        {/* Completed Projects */}
-        <div
-          onClick={() => navigate('/client/jobs')}
-          className="bg-surface p-3.5 sm:p-4 rounded-xl border border-border hover:border-border-strong hover:shadow-2xs transition-all cursor-pointer space-y-1.5 group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-ink-muted">Completed Projects</span>
-            <span className="text-[10px] font-semibold text-ink bg-surface-subtle px-1.5 py-0.5 rounded border border-border">
-              Delivered
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-extrabold text-ink group-hover:text-primary transition-colors">
-              {completedContracts.length}
-            </p>
-            <span className="text-[11px] text-ink-muted">Delivered</span>
-          </div>
-        </div>
-      </div>
-
       {/* Overview — the client's real requirements.
           This block used to read mock jobs filtered by a mock client id, so
           it was permanently empty for anyone signed in. The row menu went
           with it: Edit, Pause, Duplicate and Delete all operated on mock
           state, and only two of the four have a real equivalent (cancel, and
           delete-a-draft) — both already on the requirement's own page. */}
-      <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <h2 className="text-base font-extrabold text-ink tracking-tight">Overview</h2>
-          <button
-            onClick={() => navigate('/client/jobs')}
-            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>View all ({requirementTotal})</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[420px]">
+        {/* Active Jobs */}
+        <div className="lg:col-span-2 bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-2xs space-y-5">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-ink">Active Jobs</h2>
+            <button
+              onClick={() => navigate('/client/jobs')}
+              className="text-xs font-semibold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>View all ({requirementTotal})</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {myRequirements.loading && (
+            <p className="text-xs text-ink-muted">Loading your requirements…</p>
+          )}
+
+          {myRequirements.error && (
+            <p className="text-xs text-destructive">{myRequirements.error}</p>
+          )}
+
+          {!myRequirements.loading && !myRequirements.error && requirements.length === 0 && (
+            <div className="py-8 text-center space-y-3">
+              <p className="text-xs text-ink-muted">
+                You have not posted a requirement yet. Post one and providers can start proposing.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/client/jobs/new')}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold uppercase tracking-wide transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Post a job
+              </button>
+            </div>
+          )}
+
+          {!myRequirements.loading &&
+            !myRequirements.error &&
+            requirements.length > 0 &&
+            activeRequirements.length === 0 && (
+              <div className="py-8 text-center space-y-1">
+                <p className="text-xs text-ink-muted">Nothing live on the marketplace right now.</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/client/jobs')}
+                  className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                >
+                  View all {requirementTotal} job{requirementTotal !== 1 ? 's' : ''}
+                </button>
+              </div>
+            )}
+
+          {activeRequirements.length > 0 && (
+            <div className="space-y-3">
+              {activeRequirements.slice(0, 5).map((req, idx) => {
+                const status = REQUIREMENT_STATUS[req.status];
+                return (
+                  <button
+                    key={req.id}
+                    type="button"
+                    data-testid="overview-requirement"
+                    onClick={() => navigate(`/client/jobs/${req.id}`)}
+                    className="w-full text-left p-5 rounded-xl border border-border bg-surface hover:border-red-300 transition-all flex items-center gap-4"
+                  >
+                    <span
+                      className="text-2xl text-red-700 tabular-nums shrink-0 w-8"
+                      style={{ fontFamily: 'Anton, sans-serif' }}
+                    >
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-ink truncate max-w-[280px] sm:max-w-none">
+                          {req.title}
+                        </span>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-ink-muted flex-wrap">
+                        <span className="font-semibold text-ink">{req.category.name}</span>
+                        <span>•</span>
+                        <span>
+                          Budget: <strong className="text-ink">{formatJobBudget(req)}</strong>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          <strong className="text-ink">{req.proposalCount ?? 0}</strong> proposal
+                          {(req.proposalCount ?? 0) !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {myRequirements.loading && (
-          <p className="text-xs text-ink-muted">Loading your requirements…</p>
-        )}
-
-        {myRequirements.error && <p className="text-xs text-destructive">{myRequirements.error}</p>}
-
-        {!myRequirements.loading && !myRequirements.error && requirements.length === 0 && (
-          <div className="py-8 text-center space-y-3">
-            <p className="text-xs text-ink-muted">
-              You have not posted a requirement yet. Post one and providers can start proposing.
-            </p>
-            <Button size="sm" icon={Plus} onClick={() => navigate('/client/jobs/new')}>
-              Post a job
-            </Button>
+        {/* Needs Attention — real requirements that want a decision: published
+            with proposals nobody has reviewed yet, or published with none yet.
+            No invented data; both come straight off the same `requirements`
+            list the card to the left already fetched. */}
+        <div className="bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-2xs space-y-5">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-ink">
+              Needs Attention
+            </h2>
+            <button
+              onClick={() => navigate('/client/jobs')}
+              className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+            >
+              View all
+            </button>
           </div>
-        )}
 
-        {requirements.length > 0 && (
-          <div className="space-y-2.5">
-            {requirements.slice(0, 5).map((req) => {
-              const status = REQUIREMENT_STATUS[req.status];
+          {(() => {
+            const awaitingReview = requirements.filter(
+              (r) => r.status === 'PUBLISHED' && (r.proposalCount ?? 0) > 0,
+            );
+            const awaitingProposals = requirements.filter(
+              (r) => r.status === 'PUBLISHED' && (r.proposalCount ?? 0) === 0,
+            );
+            const items = [
+              ...awaitingReview.map((r) => ({
+                key: r.id,
+                icon: Users,
+                iconClass: 'bg-red-800 text-white',
+                title: `${r.proposalCount} new proposal${r.proposalCount !== 1 ? 's' : ''} received`,
+                subtitle: r.title,
+                cta: 'Review now',
+                onClick: () => navigate(`/client/jobs/${r.id}`),
+              })),
+              ...awaitingProposals.map((r) => ({
+                key: r.id,
+                icon: Clock,
+                iconClass: 'bg-amber-100 text-amber-600',
+                title: 'Awaiting proposals',
+                subtitle: r.title,
+                cta: 'View job',
+                onClick: () => navigate(`/client/jobs/${r.id}`),
+              })),
+            ].slice(0, 3);
+
+            if (items.length === 0) {
               return (
-                <button
-                  key={req.id}
-                  type="button"
-                  data-testid="overview-requirement"
-                  onClick={() => navigate(`/client/jobs/${req.id}`)}
-                  className="w-full text-left p-3.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-all flex items-center justify-between gap-3"
-                >
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-ink truncate max-w-[220px] sm:max-w-none">
-                        {req.title}
-                      </span>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${status.className}`}
-                      >
-                        {status.label}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
-                      <span className="font-semibold text-ink">{req.category.name}</span>
-                      <span>•</span>
-                      <span>
-                        Budget: <strong className="text-ink">{formatJobBudget(req)}</strong>
-                      </span>
-                      <span>•</span>
-                      <span>
-                        <strong className="text-ink">{req.proposalCount ?? 0}</strong> proposal
-                        {(req.proposalCount ?? 0) !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
-
-                  <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
-                </button>
+                <p className="text-xs text-ink-muted py-4">
+                  Nothing needs your attention right now.
+                </p>
               );
-            })}
-          </div>
-        )}
+            }
+
+            return (
+              <div className="space-y-5 divide-y divide-border">
+                {items.map((item, idx) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={item.onClick}
+                    className={`w-full text-left flex items-start gap-4 ${idx > 0 ? 'pt-5' : ''}`}
+                  >
+                    <span
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${item.iconClass}`}
+                    >
+                      <item.icon className="w-5 h-5" />
+                    </span>
+                    <div className="space-y-1.5 min-w-0">
+                      <p className="text-sm font-bold text-ink">{item.title}</p>
+                      <p className="text-xs text-ink-muted line-clamp-2">{item.subtitle}</p>
+                      <span className="text-xs font-semibold text-red-700 hover:underline">
+                        {item.cta} →
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );

@@ -48,7 +48,13 @@ export const MobileTabBar: React.FC = () => {
   const isMenuActive = route === '/menu';
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-border pb-[env(safe-area-inset-bottom)]">
+    <nav
+      className="md:hidden fixed bottom-3 inset-x-3 z-40 bg-[#1a1512] rounded-2xl"
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)',
+      }}
+    >
       <div
         className="grid"
         style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
@@ -61,13 +67,13 @@ export const MobileTabBar: React.FC = () => {
               key={tab.label}
               onClick={() => navigate(tab.path)}
               className={`flex flex-col items-center justify-center gap-0.5 py-2 cursor-pointer ${
-                isActive ? 'text-primary' : 'text-ink-muted'
+                isActive ? 'text-red-600' : 'text-zinc-400'
               }`}
             >
               <span className="relative">
                 <Icon className="w-5 h-5" />
                 {tab.badge && tab.badge > 0 ? (
-                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-surface" />
+                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-[#1a1512]" />
                 ) : null}
               </span>
               <span className="text-[10px] font-medium">{tab.label}</span>
@@ -78,7 +84,7 @@ export const MobileTabBar: React.FC = () => {
         <button
           onClick={() => navigate('/menu')}
           className={`flex flex-col items-center justify-center gap-0.5 py-2 cursor-pointer ${
-            isMenuActive ? 'text-primary' : 'text-ink-muted'
+            isMenuActive ? 'text-red-600' : 'text-zinc-400'
           }`}
         >
           <span className="relative">
@@ -86,11 +92,11 @@ export const MobileTabBar: React.FC = () => {
               src={currentUser.avatar}
               alt={currentUser.name}
               className={`w-5 h-5 rounded-full object-cover ${
-                isMenuActive ? 'ring-2 ring-primary' : 'ring-1 ring-border'
+                isMenuActive ? 'ring-2 ring-red-600' : 'ring-1 ring-white/20'
               }`}
             />
             {unreadNotifications > 0 ? (
-              <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-surface" />
+              <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-[#1a1512]" />
             ) : null}
           </span>
           <span className="text-[10px] font-medium">More</span>

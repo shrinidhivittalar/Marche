@@ -35,7 +35,7 @@ const FILTERS: { label: string; match: (status: JobStatus) => boolean }[] = [
 
 const STATUS_STYLE: Record<JobStatus, string> = {
   DRAFT: 'bg-surface-subtle text-ink-muted border-border',
-  PUBLISHED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  PUBLISHED: 'bg-surface-subtle text-ink-muted border-border',
   FILLED: 'bg-primary-subtle text-primary border-primary/20',
   CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200',
 };
@@ -110,14 +110,14 @@ export const MyRequirements: React.FC = () => {
         </div>
 
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-ink-muted pointer-events-none" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
           <Input
             type="text"
             placeholder="Search your requirements by title..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             data-testid="requirements-search"
-            className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink"
+            className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500"
           />
         </div>
       </div>

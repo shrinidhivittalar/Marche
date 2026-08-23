@@ -220,7 +220,7 @@ export const ProviderHomePage: React.FC = () => {
           placeholder="Search jobs..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary"
+          className="w-full bg-[#1a1512] border-none rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
         />
       </div>
 
