@@ -289,16 +289,28 @@ function RequirementRow({
         )}
 
         {job.status === 'PUBLISHED' && (
-          <Button
-            size="sm"
-            variant="outline"
-            icon={Ban}
-            disabled={busy}
-            onClick={onCancel}
-            data-testid="requirement-cancel"
-          >
-            {busy ? 'Working…' : 'Cancel'}
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={Pencil}
+              disabled={busy}
+              onClick={onEdit}
+              data-testid="requirement-edit"
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={Ban}
+              disabled={busy}
+              onClick={onCancel}
+              data-testid="requirement-cancel"
+            >
+              {busy ? 'Working…' : 'Cancel'}
+            </Button>
+          </>
         )}
       </div>
     </Card>

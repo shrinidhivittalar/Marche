@@ -413,6 +413,12 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     }
   };
 
+  // Publishing an already-PUBLISHED job is a harmless no-op server-side
+  // (JobsService.publish), but calling it at all is unnecessary — and
+  // confusing in the toast/label — when editing a live requirement rather
+  // than finishing a draft.
+  const isEditingPublished = draft.data?.status === 'PUBLISHED';
+
   const handleSaveDraft = () => {
     if (!isStepValid(1) || !isStepValid(2) || !isStepValid(3)) {
       setSubmitError(
@@ -420,7 +426,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
       );
       return;
     }
-    void runSave(() => showToast('Draft saved. You can find it on your dashboard.'));
+    void runSave(() =>
+      showToast(
+        isEditingPublished ? 'Changes saved.' : 'Draft saved. You can find it on your dashboard.',
+      ),
+    );
   };
 
   const handleSubmit = async () => {
@@ -431,7 +441,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     // Saved first, then published: publish takes no body, so anything typed
     // on the last step would otherwise be left behind.
     await runSave(async (jobId) => {
-      await jobsApi.publish(token, jobId);
+      if (!isEditingPublished) {
+        await jobsApi.publish(token, jobId);
+      }
       navigate(`/client/jobs/${jobId}`);
     });
   };
@@ -1079,7 +1091,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         </Button>
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={handleSaveDraft} disabled={saving || uploading}>
-            Save as Draft
+            {isEditingPublished ? 'Save' : 'Save as Draft'}
           </Button>
           <Button
             onClick={handleNext}
@@ -1091,7 +1103,9 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
             {saving
               ? 'Saving…'
               : step === 5
-                ? 'Publish Requirement'
+                ? isEditingPublished
+                  ? 'Save Changes'
+                  : 'Publish Requirement'
                 : `Next: ${STEP_LABELS[(step + 1) as WizardStep]}`}
           </Button>
         </div>

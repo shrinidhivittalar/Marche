@@ -66,7 +66,11 @@ export function useApiResource<T>(
     } catch (err) {
       if (generation.current !== current) return;
       setError(toMessage(err));
-      setData(null);
+      // Keep whatever data is already displayed — a transient refetch/poll
+      // failure (rate limit hiccup, dropped connection) must not blank a
+      // screen that was showing real data a moment ago. A caller with
+      // nothing loaded yet already has data === null, so this only changes
+      // behavior for the refetch case.
     } finally {
       if (generation.current === current) setLoading(false);
     }
