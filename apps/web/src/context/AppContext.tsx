@@ -548,6 +548,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // The browser's back-forward cache can restore this whole page — DOM and JS
+  // state included — from before a logout, without re-running any of our
+  // code. That leaves a frozen, visually "signed in" page on screen even
+  // though the refresh cookie behind it was already revoked. Reloading on
+  // restore forces the mount effect above to re-run its silent refresh
+  // against the real session instead of trusting the stale snapshot.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
+
   const navigate = (path: string) => {
     setRoute(path);
     window.history.pushState({}, '', path);
