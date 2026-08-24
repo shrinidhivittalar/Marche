@@ -140,6 +140,16 @@ export class NotificationsService {
     }
   }
 
+  async paymentReceived(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'PAYMENT_RECEIVED',
+      title: 'Payment received',
+      message: 'A client paid for a booking with you.',
+      data,
+    });
+  }
+
   async disputeRaised(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
     await this.createSafely({
       recipientUserId,

@@ -7,7 +7,7 @@ import type { UserRole } from '../types';
 // the deep link and the visual category are both derived here rather than
 // carried on the wire.
 
-export type NotificationCategory = 'proposal' | 'connection' | 'job';
+export type NotificationCategory = 'proposal' | 'connection' | 'job' | 'payment';
 
 export function notificationCategory(type: ApiNotification['type']): NotificationCategory {
   switch (type) {
@@ -21,6 +21,8 @@ export function notificationCategory(type: ApiNotification['type']): Notificatio
     case 'JOB_CANCELLED':
     case 'JOB_MATCHED':
       return 'job';
+    case 'PAYMENT_RECEIVED':
+      return 'payment';
   }
 }
 
@@ -68,6 +70,10 @@ export function notificationRoute(
     // same destination, the public requirement they can now bid on.
     case 'JOB_MATCHED':
       return jobId ? `/provider/jobs/${jobId}` : null;
+
+    // Recipient is always the provider who got paid.
+    case 'PAYMENT_RECEIVED':
+      return data?.connectionId ? `/contracts/${data.connectionId}` : null;
 
     default:
       return null;
