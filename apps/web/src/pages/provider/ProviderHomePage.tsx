@@ -64,12 +64,6 @@ const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year
 
 const FEED_LIMIT = 12;
 
-function greetingForHour(hour: number): string {
-  if (hour < 12) return 'Good Morning';
-  if (hour < 17) return 'Good Afternoon';
-  return 'Good Evening';
-}
-
 // Mirrors the real card's layout — category pill, title, two description
 // lines, budget row — so the feed doesn't jump around once the real cards
 // replace these.
@@ -172,7 +166,7 @@ export const ProviderHomePage: React.FC = () => {
       <div className="space-y-0.5">
         <div className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">Home</div>
         <h1 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight">
-          {greetingForHour(new Date().getHours())}, {currentUser.name.split(' ')[0]} 👋
+          Welcome back, {currentUser.name.split(' ')[0]} 👋
         </h1>
       </div>
 
