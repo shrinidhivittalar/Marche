@@ -270,15 +270,25 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
           )}
 
           {requirement.status === 'PUBLISHED' && (
-            <Button
-              variant="outline"
-              icon={Ban}
-              disabled={busy}
-              data-testid="cancel-requirement"
-              onClick={() => void run(() => jobsApi.cancel(token, requirement.id))}
-            >
-              {busy ? 'Working…' : 'Cancel Requirement'}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                icon={Pencil}
+                disabled={busy}
+                onClick={() => navigate(`/client/jobs/new/manual/${requirement.id}`)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                icon={Ban}
+                disabled={busy}
+                data-testid="cancel-requirement"
+                onClick={() => void run(() => jobsApi.cancel(token, requirement.id))}
+              >
+                {busy ? 'Working…' : 'Cancel Requirement'}
+              </Button>
+            </>
           )}
         </div>
       </Card>

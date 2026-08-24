@@ -1,4 +1,4 @@
-import { Ban, FileText, ShieldCheck } from 'lucide-react';
+import { Ban, FileText, IndianRupee, ShieldCheck } from 'lucide-react';
 import { notificationCategory } from '../../lib/formatNotification';
 import type { ApiNotification } from '../../lib/notifications-api';
 
@@ -23,13 +23,17 @@ export function NotificationIcon({ type, size = 'md' }: NotificationIconProps) {
           ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400'
           : category === 'connection'
             ? 'bg-primary/10 text-primary'
-            : 'bg-surface-subtle text-ink'
+            : category === 'payment'
+              ? 'bg-success-subtle text-success-text'
+              : 'bg-surface-subtle text-ink'
       }`}
     >
       {category === 'proposal' ? (
         <FileText className={glyph} />
       ) : category === 'connection' ? (
         <ShieldCheck className={glyph} />
+      ) : category === 'payment' ? (
+        <IndianRupee className={glyph} />
       ) : (
         <Ban className={glyph} />
       )}

@@ -26,6 +26,7 @@ function build() {
   };
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client', user: { role: 'CLIENT' } }),
+    findUserIdById: jest.fn().mockResolvedValue('user_provider'),
   };
   const razorpay = {
     keyId: 'rzp_test_key',
@@ -33,15 +34,34 @@ function build() {
     verifyPaymentSignature: jest.fn().mockReturnValue(true),
     verifyWebhookSignature: jest.fn().mockReturnValue(true),
   };
+  const connectionsRepository = {
+    findById: jest.fn().mockResolvedValue({
+      ...CONNECTION,
+      job: { title: 'Wedding Photography' },
+    }),
+  };
+  const notificationsService = {
+    paymentReceived: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new PaymentsService(
     paymentsRepository as never,
     connectionsService as never,
     profilesRepository as never,
     razorpay as never,
+    connectionsRepository as never,
+    notificationsService as never,
   );
 
-  return { service, paymentsRepository, connectionsService, profilesRepository, razorpay };
+  return {
+    service,
+    paymentsRepository,
+    connectionsService,
+    profilesRepository,
+    razorpay,
+    connectionsRepository,
+    notificationsService,
+  };
 }
 
 describe('PaymentsService', () => {
@@ -94,17 +114,22 @@ describe('PaymentsService', () => {
   });
 
   describe('verifyCallback', () => {
-    it('marks the payment paid once the signature checks out', async () => {
-      const { service, paymentsRepository } = build();
+    it('marks the payment paid once the signature checks out and notifies the provider', async () => {
+      const { service, paymentsRepository, notificationsService } = build();
       paymentsRepository.findByConnectionId.mockResolvedValue({
         id: 'payment_1',
         status: 'CREATED',
         razorpayOrderId: 'order_1',
+        amount: '9500.00',
       });
 
       await service.verifyCallback('user_client', 'connection_1', 'order_1', 'pay_1', 'sig_1');
 
       expect(paymentsRepository.markPaid).toHaveBeenCalledWith('payment_1', 'pay_1', 'sig_1');
+      expect(notificationsService.paymentReceived).toHaveBeenCalledWith(
+        'user_provider',
+        expect.objectContaining({ connectionId: 'connection_1', amount: '9500.00' }),
+      );
     });
 
     it('refuses a signature that does not verify, without marking anything paid', async () => {
@@ -187,13 +212,37 @@ describe('PaymentsService', () => {
   });
 
   describe('handleWebhookEvent', () => {
-    it('marks a captured payment paid', async () => {
-      const { service, paymentsRepository } = build();
-      paymentsRepository.findByOrderId.mockResolvedValue({ id: 'payment_1', status: 'CREATED' });
+    it('marks a captured payment paid and notifies the provider', async () => {
+      const { service, paymentsRepository, notificationsService } = build();
+      paymentsRepository.findByOrderId.mockResolvedValue({
+        id: 'payment_1',
+        connectionId: 'connection_1',
+        status: 'CREATED',
+        amount: '9500.00',
+      });
 
       await service.handleWebhookEvent('payment.captured', 'order_1', 'pay_1');
 
       expect(paymentsRepository.markPaid).toHaveBeenCalledWith('payment_1', 'pay_1', '');
+      expect(notificationsService.paymentReceived).toHaveBeenCalledWith(
+        'user_provider',
+        expect.objectContaining({ connectionId: 'connection_1', amount: '9500.00' }),
+      );
+    });
+
+    it('does not notify the loser of a markPaid race (0 rows affected)', async () => {
+      const { service, paymentsRepository, notificationsService } = build();
+      paymentsRepository.findByOrderId.mockResolvedValue({
+        id: 'payment_1',
+        connectionId: 'connection_1',
+        status: 'CREATED',
+        amount: '9500.00',
+      });
+      paymentsRepository.markPaid.mockResolvedValue(0);
+
+      await service.handleWebhookEvent('payment.captured', 'order_1', 'pay_1');
+
+      expect(notificationsService.paymentReceived).not.toHaveBeenCalled();
     });
 
     it('marks a failed payment failed', async () => {

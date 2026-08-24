@@ -1019,6 +1019,7 @@ enum NotificationType {
   JOB_CANCELLED
   DISPUTE_RAISED
   JOB_MATCHED
+  PAYMENT_RECEIVED
 }
 
 model Notification {

@@ -30,7 +30,8 @@ export type NotificationType =
   | 'PROPOSAL_REJECTED'
   | 'CONNECTION_ESTABLISHED'
   | 'JOB_CANCELLED'
-  | 'JOB_MATCHED';
+  | 'JOB_MATCHED'
+  | 'PAYMENT_RECEIVED';
 
 // Safe navigation metadata only — ids, never anything sensitive. See
 // module6.md's "Important Rule". Which keys are present depends on `type`;

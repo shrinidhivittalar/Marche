@@ -1,8 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConnectionsService } from '../../proposals/services/connections.service';
+import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { getOwnProfileOrThrow, assertOwnership } from '../../profiles/profile-access.util';
 import { paginate, type Paginated } from '../../marketplace/pagination';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
   PaymentsRepository,
   type PaymentWithConnection,
@@ -31,7 +33,27 @@ export class PaymentsService {
     private readonly connectionsService: ConnectionsService,
     private readonly profilesRepository: ProfilesRepository,
     private readonly razorpay: RazorpayClient,
+    private readonly connectionsRepository: ConnectionsRepository,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  // Notifies the provider once, only for whichever caller's markPaid call
+  // actually flipped the row to PAID (see PaymentsRepository.markPaid's
+  // conditional UPDATE) — the callback/webhook race's loser gets 0 rows
+  // affected and must not double-notify.
+  private async notifyProviderPaid(connectionId: string, amount: string): Promise<void> {
+    const connection = await this.connectionsRepository.findById(connectionId);
+    if (!connection) return;
+    const providerUserId = await this.profilesRepository.findUserIdById(
+      connection.providerProfileId,
+    );
+    if (!providerUserId) return;
+    await this.notificationsService.paymentReceived(providerUserId, {
+      connectionId,
+      jobTitle: connection.job.title,
+      amount,
+    });
+  }
 
   /**
    * Starts (or resumes) payment for a connection. Client-only — the party
@@ -104,7 +126,14 @@ export class PaymentsService {
     // ran) — same idempotent outcome as the early return above, just
     // discovered a moment later. Re-read rather than trust the pre-write
     // `payment` value, which is now stale.
-    await this.paymentsRepository.markPaid(payment.id, razorpayPaymentId, razorpaySignature);
+    const updated = await this.paymentsRepository.markPaid(
+      payment.id,
+      razorpayPaymentId,
+      razorpaySignature,
+    );
+    if (updated > 0) {
+      await this.notifyProviderPaid(connectionId, payment.amount.toString());
+    }
     return (await this.paymentsRepository.findByConnectionId(connectionId))!;
   }
 
@@ -124,7 +153,10 @@ export class PaymentsService {
     if (payment.status === 'PAID') return;
 
     if (event === 'payment.captured') {
-      await this.paymentsRepository.markPaid(payment.id, paymentId, '');
+      const updated = await this.paymentsRepository.markPaid(payment.id, paymentId, '');
+      if (updated > 0) {
+        await this.notifyProviderPaid(payment.connectionId, payment.amount.toString());
+      }
     } else if (event === 'payment.failed') {
       await this.paymentsRepository.markFailed(payment.id);
     }

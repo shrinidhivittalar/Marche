@@ -92,11 +92,11 @@
   --color-ink: #f5f3ec;
   --color-ink-muted: #a8a296;
 
-  --color-primary: #1fb683;
-  --color-primary-hover: #34c794;
-  --color-primary-active: #17a06e;
-  --color-primary-subtle: #12332a;
-  --color-primary-fg: #062017;
+  --color-primary: #ef4444;
+  --color-primary-hover: #f87171;
+  --color-primary-active: #dc2626;
+  --color-primary-subtle: #3a1414;
+  --color-primary-fg: #2b0a0a;
 
   --color-accent: #fbbf24;
   --color-accent-hover: #fdd463;
@@ -117,8 +117,8 @@
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
   --shadow-card-hover: 0 12px 28px -8px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-float: 0 24px 48px -12px rgba(31, 182, 131, 0.28), 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-focus: 0 0 0 3px rgba(31, 182, 131, 0.45);
+  --shadow-float: 0 24px 48px -12px rgba(239, 68, 68, 0.28), 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 3px rgba(239, 68, 68, 0.45);
 }
 
 /* Not scoped to :root (unlike the dark block above) so this can also be set
