@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Button, Card, Input, TextField, Textarea } from '@marche/ui';
+import { Button, Card, DatePicker, Input, TextField, Textarea } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ImageUploader } from '../media/ImageUploader';
+import { todayISODate } from '../../lib/formatTime';
 import type { UploadedImage } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import {
@@ -87,7 +88,11 @@ export const ProfileApiSection: React.FC = () => {
 
   if (!token) return null;
 
-  if (profile.loading) {
+  // Only the very first load has no data to show yet. Every later refetch —
+  // adding a skill, a language, saving the core form — must not collapse
+  // the whole section back to a bare loading message; that read as the
+  // entire profile page reloading on every click.
+  if (profile.loading && !profile.data) {
     return (
       <Card className="p-8" data-testid="profile-loading">
         <p className="text-ink-muted">Loading your profile…</p>
@@ -95,7 +100,11 @@ export const ProfileApiSection: React.FC = () => {
     );
   }
 
-  if (profile.error) {
+  // Same reasoning as the loading guard above: only replace the whole
+  // section with an error card when there's nothing to show yet. A
+  // transient refetch failure with a profile already loaded surfaces
+  // through Feedback (below `run`) instead of hiding the working page.
+  if (profile.error && !profile.data) {
     return (
       <Card className="p-8 space-y-4" data-testid="profile-load-error">
         <p className="text-danger">{profile.error}</p>
@@ -481,11 +490,11 @@ function PortfolioCard({
         <label htmlFor="portfolio-date" className="text-xs text-ink-muted">
           Project date (optional)
         </label>
-        <Input
-          id="portfolio-date"
-          type="date"
+        <DatePicker
           value={projectDate}
-          onChange={(e) => setProjectDate(e.target.value)}
+          onChange={setProjectDate}
+          max={todayISODate()}
+          captionLayout="dropdown"
           data-testid="portfolio-date"
         />
       </div>

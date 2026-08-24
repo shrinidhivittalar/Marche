@@ -1,4 +1,4 @@
-import { test, expect, signIn } from './fixtures';
+import { test, expect, signIn, pickDate } from './fixtures';
 import { chooseServiceCategory } from './journeys';
 
 // Fields and endpoints that existed in the database and API but had no UI,
@@ -155,8 +155,8 @@ test.describe('experience form', () => {
   test('records a past role with an end date', async ({ page }) => {
     await page.getByTestId('experience-company').fill('Past Studio');
     await page.getByTestId('experience-position').fill('Assistant');
-    await page.getByTestId('experience-start').fill('2018-01-01');
-    await page.getByTestId('experience-end').fill('2020-06-30');
+    await pickDate(page, 'experience-start', '2018-01-01');
+    await pickDate(page, 'experience-end', '2020-06-30');
     await page.getByTestId('add-experience').click();
 
     const entry = page.getByTestId('experience-item').filter({ hasText: 'Past Studio' });
@@ -168,7 +168,7 @@ test.describe('experience form', () => {
   test('a current role shows Present and disables the end date', async ({ page }) => {
     await page.getByTestId('experience-company').fill('Current Studio');
     await page.getByTestId('experience-position').fill('Lead');
-    await page.getByTestId('experience-start').fill('2021-03-01');
+    await pickDate(page, 'experience-start', '2021-03-01');
     await page.getByTestId('experience-current').check();
 
     // The contradiction the API rejects is made unreachable rather than

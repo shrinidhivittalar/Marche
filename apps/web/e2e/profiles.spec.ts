@@ -1,4 +1,4 @@
-import { test, expect, signIn } from './fixtures';
+import { test, expect, signIn, pickDate } from './fixtures';
 
 // Module 2 (Profiles) through the browser against the real API.
 // Positive cases prove the wiring works; negative cases prove the failures
@@ -83,7 +83,7 @@ test.describe('profile — positive', () => {
 
     await page.getByTestId('experience-company').fill('Lumina Events');
     await page.getByTestId('experience-position').fill('Lead Photographer');
-    await page.getByTestId('experience-start').fill('2020-01-15');
+    await pickDate(page, 'experience-start', '2020-01-15');
     await page.getByTestId('add-experience').click();
 
     await expect(page.getByTestId('experience-item')).toHaveCount(1);
@@ -104,8 +104,15 @@ test.describe('profile — positive', () => {
   });
 
   test('adds and removes a language with proficiency', async ({ page }) => {
-    await page.getByTestId('language-name').fill('Kannada');
-    await page.getByTestId('language-proficiency').selectOption('NATIVE');
+    // A combobox now, not a native <select> — same reasoning and pattern as
+    // skill-select above.
+    await page.getByTestId('language-name').click();
+    await page
+      .getByTestId('language-name-options')
+      .getByRole('button', { name: 'Kannada' })
+      .click();
+    await page.getByTestId('language-proficiency').click();
+    await page.getByRole('option', { name: 'Native' }).click();
     await page.getByTestId('add-language').click();
 
     await expect(page.getByTestId('language-item')).toContainText('Kannada');
@@ -160,11 +167,13 @@ test.describe('profile — negative, as a provider', () => {
   test('a duplicate language is rejected rather than silently added twice', async ({ page }) => {
     await page.goto('/provider/profile');
 
-    await page.getByTestId('language-name').fill('Tamil');
+    await page.getByTestId('language-name').click();
+    await page.getByTestId('language-name-options').getByRole('button', { name: 'Tamil' }).click();
     await page.getByTestId('add-language').click();
     await expect(page.getByTestId('language-item')).toHaveCount(1);
 
-    await page.getByTestId('language-name').fill('Tamil');
+    await page.getByTestId('language-name').click();
+    await page.getByTestId('language-name-options').getByRole('button', { name: 'Tamil' }).click();
     await page.getByTestId('add-language').click();
 
     await expect(page.getByTestId('profile-error')).toBeVisible();

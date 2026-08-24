@@ -5,10 +5,52 @@
 // place it's rendered.
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Button, Card, Combobox, Input, Textarea } from '@marche/ui';
+import {
+  Button,
+  Card,
+  Combobox,
+  DatePicker,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@marche/ui';
 import type { ApiProfile, LanguageProficiency } from '../../lib/marketplace-api';
 
 const PROFICIENCY: LanguageProficiency[] = ['BASIC', 'CONVERSATIONAL', 'FLUENT', 'NATIVE'];
+const PROFICIENCY_LABEL: Record<LanguageProficiency, string> = {
+  BASIC: 'Basic',
+  CONVERSATIONAL: 'Conversational',
+  FLUENT: 'Fluent',
+  NATIVE: 'Native',
+};
+
+// A starting list, not an exhaustive one — Combobox lets a client type and
+// add anything missing (same escape hatch SkillsCard already relies on for
+// crafts the seeded list doesn't cover).
+const COMMON_LANGUAGES = [
+  'English',
+  'Hindi',
+  'Tamil',
+  'Telugu',
+  'Kannada',
+  'Malayalam',
+  'Marathi',
+  'Gujarati',
+  'Bengali',
+  'Punjabi',
+  'Urdu',
+  'Odia',
+  'Assamese',
+  'French',
+  'German',
+  'Spanish',
+  'Mandarin',
+  'Arabic',
+];
 
 export function SkillsCard({
   profile,
@@ -189,11 +231,11 @@ export function ExperienceCard({
           <label htmlFor="experience-start" className="text-xs text-ink-muted">
             Start date
           </label>
-          <Input
-            id="experience-start"
-            type="date"
+          <DatePicker
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={setStartDate}
+            max={endDate || undefined}
+            captionLayout="dropdown"
             data-testid="experience-start"
           />
         </div>
@@ -201,15 +243,15 @@ export function ExperienceCard({
           <label htmlFor="experience-end" className="text-xs text-ink-muted">
             End date
           </label>
-          <Input
-            id="experience-end"
-            type="date"
+          <DatePicker
             value={endDate}
+            onChange={setEndDate}
+            min={startDate || undefined}
+            captionLayout="dropdown"
             // Disabled rather than merely validated: the API rejects an end
             // date alongside "currently working", so the contradiction is
             // made unreachable instead of explained after the fact.
             disabled={currentlyWorking}
-            onChange={(e) => setEndDate(e.target.value)}
             data-testid="experience-end"
           />
         </div>
@@ -340,6 +382,7 @@ export function LanguagesCard({
 }) {
   const [language, setLanguage] = useState('');
   const [proficiency, setProficiency] = useState<LanguageProficiency>('CONVERSATIONAL');
+  const existingLanguages = (profile.languages ?? []).map((l) => l.language);
 
   return (
     <Card className="p-8 space-y-4" data-testid="languages-card">
@@ -373,24 +416,34 @@ export function LanguagesCard({
         ))}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          placeholder="Language"
+        <Combobox
           value={language}
-          onChange={(e) => setLanguage(e.target.value)}
+          onChange={setLanguage}
+          options={COMMON_LANGUAGES.map((name) => ({ value: name, label: name }))}
+          placeholder="Choose a language…"
+          searchPlaceholder="Search or type your own…"
+          emptyText="No matching languages."
+          disabled={disabled}
           data-testid="language-name"
+          existingLabels={existingLanguages}
+          onCreate={(name) => onAdd({ language: name, proficiency })}
+          createLabel={(name) => `Add "${name}"`}
         />
-        <select
+        <Select
           value={proficiency}
-          onChange={(e) => setProficiency(e.target.value as LanguageProficiency)}
-          data-testid="language-proficiency"
-          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          onValueChange={(value) => setProficiency(value as LanguageProficiency)}
         >
-          {PROFICIENCY.map((level) => (
-            <option key={level} value={level}>
-              {level}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger data-testid="language-proficiency" aria-label="Proficiency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PROFICIENCY.map((level) => (
+              <SelectItem key={level} value={level}>
+                {PROFICIENCY_LABEL[level]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <Button
         disabled={disabled || !language.trim()}
