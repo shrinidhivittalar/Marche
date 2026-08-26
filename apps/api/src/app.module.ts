@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { stdSerializers } from 'pino';
 import { PrismaModule } from './prisma/prisma.module';
+import { HealthModule } from './health/health.module';
 import { ThrottlerStorageModule } from './throttler/throttler-storage.module';
 import { RedisThrottlerStorage } from './throttler/redis-throttler-storage';
 import { AuditModule } from './audit/audit.module';
@@ -78,6 +79,7 @@ import { WorkDiaryModule } from './work-diary/work-diary.module';
       }),
     }),
     PrismaModule,
+    HealthModule,
     AuditModule,
     IdentityModule,
     ProfilesModule,

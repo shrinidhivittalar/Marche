@@ -41,7 +41,11 @@ export class EmailService {
         })
       : null;
     this.from = process.env.EMAIL_FROM ?? 'Marché <no-reply@example.com>';
-    this.frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
+    // No fallback: FRONTEND_ORIGIN is required and validated at startup (see
+    // config/env.validation.ts) — a silent localhost default here would
+    // mean emailed verification/reset links point at localhost if that
+    // guarantee were ever bypassed.
+    this.frontendOrigin = process.env.FRONTEND_ORIGIN as string;
   }
 
   async sendVerificationEmail(email: string, rawToken: string): Promise<void> {
