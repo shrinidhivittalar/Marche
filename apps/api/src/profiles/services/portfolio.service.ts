@@ -16,7 +16,7 @@ export class PortfolioService {
 
   async create(userId: string, dto: CreatePortfolioDto): Promise<Portfolio> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
 
     // Every file is checked before anything is written. assertAttachable
     // enforces both halves of the rule: the file belongs to this user, and

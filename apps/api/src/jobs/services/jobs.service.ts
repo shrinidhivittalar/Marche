@@ -66,7 +66,7 @@ export class JobsService {
 
   async create(userId: string, dto: CreateJobDto): Promise<Job> {
     const profile = await this.getOwnProfile(userId);
-    assertClientRole(profile.user.role);
+    assertClientRole(profile.user);
 
     await this.assertCategoryExists(dto.categoryId);
 
@@ -135,7 +135,7 @@ export class JobsService {
     // Re-checked at publish, not just at create. A client can be suspended
     // between drafting and publishing, and publish is the moment the
     // requirement becomes visible to everyone.
-    assertClientRole(profile.user.role);
+    assertClientRole(profile.user);
 
     // Stamped once, on first publish, and never rewritten. There is no
     // unpublish in Phase 1, but this keeps the rule true if one arrives.

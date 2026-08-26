@@ -41,7 +41,7 @@ describe('SavedProvidersService', () => {
     it('saves a provider profile for the calling client', async () => {
       const { service, savedProvidersRepository } = build();
 
-      await service.save('user_client', 'CLIENT', 'profile_provider');
+      await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
 
       expect(savedProvidersRepository.create).toHaveBeenCalledWith(
         'profile_client',
@@ -53,7 +53,7 @@ describe('SavedProvidersService', () => {
       const { service } = build();
 
       await expect(
-        service.save('user_provider', 'PROVIDER', 'profile_provider'),
+        service.save('user_provider', { role: 'PROVIDER' }, 'profile_provider'),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -65,7 +65,7 @@ describe('SavedProvidersService', () => {
       });
 
       await expect(
-        service.save('user_client', 'CLIENT', 'profile_client_2'),
+        service.save('user_client', { role: 'CLIENT' }, 'profile_client_2'),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -73,9 +73,9 @@ describe('SavedProvidersService', () => {
       const { service, profilesRepository } = build();
       profilesRepository.findById.mockResolvedValue(null);
 
-      await expect(service.save('user_client', 'CLIENT', 'missing')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.save('user_client', { role: 'CLIENT' }, 'missing'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('is idempotent — saving an already-saved provider returns the existing row, not a duplicate', async () => {
@@ -83,7 +83,7 @@ describe('SavedProvidersService', () => {
       const existing = { id: 'save_existing' };
       savedProvidersRepository.find.mockResolvedValue(existing);
 
-      const result = await service.save('user_client', 'CLIENT', 'profile_provider');
+      const result = await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
 
       expect(result).toBe(existing);
       expect(savedProvidersRepository.create).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('SavedProvidersService', () => {
         .mockResolvedValueOnce(null) // pre-check: not saved yet
         .mockResolvedValueOnce(winner); // post-race: the other request won
 
-      const result = await service.save('user_client', 'CLIENT', 'profile_provider');
+      const result = await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
 
       expect(result).toBe(winner);
     });
@@ -110,23 +110,25 @@ describe('SavedProvidersService', () => {
       const { service, savedProvidersRepository } = build();
       savedProvidersRepository.find.mockResolvedValue({ id: 'save_1' });
 
-      await expect(service.isSaved('user_client', 'CLIENT', 'profile_provider')).resolves.toBe(
-        true,
-      );
+      await expect(
+        service.isSaved('user_client', { role: 'CLIENT' }, 'profile_provider'),
+      ).resolves.toBe(true);
     });
 
     it('is false when no save row exists', async () => {
       const { service } = build();
 
-      await expect(service.isSaved('user_client', 'CLIENT', 'profile_provider')).resolves.toBe(
-        false,
-      );
+      await expect(
+        service.isSaved('user_client', { role: 'CLIENT' }, 'profile_provider'),
+      ).resolves.toBe(false);
     });
 
     it('is false for a provider, without even checking — a provider can never have saved anyone', async () => {
       const { service, profilesRepository } = build();
 
-      await expect(service.isSaved('user_provider', 'PROVIDER', 'profile_x')).resolves.toBe(false);
+      await expect(
+        service.isSaved('user_provider', { role: 'PROVIDER' }, 'profile_x'),
+      ).resolves.toBe(false);
       expect(profilesRepository.findByUserId).not.toHaveBeenCalled();
     });
   });
@@ -135,7 +137,7 @@ describe('SavedProvidersService', () => {
     it('deletes the save for the calling client', async () => {
       const { service, savedProvidersRepository } = build();
 
-      await service.unsave('user_client', 'CLIENT', 'profile_provider');
+      await service.unsave('user_client', { role: 'CLIENT' }, 'profile_provider');
 
       expect(savedProvidersRepository.delete).toHaveBeenCalledWith(
         'profile_client',
@@ -150,7 +152,7 @@ describe('SavedProvidersService', () => {
       );
 
       await expect(
-        service.unsave('user_client', 'CLIENT', 'profile_provider'),
+        service.unsave('user_client', { role: 'CLIENT' }, 'profile_provider'),
       ).resolves.toBeUndefined();
     });
   });
@@ -167,7 +169,11 @@ describe('SavedProvidersService', () => {
         { id: 'p2', displayName: 'Second', avatarMedia: null },
       ]);
 
-      const result = await service.listMine('user_client', 'CLIENT', { page: 1, limit: 20 });
+      const result = await service.listMine(
+        'user_client',
+        { role: 'CLIENT' },
+        { page: 1, limit: 20 },
+      );
 
       expect(result.data.map((card) => card.id)).toEqual(['p2', 'p1']);
     });

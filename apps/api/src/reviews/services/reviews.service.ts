@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ReviewsRepository } from '../repositories/reviews.repository';
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
@@ -70,6 +75,18 @@ export class ReviewsService {
       connection.clientProfileId === profile.id
         ? connection.providerProfileId
         : connection.clientProfileId;
+
+    // Defensive re-check (Module 01 Slice 2, module1-implementation-contract.md
+    // §6.2): the Connection this reviewee is drawn from already cannot have
+    // equal clientProfileId/providerProfileId (the DB CHECK constraint plus
+    // the accept transaction's own invariant — see ProposalsService.accept),
+    // so this can only fire if that upstream guarantee is ever broken. It
+    // must fail loudly here, not let a self-review through, if it ever is.
+    // Canonical User.id comparison, not Profile.id.
+    const revieweeUserId = await this.profilesRepository.findUserIdById(revieweeProfileId);
+    if (revieweeUserId === userId) {
+      throw new ForbiddenException('You cannot review yourself');
+    }
 
     try {
       return await this.reviewsRepository.create(

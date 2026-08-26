@@ -28,7 +28,7 @@ export class ServicesService {
 
   async create(userId: string, dto: CreateServiceDto): Promise<Service> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
 
     await this.assertCategoryExists(dto.categoryId);
     await this.assertSkillsExist(dto.skillIds);

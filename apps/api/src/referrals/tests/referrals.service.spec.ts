@@ -35,7 +35,7 @@ describe('ReferralsService', () => {
       const { service, referralsRepository, emailService } = build();
       referralsRepository.create.mockResolvedValue({ id: 'referral_1', ...DTO });
 
-      const result = await service.create('user_1', 'CLIENT', DTO);
+      const result = await service.create('user_1', { role: 'CLIENT' }, DTO);
 
       expect(referralsRepository.create).toHaveBeenCalledWith({
         referrerProfileId: 'profile_1',
@@ -60,7 +60,7 @@ describe('ReferralsService', () => {
         user: { role: 'PROVIDER' },
       });
 
-      await expect(service.create('user_1', 'PROVIDER', DTO)).rejects.toBeInstanceOf(
+      await expect(service.create('user_1', { role: 'PROVIDER' }, DTO)).rejects.toBeInstanceOf(
         ForbiddenException,
       );
     });
@@ -69,7 +69,7 @@ describe('ReferralsService', () => {
       const { service, referralsRepository, emailService } = build();
       referralsRepository.find.mockResolvedValue({ id: 'referral_1' });
 
-      await expect(service.create('user_1', 'CLIENT', DTO)).rejects.toBeInstanceOf(
+      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBeInstanceOf(
         ConflictException,
       );
       expect(referralsRepository.create).not.toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe('ReferralsService', () => {
       const { service, referralsRepository } = build();
       referralsRepository.create.mockRejectedValue({ code: 'P2002' });
 
-      await expect(service.create('user_1', 'CLIENT', DTO)).rejects.toBeInstanceOf(
+      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBeInstanceOf(
         ConflictException,
       );
     });
@@ -90,7 +90,7 @@ describe('ReferralsService', () => {
       const dbError = new Error('database unavailable');
       referralsRepository.create.mockRejectedValue(dbError);
 
-      await expect(service.create('user_1', 'CLIENT', DTO)).rejects.toBe(dbError);
+      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBe(dbError);
     });
   });
 
@@ -104,7 +104,7 @@ describe('ReferralsService', () => {
       });
 
       await expect(
-        service.listMine('user_1', 'PROVIDER', { page: 1, limit: 20 }),
+        service.listMine('user_1', { role: 'PROVIDER' }, { page: 1, limit: 20 }),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -113,7 +113,7 @@ describe('ReferralsService', () => {
       referralsRepository.listByReferrer.mockResolvedValue([{ id: 'referral_1' }]);
       referralsRepository.countByReferrer.mockResolvedValue(1);
 
-      const result = await service.listMine('user_1', 'CLIENT', { page: 1, limit: 20 });
+      const result = await service.listMine('user_1', { role: 'CLIENT' }, { page: 1, limit: 20 });
 
       expect(referralsRepository.listByReferrer).toHaveBeenCalledWith('profile_1', 0, 20);
       expect(result.data).toEqual([{ id: 'referral_1' }]);

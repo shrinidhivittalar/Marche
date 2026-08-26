@@ -50,13 +50,17 @@ export class DirectContractsService {
   /** Client only. Creates the offer; nothing is binding until the provider accepts it. */
   async create(clientUserId: string, dto: CreateDirectContractDto) {
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, clientUserId);
-    assertClientRole(clientProfile.user.role);
+    assertClientRole(clientProfile.user);
 
     const providerProfile = await this.profilesRepository.findById(dto.providerProfileId);
     if (!providerProfile) {
       throw new NotFoundException('Provider not found');
     }
-    assertProviderRole(providerProfile.user.role);
+    assertProviderRole(providerProfile.user);
+    // Self-dealing check (Module 01 Slice 2, module1-implementation-contract.md
+    // §6.2): compares canonical User.id, not Profile.id — providerProfile.userId
+    // and clientUserId are both already User.id values, not resolved through
+    // Profile.id equality.
     if (providerProfile.userId === clientUserId) {
       throw new BadRequestException('You cannot hire yourself');
     }

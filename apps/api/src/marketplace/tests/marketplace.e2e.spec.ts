@@ -28,7 +28,19 @@ import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
 // without one. Real token verification is Module 1's responsibility and is
 // covered by its own tests; what matters here is that the guard is actually
 // applied to the routes that need it.
-const AUTHED_USER = { id: 'user_1', email: 'p@example.com', name: 'P', role: 'PROVIDER' };
+// platformRole: 'ADMIN' so PlatformRoleGuard (Module 01 Slice 2) doesn't
+// reject the category-admin routes before these tests reach the behavior
+// they're actually testing (DTO validation, routing, status codes) — a
+// real, unauthorized caller's 403 is covered separately by the
+// PlatformRoleGuard unit spec, not duplicated here.
+const AUTHED_USER = {
+  id: 'user_1',
+  email: 'p@example.com',
+  name: 'P',
+  role: 'PROVIDER',
+  platformRole: 'ADMIN',
+  capabilities: ['PROVIDER'],
+};
 
 describe('marketplace HTTP', () => {
   let app: INestApplication;
@@ -72,7 +84,14 @@ describe('marketplace HTTP', () => {
           if (!req.headers.authorization) {
             throw new UnauthorizedException();
           }
-          req.user = AUTHED_USER;
+          // x-test-platform-role lets individual tests exercise
+          // PlatformRoleGuard (Module 01 Slice 2), which runs for real in
+          // this suite (not stubbed) — everything else keeps getting
+          // AUTHED_USER (platformRole ADMIN) unchanged.
+          const testPlatformRole = req.headers['x-test-platform-role'];
+          req.user = testPlatformRole
+            ? { ...AUTHED_USER, platformRole: testPlatformRole }
+            : AUTHED_USER;
           return true;
         },
       })
@@ -157,6 +176,66 @@ describe('marketplace HTTP', () => {
     ])('%s is public', async (path) => {
       const res = await request(app.getHttpServer()).get(path);
       expect(res.status).toBe(200);
+    });
+  });
+
+  // PlatformRoleGuard runs for real in this suite (Module 01 Slice 2) —
+  // only JwtAuthGuard is stubbed. These prove the guard is actually wired
+  // to the category-admin routes, not just unit-tested in isolation.
+  describe('PlatformRoleGuard on admin-only category routes', () => {
+    it.each([
+      ['post', '/categories', { name: 'XY', slug: 'xy' }],
+      ['patch', '/categories/c1', { name: 'X' }],
+      ['delete', '/categories/c1', undefined],
+    ])(
+      '%s %s rejects a plain USER with 403, before the request reaches the service',
+      async (method, path, body) => {
+        const agent = request(app.getHttpServer());
+        const send = agent[method as 'post' | 'patch' | 'delete'].bind(agent);
+        const res = await send(path)
+          .set('authorization', 'Bearer token')
+          .set('x-test-platform-role', 'USER')
+          .send(body);
+
+        expect(res.status).toBe(403);
+        expect(categoriesService.create).not.toHaveBeenCalled();
+        expect(categoriesService.update).not.toHaveBeenCalled();
+        expect(categoriesService.remove).not.toHaveBeenCalled();
+      },
+    );
+
+    it('allows an ADMIN through', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/categories')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'ADMIN')
+        .send({ name: 'XY', slug: 'xy' });
+
+      expect(res.status).toBe(201);
+      expect(categoriesService.create).toHaveBeenCalled();
+    });
+
+    it('allows a SUPER_ADMIN through — a strict superset of ADMIN, not a separate check', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/categories')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'SUPER_ADMIN')
+        .send({ name: 'YZ', slug: 'yz' });
+
+      expect(res.status).toBe(201);
+    });
+
+    it('cannot be bypassed by a client-controlled field: the DTO has no role/platformRole field, and one sent anyway is rejected by whitelist validation, not silently accepted', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/categories')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'USER')
+        .send({ name: 'XY', slug: 'xy', platformRole: 'ADMIN', role: 'ADMIN' });
+
+      // Rejected by PlatformRoleGuard (403) before validation would even
+      // get a chance to reject the extra fields (400) — either way, never
+      // the 201 a client-controlled role escalation would produce.
+      expect(res.status).toBe(403);
     });
   });
 

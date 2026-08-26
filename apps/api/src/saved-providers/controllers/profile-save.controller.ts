@@ -28,7 +28,7 @@ export class ProfileSaveController {
   @ApiOperation({ summary: 'Whether the caller has saved this provider profile' })
   isSaved(@CurrentUser() user: AuthenticatedUser, @Param('profileId') profileId: string) {
     return this.savedProvidersService
-      .isSaved(user.id, user.role, profileId)
+      .isSaved(user.id, user, profileId)
       .then((saved) => ({ saved }));
   }
 
@@ -38,7 +38,7 @@ export class ProfileSaveController {
     description: 'Saving an already-saved provider just returns the existing save, unchanged.',
   })
   save(@CurrentUser() user: AuthenticatedUser, @Param('profileId') profileId: string) {
-    return this.savedProvidersService.save(user.id, user.role, profileId);
+    return this.savedProvidersService.save(user.id, user, profileId);
   }
 
   @Delete()
@@ -51,6 +51,6 @@ export class ProfileSaveController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('profileId') profileId: string,
   ): Promise<void> {
-    await this.savedProvidersService.unsave(user.id, user.role, profileId);
+    await this.savedProvidersService.unsave(user.id, user, profileId);
   }
 }

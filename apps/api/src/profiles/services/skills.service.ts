@@ -58,7 +58,7 @@ export class SkillsService {
    */
   async addSkill(userId: string, dto: AddSkillDto): Promise<UserSkill> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
 
     const skill = dto.skillId
       ? await this.skillsRepository.findSkillById(dto.skillId)

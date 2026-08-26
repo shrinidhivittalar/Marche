@@ -19,7 +19,7 @@ export class ReferralsController {
     summary: "The caller's referral history (Client only), newest first",
   })
   listMine(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationQueryDto) {
-    return this.referralsService.listMine(user.id, user.role, pagination);
+    return this.referralsService.listMine(user.id, user, pagination);
   }
 
   @Post()
@@ -30,6 +30,6 @@ export class ReferralsController {
       'registers with this exact email address — see AuthService.register.',
   })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateReferralDto) {
-    return this.referralsService.create(user.id, user.role, dto);
+    return this.referralsService.create(user.id, user, dto);
   }
 }

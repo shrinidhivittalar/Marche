@@ -325,6 +325,23 @@ describe('ProposalsService', () => {
       expect(connection).toEqual({ id: 'connection_1' });
     });
 
+    it('rejects self-acceptance defensively — canonical User.id, not Profile.id (Module 01 Slice 2)', async () => {
+      // The proposal's providerProfileId is swapped to the accepting
+      // client's own profile — findUserIdById resolves that back to
+      // CLIENT.userId ('user_2'), the same id doing the accepting. submit()
+      // already rejects this upstream; this proves accept()'s own
+      // independent re-check fires too, not just the upstream guard.
+      const { service, jobsService, connections } = asClient({
+        proposal: { providerProfileId: CLIENT.id },
+      });
+
+      await expect(service.accept('user_2', 'proposal_1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(jobsService.claimFilled).not.toHaveBeenCalled();
+      expect(connections.create).not.toHaveBeenCalled();
+    });
+
     it('conflicts and writes nothing when the requirement was already filled', async () => {
       const { service, jobsService, proposals, connections } = asClient();
       jobsService.claimFilled.mockRejectedValue(new ConflictException('already filled'));
