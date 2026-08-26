@@ -11,6 +11,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Legacy fixed role. Kept temporarily during the Module 01 identity refactor's
+// expand/migrate/contract migration (production-refactor/module1-migration-plan.md
+// §2.2) — User.platformRole + UserCapability below are the new source of
+// truth once every read path is migrated over; role is not read by any new
+// code and must not be dropped until that migration is verified complete in
+// production (see production-refactor/module1-migration-plan.md §2.2 step 5).
 enum UserRole {
   CLIENT
   PROVIDER
@@ -24,13 +30,34 @@ enum UserStatus {
   DELETED
 }
 
+// Platform-operator authority — orthogonal to marketplace capability
+// (see Capability below). A single scalar, not a join table: exactly one
+// value per user, matching module1-implementation-contract.md §4.1's
+// explicit YAGNI reasoning (three fixed values, single assignment, no
+// product requirement for multi-role stacking).
+enum PlatformRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Which side(s) of the marketplace a User may act on. Independent of
+// PlatformRole — see module1-implementation-contract.md §0's four-concept
+// table. A User may hold zero, one, or both capabilities (UserCapability
+// below); this enum only names the two possible values.
+enum Capability {
+  CLIENT
+  PROVIDER
+}
+
 model User {
-  id              String     @id @default(uuid())
-  email           String     @unique
+  id              String       @id @default(uuid())
+  email           String       @unique
   passwordHash    String
   name            String
   role            UserRole
-  status          UserStatus @default(ACTIVE)
+  platformRole    PlatformRole @default(USER)
+  status          UserStatus   @default(ACTIVE)
   emailVerifiedAt DateTime?
 
   createdAt DateTime  @default(now())
@@ -49,8 +76,27 @@ model User {
   disputesReceived   Dispute[]           @relation("DisputesReceived")
   disputesResolved   Dispute[]           @relation("DisputesResolved")
   workDiaryEntries   WorkDiaryEntry[]
+  capabilities       UserCapability[]
 
   @@map("users")
+}
+
+// One row per active capability a User holds. Grant-only in this slice —
+// no deactivation flow (module1-implementation-contract.md §2.3). The
+// (userId, capability) unique constraint is both the natural idempotency
+// key for the future activation endpoint and the thing that makes "does
+// this user hold X" a simple existence check.
+model UserCapability {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability  Capability
+  activatedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+
+  @@unique([userId, capability])
+  @@index([userId])
+  @@map("user_capabilities")
 }
 
 model Session {
