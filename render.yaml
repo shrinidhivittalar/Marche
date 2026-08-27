@@ -80,6 +80,20 @@ services:
       - key: GROQ_API_KEY
         sync: false
 
+      # Powers "Continue with Google" (POST /auth/google, /auth/google/link).
+      # Without it every other auth flow keeps working — only those two
+      # routes fail (503) — see apps/api/src/identity/google-auth-verifier.ts.
+      # This is the OAuth 2.0 Client ID from Google Cloud Console
+      # (APIs & Services -> Credentials), not a secret: it is the same value
+      # the frontend's Google Identity Services SDK is configured with,
+      # and Google's own documentation treats it as public. There is no
+      # corresponding client *secret* to set here — this backend only
+      # verifies ID tokens (google-auth-library's verifyIdToken), it never
+      # exchanges an authorization code, which is the only Google OAuth flow
+      # that needs one.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
       # Required — apps/api/src/payments throws on boot without all three,
       # same as REDIS_URL above. Test-mode keys from the Razorpay dashboard;
       # see apps/api/.env.example for where each one comes from.
