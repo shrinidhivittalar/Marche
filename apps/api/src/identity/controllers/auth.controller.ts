@@ -20,8 +20,12 @@ import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { GoogleAuthDto } from '../dto/google-auth.dto';
 import { AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_TTL_MS } from '../auth-rate-limit';
 import { EmailThrottlerGuard } from '../guards/email-throttler.guard';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { CurrentUser } from '../current-user.decorator';
+import type { AuthenticatedUser } from '../strategies/jwt.strategy';
 
 const REFRESH_COOKIE_NAME = 'marche_refresh_token';
 
@@ -174,5 +178,35 @@ export class AuthController {
       throw new BadRequestException('token query parameter is required');
     }
     await this.authService.verifyEmail(token);
+  }
+
+  @Post('google')
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({
+    summary:
+      'Sign in or register with a verified Google ID token; refresh token set as an httpOnly cookie',
+  })
+  async google(
+    @Body() dto: GoogleAuthDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.googleLogin(dto.idToken, requestContext(req));
+    if ('accessToken' in result) {
+      setRefreshCookie(res, result.refreshToken);
+      return { accessToken: result.accessToken, user: result.user };
+    }
+    return result;
+  }
+
+  @Post('google/link')
+  @UseGuards(JwtAuthGuard)
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({
+    summary:
+      'Attach a verified Google account to the caller’s own authenticated account (self-service only)',
+  })
+  linkGoogle(@CurrentUser() user: AuthenticatedUser, @Body() dto: GoogleAuthDto) {
+    return this.authService.linkGoogleAccount(user.id, dto.idToken);
   }
 }

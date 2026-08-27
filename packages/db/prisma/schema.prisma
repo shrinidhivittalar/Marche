@@ -78,6 +78,7 @@ model User {
   workDiaryEntries   WorkDiaryEntry[]
   capabilities       UserCapability[]
   verifications      Verification[]
+  authMethods        AuthenticationMethod[]
 
   @@map("users")
 }
@@ -140,6 +141,36 @@ model Verification {
   @@unique([userId, type])
   @@index([userId])
   @@map("verifications")
+}
+
+enum AuthProvider {
+  EMAIL_PASSWORD
+  GOOGLE
+}
+
+// One row per way a User can authenticate. EMAIL_PASSWORD rows are
+// backfilled for every existing user at migration time (providerAccountId
+// null) so this table is a complete ledger from day one, not a
+// Google-only afterthought (module1-implementation-contract.md §7.1).
+//
+// providerAccountId is Google's `sub` claim — permanent, provider-issued,
+// and the only trustworthy linking key (never email alone). Unique where
+// not null: one Google account can never be attached to two Marché users.
+// (userId, provider) unique: a User can hold at most one row per provider
+// — no duplicate Google methods for the same identity.
+model AuthenticationMethod {
+  id                String       @id @default(uuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          AuthProvider
+  providerAccountId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("authentication_methods")
 }
 
 model Session {

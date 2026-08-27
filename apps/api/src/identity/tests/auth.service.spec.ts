@@ -6,12 +6,14 @@ import type { UsersRepository } from '../repositories/users.repository';
 import type { SessionsRepository } from '../repositories/sessions.repository';
 import type { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import type { VerificationsRepository } from '../repositories/verifications.repository';
+import type { AuthenticationMethodsRepository } from '../repositories/authentication-methods.repository';
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import type { EmailService } from '../../email/email.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { ProfilesService } from '../../profiles/services/profiles.service';
 import type { ReferralsService } from '../../referrals/services/referrals.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { GoogleAuthVerifier } from '../google-auth-verifier';
 import type { User } from '@marche/db';
 
 function buildUser(overrides: Partial<User> = {}): User {
@@ -35,12 +37,14 @@ describe('AuthService', () => {
   let sessionsRepository: jest.Mocked<SessionsRepository>;
   let verificationTokensRepository: jest.Mocked<VerificationTokensRepository>;
   let verificationsRepository: jest.Mocked<VerificationsRepository>;
+  let authenticationMethodsRepository: jest.Mocked<AuthenticationMethodsRepository>;
   let passwordResetsRepository: jest.Mocked<PasswordResetsRepository>;
   let emailService: jest.Mocked<EmailService>;
   let auditService: jest.Mocked<AuditService>;
   let profilesService: jest.Mocked<ProfilesService>;
   let referralsService: jest.Mocked<ReferralsService>;
   let prismaService: jest.Mocked<PrismaService>;
+  let googleAuthVerifier: jest.Mocked<GoogleAuthVerifier>;
   let authService: AuthService;
 
   beforeEach(() => {
@@ -70,6 +74,17 @@ describe('AuthService', () => {
     verificationsRepository = {
       upsertEmailVerified: jest.fn(),
     } as unknown as jest.Mocked<VerificationsRepository>;
+
+    authenticationMethodsRepository = {
+      findByGoogleSub: jest.fn(),
+      findByUserAndProvider: jest.fn(),
+      createGoogle: jest.fn(),
+      createEmailPassword: jest.fn(),
+    } as unknown as jest.Mocked<AuthenticationMethodsRepository>;
+
+    googleAuthVerifier = {
+      verify: jest.fn(),
+    } as unknown as jest.Mocked<GoogleAuthVerifier>;
 
     passwordResetsRepository = {
       create: jest.fn(),
@@ -106,6 +121,7 @@ describe('AuthService', () => {
       sessionsRepository,
       verificationTokensRepository,
       verificationsRepository,
+      authenticationMethodsRepository,
       passwordResetsRepository,
       emailService,
       new JwtService({ secret: 'test-secret' }),
@@ -113,6 +129,7 @@ describe('AuthService', () => {
       profilesService,
       referralsService,
       prismaService,
+      googleAuthVerifier,
     );
   });
 
@@ -216,6 +233,19 @@ describe('AuthService', () => {
 
       expect(usersRepository.grantCapability).toHaveBeenCalledTimes(1);
       expect(usersRepository.grantCapability).toHaveBeenCalledWith(created.id, 'CLIENT', undefined);
+    });
+
+    it('creates an EMAIL_PASSWORD authentication-method row in the same transaction (Module 01 Slice 7)', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ role: 'CLIENT' });
+      usersRepository.create.mockResolvedValue(created);
+
+      await authService.register({ ...registerDto, role: 'CLIENT' });
+
+      expect(authenticationMethodsRepository.createEmailPassword).toHaveBeenCalledWith(
+        created.id,
+        undefined,
+      );
     });
 
     it('grants exactly one PROVIDER capability for a Provider registration', async () => {
@@ -670,6 +700,234 @@ describe('AuthService', () => {
       await authService.verifyEmail('raw-token');
 
       expect(referralsService.handleUserJoined).toHaveBeenCalledWith('jane@example.com');
+    });
+  });
+
+  describe('googleLogin', () => {
+    const verifiedIdentity = {
+      sub: 'google-sub-1',
+      email: 'jane@example.com',
+      emailVerified: true,
+    };
+
+    it('authenticates the existing User when the Google sub is already linked', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
+        id: 'method_1',
+        userId: 'user_1',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+      usersRepository.findById.mockResolvedValue(buildUser({ id: 'user_1' }) as never);
+
+      const result = await authService.googleLogin('id-token', {});
+
+      expect('accessToken' in result).toBe(true);
+      expect(usersRepository.create).not.toHaveBeenCalled();
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.google.login', userId: 'user_1' }),
+      );
+    });
+
+    it('rejects when the linked user is not active', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
+        id: 'method_1',
+        userId: 'user_1',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+      usersRepository.findById.mockResolvedValue(buildUser({ status: 'SUSPENDED' }) as never);
+
+      await expect(authService.googleLogin('id-token', {})).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('does not link when the sub is unknown but the email already belongs to an existing user', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      usersRepository.findByEmail.mockResolvedValue(buildUser({ id: 'existing_user' }));
+
+      await expect(authService.googleLogin('id-token', {})).rejects.toThrow(
+        'An account with this email already exists',
+      );
+      expect(authenticationMethodsRepository.createGoogle).not.toHaveBeenCalled();
+      expect(usersRepository.create).not.toHaveBeenCalled();
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'auth.google.email_collision',
+          userId: 'existing_user',
+        }),
+      );
+    });
+
+    it('creates a new User + Profile + AuthenticationMethod(GOOGLE) atomically, with no capability granted', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ id: 'new_user', emailVerifiedAt: null });
+      usersRepository.create.mockResolvedValue(created);
+      usersRepository.markEmailVerified.mockResolvedValue({
+        ...created,
+        emailVerifiedAt: new Date(),
+      });
+
+      const result = await authService.googleLogin('id-token', {});
+
+      expect(usersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'jane@example.com' }),
+        undefined,
+      );
+      expect(profilesService.createForNewUser).toHaveBeenCalledWith('new_user', 'jane', undefined);
+      expect(authenticationMethodsRepository.createGoogle).toHaveBeenCalledWith(
+        'new_user',
+        'google-sub-1',
+        undefined,
+      );
+      // The one thing this test exists to prove: no capability grant call
+      // anywhere in the new-user path.
+      expect(usersRepository.grantCapability).not.toHaveBeenCalled();
+      expect('accessToken' in result).toBe(true);
+    });
+
+    it('marks the new user verified from Google’s claim, both representations, in the same transaction', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ id: 'new_user', emailVerifiedAt: null });
+      usersRepository.create.mockResolvedValue(created);
+      const verifiedAt = new Date();
+      usersRepository.markEmailVerified.mockResolvedValue({
+        ...created,
+        emailVerifiedAt: verifiedAt,
+      });
+
+      await authService.googleLogin('id-token', {});
+
+      expect(usersRepository.markEmailVerified).toHaveBeenCalledWith('new_user', undefined);
+      expect(verificationsRepository.upsertEmailVerified).toHaveBeenCalledWith(
+        'new_user',
+        verifiedAt,
+        undefined,
+      );
+    });
+
+    it('creates the account but issues no session when Google has not verified the email — same as password registration', async () => {
+      googleAuthVerifier.verify.mockResolvedValue({ ...verifiedIdentity, emailVerified: false });
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ id: 'new_user', emailVerifiedAt: null });
+      usersRepository.create.mockResolvedValue(created);
+
+      const result = await authService.googleLogin('id-token', {});
+
+      expect(usersRepository.markEmailVerified).not.toHaveBeenCalled();
+      expect(sessionsRepository.create).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).toHaveBeenCalled();
+      expect(result).toEqual({ status: 'verification_email_sent' });
+    });
+  });
+
+  describe('linkGoogleAccount', () => {
+    const identity = { sub: 'google-sub-1', email: 'jane@example.com', emailVerified: true };
+
+    it('links a fresh Google account to the caller', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(identity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      authenticationMethodsRepository.createGoogle.mockResolvedValue({
+        id: 'method_1',
+        userId: 'user_1',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+
+      const result = await authService.linkGoogleAccount('user_1', 'id-token');
+
+      expect(result).toEqual({ linked: true });
+      expect(authenticationMethodsRepository.createGoogle).toHaveBeenCalledWith(
+        'user_1',
+        'google-sub-1',
+      );
+      expect(auditService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'auth.google.linked', userId: 'user_1' }),
+      );
+    });
+
+    it('is idempotent: relinking the same Google account to the same user succeeds without a duplicate row', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(identity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
+        id: 'method_1',
+        userId: 'user_1',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+
+      const result = await authService.linkGoogleAccount('user_1', 'id-token');
+
+      expect(result).toEqual({ linked: true });
+      expect(authenticationMethodsRepository.createGoogle).not.toHaveBeenCalled();
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
+    it('rejects linking a Google account already attached to a different user', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(identity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
+        id: 'method_1',
+        userId: 'someone_else',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+
+      await expect(authService.linkGoogleAccount('user_1', 'id-token')).rejects.toThrow(
+        'already linked to a different account',
+      );
+      expect(authenticationMethodsRepository.createGoogle).not.toHaveBeenCalled();
+    });
+
+    it('recovers from a concurrent-link race: the other request already linked this sub to the same user', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(identity);
+      authenticationMethodsRepository.findByGoogleSub
+        .mockResolvedValueOnce(null) // pre-check: unlinked
+        .mockResolvedValueOnce({
+          id: 'method_1',
+          userId: 'user_1',
+          provider: 'GOOGLE',
+          providerAccountId: 'google-sub-1',
+          createdAt: new Date(),
+        }); // post-race: the caller's own other request won
+      authenticationMethodsRepository.createGoogle.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+
+      const result = await authService.linkGoogleAccount('user_1', 'id-token');
+
+      expect(result).toEqual({ linked: true });
+    });
+
+    it('recovers from a concurrent-link race that another user actually won', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(identity);
+      authenticationMethodsRepository.findByGoogleSub
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'method_1',
+          userId: 'someone_else',
+          provider: 'GOOGLE',
+          providerAccountId: 'google-sub-1',
+          createdAt: new Date(),
+        });
+      authenticationMethodsRepository.createGoogle.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+
+      await expect(authService.linkGoogleAccount('user_1', 'id-token')).rejects.toThrow(
+        'already linked to a different account',
+      );
     });
   });
 });

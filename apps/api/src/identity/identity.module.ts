@@ -13,8 +13,10 @@ import { UsersRepository } from './repositories/users.repository';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VerificationTokensRepository } from './repositories/verification-tokens.repository';
 import { VerificationsRepository } from './repositories/verifications.repository';
+import { AuthenticationMethodsRepository } from './repositories/authentication-methods.repository';
 import { PasswordResetsRepository } from './repositories/password-resets.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleAuthVerifier } from './google-auth-verifier';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { EmailModule } from '../email/email.module';
 import { ReferralsModule } from '../referrals/referrals.module';
@@ -44,9 +46,11 @@ import { EmailThrottlerGuard } from './guards/email-throttler.guard';
     SessionsRepository,
     VerificationTokensRepository,
     VerificationsRepository,
+    AuthenticationMethodsRepository,
     PasswordResetsRepository,
     JwtStrategy,
     EmailThrottlerGuard,
+    GoogleAuthVerifier,
   ],
 })
 export class IdentityModule {}
