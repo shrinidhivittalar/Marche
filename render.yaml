@@ -1,3 +1,15 @@
+# This file defines the API service only (marche-api). The frontend
+# (apps/web) is deployed separately and is not declared here — whatever
+# service hosts its built output must have a catch-all rewrite configured:
+#
+#     /*  ->  /index.html
+#
+# Required because AppContext's routing (apps/web/src/context/AppContext.tsx)
+# uses the History API (pushState/popstate) for deep links like
+# /client/jobs/123 — without this rewrite, refreshing or opening such a URL
+# directly 404s at the host instead of reaching index.html and letting
+# AppContext resolve the route client-side. On a Render Static Site this is
+# configured under Settings -> Redirects/Rewrites, not in a repo file.
 services:
   - type: web
     name: marche-api
@@ -34,15 +46,28 @@ services:
 
       # Postgres connection string (Neon). Prisma reads this at runtime and
       # during the migrate/seed steps above.
+      #
+      # Must include the agreed connection_limit=5 query parameter (e.g.
+      # ...?sslmode=require&connection_limit=5) — sized for this service's
+      # single `standard` instance plus the brief old+new overlap during a
+      # Render rolling deploy, comfortably under Neon's connection ceiling.
+      # Set directly in the Render dashboard value for this var (sync: false
+      # means it is never committed here) — verify it's present there, this
+      # file cannot enforce or confirm it.
       - key: DATABASE_URL
         sync: false
 
       # Backs rate limiting (see apps/api/src/throttler). Point this at a
       # Render Key Value instance so limits are shared across every API
-      # instance and survive redeploys. Optional — unset falls back to a
-      # per-process in-memory store rather than failing to boot, but that
-      # fallback doesn't share or persist limits, so treat this as required
-      # in practice.
+      # instance and survive redeploys.
+      #
+      # Required in production: apps/api/src/config/env.validation.ts fails
+      # startup when NODE_ENV=production and this is unset — the per-process
+      # in-memory fallback isn't acceptable in production (limits aren't
+      # shared across instances and reset on every redeploy). Do not deploy
+      # this env.validation.ts change until a real Redis instance is
+      # provisioned and this value is set, or the next deploy will fail to
+      # boot.
       - key: REDIS_URL
         sync: false
 
@@ -55,10 +80,19 @@ services:
       - key: JWT_ACCESS_SECRET
         sync: false
 
-      # Exact origin of the deployed frontend, no trailing slash. CORS uses
-      # credentials, so the browser rejects a wildcard and rejects any
-      # mismatch — a trailing slash here is enough to break every request.
+      # The one canonical frontend URL, used for every emailed link
+      # (verification, reset, invites). No trailing slash. Not the CORS
+      # allow-list — see CORS_ORIGINS below for which browser origins may
+      # call the API.
       - key: FRONTEND_ORIGIN
+        sync: false
+
+      # Comma-separated list of browser origins allowed to call the API with
+      # credentials (cookies) — e.g. "https://marche.app,https://staging.marche.app".
+      # No trailing slash on any entry. CORS uses credentials, so the browser
+      # rejects a wildcard and rejects any mismatch — a trailing slash on an
+      # entry here is enough to break every request from that origin.
+      - key: CORS_ORIGINS
         sync: false
 
       # Transactional email for verification and password-reset links.

@@ -4,6 +4,17 @@
 // chance to load .env during Nest's instantiation phase.
 import 'dotenv/config';
 import 'reflect-metadata';
+import { validateRequiredEnv } from './config/env.validation';
+import { parseCorsOrigins } from './config/cors-origins';
+
+// Must run before AppModule is imported below, for the same reason
+// 'dotenv/config' must load first: IdentityModule's JwtModule.register reads
+// process.env.JWT_ACCESS_SECRET at decoration time, the moment AppModule (and
+// its imports) are require()'d — before Nest exists, and before any
+// ConfigModule validation would ever get a chance to run. A missing required
+// var throws here instead, with every missing var listed at once.
+validateRequiredEnv();
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -30,6 +41,13 @@ async function bootstrap() {
   // nginx/Cloudflare in front of this service) so req.ip resolves to the
   // real client address instead of the proxy's. Needed for per-client
   // rate limiting (ThrottlerGuard) and IP-based audit/session logging.
+  //
+  // The correct value depends entirely on proxy topology, not on anything
+  // this app controls: it's "how many reverse proxies sit between the
+  // client and this process", which is 1 on Render today. If a CDN or any
+  // other proxy is ever added in front of Render, this must be reviewed and
+  // increased to match the new hop count — leaving it at 1 in that case
+  // would let req.ip resolve to the wrong proxy's address.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   app.useGlobalPipes(
@@ -51,8 +69,15 @@ async function bootstrap() {
 
   // credentials:true requires an explicit origin — '*' (the default) is
   // rejected by browsers for credentialed (cookie-bearing) requests.
+  // CORS_ORIGINS, not FRONTEND_ORIGIN: this is the (possibly larger) set of
+  // browser origins allowed to call the API, e.g. a staging frontend that
+  // should reach the API but never appears in an emailed link.
+  // No localhost fallback: validateRequiredEnv() above already guarantees
+  // CORS_ORIGINS is set, in every environment including local dev (see
+  // apps/api/.env.example) — a silent fallback here would let a production
+  // deploy boot with CORS pointed at localhost instead of failing loudly.
   app.enableCors({
-    origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173',
+    origin: parseCorsOrigins(process.env.CORS_ORIGINS),
     credentials: true,
   });
 
@@ -71,4 +96,12 @@ async function bootstrap() {
   await app.listen(port);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  // The Nest/pino logger isn't constructed yet if bootstrap fails before
+  // NestFactory.create() resolves, so console is the only guaranteed sink.
+  // Exiting explicitly (rather than leaving an unhandled rejection) gives
+  // the process a clean, immediately-visible failure and correct exit code
+  // for Render's crash-loop diagnostics.
+  console.error('Fatal error during application startup:', error);
+  process.exit(1);
+});
