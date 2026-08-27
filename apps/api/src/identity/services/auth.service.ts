@@ -4,6 +4,7 @@ import * as argon2 from 'argon2';
 import { UsersRepository } from '../repositories/users.repository';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
+import { VerificationsRepository } from '../repositories/verifications.repository';
 import { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import { EmailService } from '../../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
@@ -84,6 +85,7 @@ export class AuthService {
     private readonly usersRepository: UsersRepository,
     private readonly sessionsRepository: SessionsRepository,
     private readonly verificationTokensRepository: VerificationTokensRepository,
+    private readonly verificationsRepository: VerificationsRepository,
     private readonly passwordResetsRepository: PasswordResetsRepository,
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
@@ -346,7 +348,19 @@ export class AuthService {
       throw new UnauthorizedException('This verification link is invalid or has expired');
     }
 
-    const user = await this.usersRepository.markEmailVerified(verification.userId);
+    // module1-implementation-contract.md §8.2: Verification becomes the
+    // write-side system of record the moment anything sets
+    // emailVerifiedAt, so the two are written together, in the same
+    // transaction, rather than emailVerifiedAt alone.
+    const user = await this.prisma.client.$transaction(async (tx) => {
+      const updated = await this.usersRepository.markEmailVerified(verification.userId, tx);
+      await this.verificationsRepository.upsertEmailVerified(
+        verification.userId,
+        updated.emailVerifiedAt!,
+        tx,
+      );
+      return updated;
+    });
     await this.verificationTokensRepository.deleteById(verification.id);
     await this.auditService.record({
       eventType: AUTH_EVENTS.EMAIL_VERIFIED,

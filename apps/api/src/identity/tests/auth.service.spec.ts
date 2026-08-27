@@ -5,6 +5,7 @@ import { AuthService } from '../services/auth.service';
 import type { UsersRepository } from '../repositories/users.repository';
 import type { SessionsRepository } from '../repositories/sessions.repository';
 import type { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
+import type { VerificationsRepository } from '../repositories/verifications.repository';
 import type { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import type { EmailService } from '../../email/email.service';
 import type { AuditService } from '../../audit/audit.service';
@@ -33,6 +34,7 @@ describe('AuthService', () => {
   let usersRepository: jest.Mocked<UsersRepository>;
   let sessionsRepository: jest.Mocked<SessionsRepository>;
   let verificationTokensRepository: jest.Mocked<VerificationTokensRepository>;
+  let verificationsRepository: jest.Mocked<VerificationsRepository>;
   let passwordResetsRepository: jest.Mocked<PasswordResetsRepository>;
   let emailService: jest.Mocked<EmailService>;
   let auditService: jest.Mocked<AuditService>;
@@ -64,6 +66,10 @@ describe('AuthService', () => {
       findByTokenHash: jest.fn(),
       deleteById: jest.fn(),
     } as unknown as jest.Mocked<VerificationTokensRepository>;
+
+    verificationsRepository = {
+      upsertEmailVerified: jest.fn(),
+    } as unknown as jest.Mocked<VerificationsRepository>;
 
     passwordResetsRepository = {
       create: jest.fn(),
@@ -99,6 +105,7 @@ describe('AuthService', () => {
       usersRepository,
       sessionsRepository,
       verificationTokensRepository,
+      verificationsRepository,
       passwordResetsRepository,
       emailService,
       new JwtService({ secret: 'test-secret' }),
@@ -632,11 +639,19 @@ describe('AuthService', () => {
         expiresAt: new Date(Date.now() + 1000 * 60),
         createdAt: new Date(),
       });
-      usersRepository.markEmailVerified.mockResolvedValue(buildUser({ email: 'jane@example.com' }));
+      const verifiedAt = new Date();
+      usersRepository.markEmailVerified.mockResolvedValue(
+        buildUser({ email: 'jane@example.com', emailVerifiedAt: verifiedAt }),
+      );
 
       await authService.verifyEmail('raw-token');
 
-      expect(usersRepository.markEmailVerified).toHaveBeenCalledWith('user_1');
+      expect(usersRepository.markEmailVerified).toHaveBeenCalledWith('user_1', undefined);
+      expect(verificationsRepository.upsertEmailVerified).toHaveBeenCalledWith(
+        'user_1',
+        verifiedAt,
+        undefined,
+      );
       expect(verificationTokensRepository.deleteById).toHaveBeenCalledWith('verification_1');
     });
 
@@ -648,7 +663,9 @@ describe('AuthService', () => {
         expiresAt: new Date(Date.now() + 1000 * 60),
         createdAt: new Date(),
       });
-      usersRepository.markEmailVerified.mockResolvedValue(buildUser({ email: 'jane@example.com' }));
+      usersRepository.markEmailVerified.mockResolvedValue(
+        buildUser({ email: 'jane@example.com', emailVerifiedAt: new Date() }),
+      );
 
       await authService.verifyEmail('raw-token');
 

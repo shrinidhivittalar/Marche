@@ -116,6 +116,9 @@ describe('proposal acceptance under concurrency', () => {
         // ProposalsService.submit()'s assertProviderRole would reject every
         // provider this helper creates.
         capabilities: { create: { capability: role } },
+        // Module 01 Slice 5: ProposalsService.submit() now also requires a
+        // verified email — this file calls the real service, not a mock.
+        emailVerifiedAt: new Date(),
       },
     });
     const profile = await prisma.client.profile.create({

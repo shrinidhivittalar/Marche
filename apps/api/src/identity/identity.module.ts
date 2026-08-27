@@ -10,6 +10,7 @@ import { CapabilitiesService } from './services/capabilities.service';
 import { UsersRepository } from './repositories/users.repository';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VerificationTokensRepository } from './repositories/verification-tokens.repository';
+import { VerificationsRepository } from './repositories/verifications.repository';
 import { PasswordResetsRepository } from './repositories/password-resets.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { ProfilesModule } from '../profiles/profiles.module';
@@ -39,6 +40,7 @@ import { EmailThrottlerGuard } from './guards/email-throttler.guard';
     UsersRepository,
     SessionsRepository,
     VerificationTokensRepository,
+    VerificationsRepository,
     PasswordResetsRepository,
     JwtStrategy,
     EmailThrottlerGuard,

@@ -77,6 +77,7 @@ model User {
   disputesResolved   Dispute[]           @relation("DisputesResolved")
   workDiaryEntries   WorkDiaryEntry[]
   capabilities       UserCapability[]
+  verifications      Verification[]
 
   @@map("users")
 }
@@ -97,6 +98,48 @@ model UserCapability {
   @@unique([userId, capability])
   @@index([userId])
   @@map("user_capabilities")
+}
+
+// A different axis from Capability entirely (module1-implementation-contract.md
+// §0): this answers "how much has this identity been verified/trusted?",
+// never "what is this identity allowed to do?". Only EMAIL is written by
+// Module 01 Slice 5 — the other five values exist so a future slice that
+// implements PHONE/IDENTITY/etc. needs no further migration, per
+// module1-implementation-contract.md §8.1's "architecture-ready" distinction.
+enum VerificationType {
+  EMAIL
+  PHONE
+  IDENTITY
+  PROVIDER
+  CREDENTIAL
+  BUSINESS
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+// System of record for verification state. User.emailVerifiedAt is kept as
+// a denormalized, fast-path read column for the login hot path
+// (module1-implementation-contract.md §8.2) — this table is the write-side
+// source of truth: whatever sets emailVerifiedAt also upserts the matching
+// row here, in the same transaction. unique(userId, type) makes that upsert
+// the natural idempotency key, same pattern as UserCapability above.
+model Verification {
+  id         String              @id @default(uuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       VerificationType
+  status     VerificationStatus
+  verifiedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@map("verifications")
 }
 
 model Session {

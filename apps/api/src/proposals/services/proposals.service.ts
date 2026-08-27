@@ -10,7 +10,11 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { JobsService } from '../../jobs/services/jobs.service';
 import { MediaService } from '../../media/media.service';
-import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
+import {
+  assertEmailVerified,
+  assertProviderRole,
+  getOwnProfileOrThrow,
+} from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { ProposalsRepository } from '../repositories/proposals.repository';
@@ -58,6 +62,9 @@ export class ProposalsService {
     // provider can be suspended or have their role changed between opening
     // the form and sending it, and this is the moment an offer becomes real.
     assertProviderRole(profile.user);
+    // Module 01 Slice 5: EMAIL verification required at submission — the
+    // moment an offer becomes real to the client on the other side.
+    assertEmailVerified(profile.user);
 
     const job = await this.jobsRepository.findById(dto.jobId);
     if (!job) {

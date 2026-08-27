@@ -10,12 +10,20 @@ import type { CreateDirectContractDto } from '../dto/create-direct-contract.dto'
 const CLIENT_PROFILE = {
   id: 'client_profile',
   userId: 'user_client',
-  user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+  user: {
+    role: 'CLIENT',
+    capabilities: [{ capability: 'CLIENT' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
 };
 const PROVIDER_PROFILE = {
   id: 'provider_profile',
   userId: 'user_provider',
-  user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+  user: {
+    role: 'PROVIDER',
+    capabilities: [{ capability: 'PROVIDER' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
 };
 
 const DTO: CreateDirectContractDto = {
@@ -136,6 +144,16 @@ describe('DirectContractsService.create', () => {
       expect.objectContaining({ proposalId: 'proposal_1' }),
     );
     expect(result.id).toBe('proposal_1');
+  });
+
+  it('rejects a client with an unverified email', async () => {
+    const { service, profilesRepository } = build();
+    profilesRepository.findByUserId.mockResolvedValue({
+      ...CLIENT_PROFILE,
+      user: { ...CLIENT_PROFILE.user, emailVerifiedAt: null },
+    });
+
+    await expect(service.create('user_client', DTO)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('rejects a non-client caller', async () => {

@@ -1,5 +1,10 @@
 import { ForbiddenException } from '@nestjs/common';
-import { assertClientRole, assertProviderRole, hasCapability } from '../profile-access.util';
+import {
+  assertClientRole,
+  assertEmailVerified,
+  assertProviderRole,
+  hasCapability,
+} from '../profile-access.util';
 
 describe('hasCapability — capability is the sole source of truth (Module 01 Slice 4 cutover)', () => {
   it('grants access from a real UserCapability row, independent of the legacy role', () => {
@@ -70,6 +75,29 @@ describe('hasCapability — capability is the sole source of truth (Module 01 Sl
       };
       expect(() => assertClientRole(dualCapabilityUser)).not.toThrow();
       expect(() => assertProviderRole(dualCapabilityUser)).not.toThrow();
+    });
+  });
+
+  describe('assertEmailVerified (Module 01 Slice 5 — a separate axis from capability)', () => {
+    it('passes for a verified user', () => {
+      expect(() => assertEmailVerified({ emailVerifiedAt: new Date() })).not.toThrow();
+    });
+
+    it('throws for an unverified user', () => {
+      expect(() => assertEmailVerified({ emailVerifiedAt: null })).toThrow(ForbiddenException);
+    });
+
+    it('is independent of capability — holding a capability does not imply verification, and vice versa', () => {
+      // A capability check passing says nothing about verification status,
+      // and this function reads only emailVerifiedAt, never capabilities —
+      // the two must be called separately by any route that needs both.
+      const unverifiedProvider = {
+        role: 'PROVIDER' as const,
+        capabilities: [{ capability: 'PROVIDER' as const }],
+        emailVerifiedAt: null,
+      };
+      expect(() => assertProviderRole(unverifiedProvider)).not.toThrow();
+      expect(() => assertEmailVerified(unverifiedProvider)).toThrow(ForbiddenException);
     });
   });
 });

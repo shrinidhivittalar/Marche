@@ -94,3 +94,22 @@ export function assertOwnership(resourceProfileId: string, callerProfileId: stri
     throw new ForbiddenException('You do not have access to this resource');
   }
 }
+
+// Verification answers a different question from Capability and must never
+// be folded into hasCapability/assertProviderRole/assertClientRole:
+// Capability is "what is this identity allowed to do", Verification is "how
+// much has this identity been verified/trusted". A route that needs both
+// calls both checks independently — see JobsService.publish,
+// ProposalsService.submit, DirectContractsService.create, and
+// CapabilitiesService.activate for the four places EMAIL verification is
+// currently required (Module 01 Slice 5). Every other verification type is
+// schema-ready only — no code path checks or requires it yet.
+export interface VerifiableUser {
+  emailVerifiedAt: Date | null;
+}
+
+export function assertEmailVerified(user: VerifiableUser): void {
+  if (!user.emailVerifiedAt) {
+    throw new ForbiddenException('Verify your email before continuing');
+  }
+}

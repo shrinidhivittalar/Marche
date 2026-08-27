@@ -10,12 +10,20 @@ import type { CreateProposalDto } from '../dto/proposal.dto';
 const PROVIDER = {
   id: 'provider_profile',
   userId: 'user_1',
-  user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+  user: {
+    role: 'PROVIDER',
+    capabilities: [{ capability: 'PROVIDER' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
 };
 const CLIENT = {
   id: 'client_profile',
   userId: 'user_2',
-  user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+  user: {
+    role: 'CLIENT',
+    capabilities: [{ capability: 'CLIENT' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
 };
 
 // The transaction client the mocked $transaction hands the callback. Identity
@@ -148,6 +156,17 @@ describe('ProposalsService', () => {
       const [data] = proposals.create.mock.calls[0];
       expect(data.providerProfileId).toBe('provider_profile');
       expect(data.proposedPrice).toBe(25000);
+    });
+
+    it('rejects submission with an unverified email', async () => {
+      const { service, profiles, proposals } = build();
+      profiles.findByUserId.mockResolvedValue({
+        ...PROVIDER,
+        user: { ...PROVIDER.user, emailVerifiedAt: null },
+      });
+
+      await expect(service.submit('user_1', dto)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(proposals.create).not.toHaveBeenCalled();
     });
 
     it('takes the provider from the authenticated caller, never the request', async () => {

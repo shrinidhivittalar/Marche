@@ -49,8 +49,8 @@ export class UsersRepository {
     return (tx ?? this.prisma.client).user.create({ data });
   }
 
-  markEmailVerified(userId: string): Promise<User> {
-    return this.prisma.client.user.update({
+  markEmailVerified(userId: string, tx?: Prisma.TransactionClient): Promise<User> {
+    return (tx ?? this.prisma.client).user.update({
       where: { id: userId },
       data: { emailVerifiedAt: new Date() },
     });

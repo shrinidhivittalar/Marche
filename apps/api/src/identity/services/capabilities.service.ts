@@ -1,5 +1,6 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UsersRepository } from '../repositories/users.repository';
+import { assertEmailVerified } from '../../profiles/profile-access.util';
 import type { Capability } from '@marche/db';
 
 // Module 01 Slice 3 — post-registration capability activation
@@ -22,9 +23,10 @@ export class CapabilitiesService {
     }
     // Verified email required per §2.3 — account-active/status is already
     // enforced upstream by JwtAuthGuard/JwtStrategy before this is reached.
-    if (!user.emailVerifiedAt) {
-      throw new ForbiddenException('Verify your email before activating a capability');
-    }
+    // Module 01 Slice 5: uses the same shared assertEmailVerified as
+    // JobsService.publish/ProposalsService.submit/DirectContractsService.create
+    // — one verification check, not four copies of the same null check.
+    assertEmailVerified(user);
     await this.usersRepository.grantCapability(userId, capability);
   }
 }

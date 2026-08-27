@@ -14,6 +14,7 @@ import { ConnectionsRepository } from '../../proposals/repositories/connections.
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
   assertClientRole,
+  assertEmailVerified,
   assertProviderRole,
   getOwnProfileOrThrow,
 } from '../../profiles/profile-access.util';
@@ -51,6 +52,12 @@ export class DirectContractsService {
   async create(clientUserId: string, dto: CreateDirectContractDto) {
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, clientUserId);
     assertClientRole(clientProfile.user);
+    // Module 01 Slice 5: EMAIL verification required of the initiating
+    // client — the target provider has taken no action yet at creation
+    // time (they accept or decline later), so only the actor is gated here,
+    // consistent with the actor-gated pattern at job publish and proposal
+    // submission.
+    assertEmailVerified(clientProfile.user);
 
     const providerProfile = await this.profilesRepository.findById(dto.providerProfileId);
     if (!providerProfile) {
