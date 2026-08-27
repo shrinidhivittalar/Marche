@@ -121,14 +121,20 @@ export class AuthService {
       return REGISTER_ACKNOWLEDGEMENT;
     }
 
-    // User + Profile must be created together: if the process dies between
-    // them, a user with no profile breaks every downstream profile endpoint.
+    // User + Profile + initial UserCapability must be created together: if
+    // the process dies partway, a user with no profile or no capability row
+    // breaks downstream profile/authorization endpoints. The capability
+    // granted mirrors dto.role exactly (CLIENT|PROVIDER) — RegisterDto has
+    // no ADMIN/SUPER_ADMIN option and no platformRole field, so a public
+    // signup can never produce anything but a USER-platformRole identity
+    // with exactly one capability (module1-implementation-contract.md §5, §2.2).
     const user = await this.prisma.client.$transaction(async (tx) => {
       const created = await this.usersRepository.create(
         { email: dto.email, passwordHash, name: dto.name, role: dto.role },
         tx,
       );
       await this.profilesService.createForNewUser(created.id, created.name, tx);
+      await this.usersRepository.grantCapability(created.id, dto.role, tx);
       return created;
     });
 

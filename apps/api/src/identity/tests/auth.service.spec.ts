@@ -48,6 +48,7 @@ describe('AuthService', () => {
       create: jest.fn(),
       markEmailVerified: jest.fn(),
       updatePasswordHash: jest.fn(),
+      grantCapability: jest.fn(),
     } as unknown as jest.Mocked<UsersRepository>;
 
     sessionsRepository = {
@@ -197,6 +198,75 @@ describe('AuthService', () => {
         created.name,
         undefined,
       );
+    });
+
+    it('grants exactly one CLIENT capability, inside the same transaction, for a Client registration', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ role: 'CLIENT' });
+      usersRepository.create.mockResolvedValue(created);
+
+      await authService.register({ ...registerDto, role: 'CLIENT' });
+
+      expect(usersRepository.grantCapability).toHaveBeenCalledTimes(1);
+      expect(usersRepository.grantCapability).toHaveBeenCalledWith(created.id, 'CLIENT', undefined);
+    });
+
+    it('grants exactly one PROVIDER capability for a Provider registration', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ role: 'PROVIDER' });
+      usersRepository.create.mockResolvedValue(created);
+
+      await authService.register({ ...registerDto, role: 'PROVIDER' });
+
+      expect(usersRepository.grantCapability).toHaveBeenCalledTimes(1);
+      expect(usersRepository.grantCapability).toHaveBeenCalledWith(
+        created.id,
+        'PROVIDER',
+        undefined,
+      );
+    });
+
+    it('never grants ADMIN/SUPER_ADMIN capability or platformRole — RegisterDto has no such field', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser();
+      usersRepository.create.mockResolvedValue(created);
+
+      await authService.register({ ...registerDto, role: 'CLIENT' });
+
+      // grantCapability is only ever called with the enum value that came
+      // from dto.role, which RegisterDto restricts to CLIENT|PROVIDER
+      // (@IsIn) at the validation layer — there is no code path in
+      // register() that can pass anything else.
+      const grantedCapability = usersRepository.grantCapability.mock.calls[0]![1];
+      expect(['CLIENT', 'PROVIDER']).toContain(grantedCapability);
+      expect(usersRepository.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({ platformRole: expect.anything() }),
+        undefined,
+      );
+    });
+
+    it('does not grant a capability on the duplicate-email path', async () => {
+      usersRepository.findByEmail.mockResolvedValue(buildUser());
+
+      await authService.register({ ...registerDto });
+
+      expect(usersRepository.grantCapability).not.toHaveBeenCalled();
+    });
+
+    it('rolls back nothing further and rethrows if capability granting fails mid-transaction', async () => {
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser();
+      usersRepository.create.mockResolvedValue(created);
+      usersRepository.grantCapability.mockRejectedValue(new Error('db unavailable'));
+
+      await expect(authService.register({ ...registerDto })).rejects.toThrow('db unavailable');
+      // The transaction callback throwing is what causes Prisma to roll back
+      // User + Profile + Capability together — this test's mocked
+      // $transaction just invokes the callback directly, so the meaningful
+      // assertion is that the error from inside the callback propagates
+      // rather than being swallowed, which is what would let a partial
+      // registration succeed.
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
   });
 

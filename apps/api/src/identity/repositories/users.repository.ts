@@ -1,12 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { Prisma, User, UserCapability, UserRole } from '@marche/db';
+import type { Capability, Prisma, User, UserCapability, UserRole } from '@marche/db';
 
 // findById's return shape, with capabilities attached — see the comment on
 // findById below for why. Everything that already only reads the plain
 // User fields (AuthService.refresh, UsersService) keeps working unchanged;
 // this is additive.
 export type UserWithCapabilities = User & { capabilities: UserCapability[] };
+
+// Postgres' unique-violation code, surfaced by Prisma — same duck-typed
+// check already used in skills.service.ts, proposals.service.ts, etc.
+const UNIQUE_VIOLATION = 'P2002';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
+}
 
 @Injectable()
 export class UsersRepository {
@@ -48,5 +61,35 @@ export class UsersRepository {
       where: { id: userId },
       data: { passwordHash },
     });
+  }
+
+  // Idempotent grant: (userId, capability) is unique at the database level
+  // (schema.prisma's UserCapability.@@unique), so a retried or concurrently
+  // racing grant for the same pair falls into the catch below and returns
+  // the row the other writer already created, rather than erroring or
+  // producing a duplicate — module1-implementation-contract.md §2.3, §10.
+  // Used both by AuthService.register (inside the registration transaction,
+  // where a collision is impossible for a brand-new user) and by capability
+  // activation (where it's the actual idempotency mechanism).
+  async grantCapability(
+    userId: string,
+    capability: Capability,
+    tx?: Prisma.TransactionClient,
+  ): Promise<UserCapability> {
+    const client = tx ?? this.prisma.client;
+    try {
+      return await client.userCapability.create({ data: { userId, capability } });
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const existing = await client.userCapability.findUnique({
+        where: { userId_capability: { userId, capability } },
+      });
+      if (!existing) {
+        throw error;
+      }
+      return existing;
+    }
   }
 }
