@@ -57,6 +57,18 @@ services:
       - key: DATABASE_URL
         sync: false
 
+      # Neon's direct (non-pooled) connection string — used only by
+      # `prisma migrate deploy` in the buildCommand above, via
+      # schema.prisma's datasource.directUrl. Required because Prisma's
+      # migration advisory lock, taken over a pooled PgBouncer connection,
+      # can be handed off to an unrelated pooled client once the migration
+      # process exits — orphaning the lock and blocking every subsequent
+      # `migrate deploy` with a P1002 timeout, which is exactly what
+      # happened in production. The runtime Prisma Client is unaffected —
+      # it still uses the pooled DATABASE_URL above for every request.
+      - key: DIRECT_DATABASE_URL
+        sync: false
+
       # Backs rate limiting (see apps/api/src/throttler). Point this at a
       # Render Key Value instance so limits are shared across every API
       # instance and survive redeploys.

@@ -8,7 +8,23 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Pooled (PgBouncer) connection — what the running Prisma Client uses at
+  // runtime, in every environment.
+  url       = env("DATABASE_URL")
+  // Direct, non-pooled connection — used only by `prisma migrate`/`db push`/
+  // introspection. Prisma's own advisory lock (taken during `migrate deploy`
+  // to prevent concurrent migrations) must run over a direct connection:
+  // through PgBouncer, the physical backend holding that lock can be handed
+  // to an unrelated pooled client after the migration process exits,
+  // orphaning the lock and blocking every subsequent `migrate deploy` with
+  // a P1002 timeout — which is exactly what happened in production.
+  // NOTE: Prisma does not fall back to `url` if this is unset — any
+  // `migrate`/`db push`/introspect command will error with "Environment
+  // variable not found: DIRECT_DATABASE_URL" until it's set. TEST_DATABASE_URL
+  // (see packages/db/.env / jest.setup-test-db.js) is itself a pooled
+  // "-pooler" Neon endpoint, so `db:test:prepare`'s `migrate deploy` needs
+  // the same treatment — not addressed by this change, flagged separately.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // Legacy fixed role. Kept temporarily during the Module 01 identity refactor's
