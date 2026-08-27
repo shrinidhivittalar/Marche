@@ -52,6 +52,18 @@ describe('AuditService', () => {
       );
     });
 
+    // Module 1 closeout fix: this used to check the caller's legacy
+    // User.role, which never becomes 'ADMIN' for anyone promoted through
+    // Slice 6's PATCH /admin/users/:id/platform-role — only platformRole
+    // does. SUPER_ADMIN must pass too, as a strict superset of ADMIN.
+    it('allows a SUPER_ADMIN', async () => {
+      const { auditService, findMany } = buildForList();
+
+      await auditService.list('SUPER_ADMIN', { page: 1, limit: 20 });
+
+      expect(findMany).toHaveBeenCalled();
+    });
+
     it('matches search against eventType or email, case-insensitively', async () => {
       const { auditService, findMany, count } = buildForList();
 

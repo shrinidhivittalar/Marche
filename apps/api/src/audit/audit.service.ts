@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { paginate } from '../marketplace/pagination';
 import type { AuditLogQueryDto } from './dto/audit-log-query.dto';
-import type { Prisma } from '@marche/db';
+import type { Prisma, PlatformRole } from '@marche/db';
 
 export interface AuditEventInput {
   /** Namespaced, e.g. "auth.login.success" — see each module's own event-name constants. */
@@ -44,8 +44,11 @@ export class AuditService {
 
   // Admin-only read side. There is no controller route for anyone else —
   // this is a security trail, not a per-user activity feed.
-  async list(role: string, query: AuditLogQueryDto) {
-    if (role !== 'ADMIN') {
+  //
+  // Checks platformRole, not the legacy User.role — see the identical fix
+  // and reasoning on marketplace-access.util.ts's assertAdminRole.
+  async list(platformRole: PlatformRole, query: AuditLogQueryDto) {
+    if (platformRole !== 'ADMIN' && platformRole !== 'SUPER_ADMIN') {
       throw new ForbiddenException('This is only available to admins');
     }
 

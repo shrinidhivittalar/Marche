@@ -7,7 +7,7 @@ import {
 import { CategoriesRepository } from '../repositories/categories.repository';
 import { assertAdminRole } from '../marketplace-access.util';
 import type { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
-import type { Category } from '@marche/db';
+import type { Category, PlatformRole } from '@marche/db';
 
 @Injectable()
 export class CategoriesService {
@@ -25,8 +25,8 @@ export class CategoriesService {
     return category;
   }
 
-  async create(role: string, dto: CreateCategoryDto): Promise<Category> {
-    assertAdminRole(role);
+  async create(platformRole: PlatformRole, dto: CreateCategoryDto): Promise<Category> {
+    assertAdminRole(platformRole);
     await this.assertSlugAvailable(dto.slug);
     if (dto.parentId) {
       await this.assertCanBeParent(dto.parentId);
@@ -42,8 +42,8 @@ export class CategoriesService {
     });
   }
 
-  async update(role: string, id: string, dto: UpdateCategoryDto): Promise<Category> {
-    assertAdminRole(role);
+  async update(platformRole: PlatformRole, id: string, dto: UpdateCategoryDto): Promise<Category> {
+    assertAdminRole(platformRole);
     const category = await this.categoriesRepository.findById(id);
     if (!category) {
       throw new NotFoundException('Category not found');
@@ -70,8 +70,8 @@ export class CategoriesService {
     });
   }
 
-  async remove(role: string, id: string): Promise<void> {
-    assertAdminRole(role);
+  async remove(platformRole: PlatformRole, id: string): Promise<void> {
+    assertAdminRole(platformRole);
     const category = await this.categoriesRepository.findById(id);
     if (!category) {
       throw new NotFoundException('Category not found');

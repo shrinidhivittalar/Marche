@@ -46,7 +46,7 @@ export class CategoriesController {
   @UseGuards(JwtAuthGuard, PlatformRoleGuard)
   @RequirePlatformRole('ADMIN')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateCategoryDto) {
-    return this.categoriesService.create(user.role, dto);
+    return this.categoriesService.create(user.platformRole, dto);
   }
 
   @Patch(':id')
@@ -59,7 +59,7 @@ export class CategoriesController {
     @Param('id') id: string,
     @Body() dto: UpdateCategoryDto,
   ) {
-    return this.categoriesService.update(user.role, id, dto);
+    return this.categoriesService.update(user.platformRole, id, dto);
   }
 
   @Delete(':id')
@@ -72,6 +72,6 @@ export class CategoriesController {
   @UseGuards(JwtAuthGuard, PlatformRoleGuard)
   @RequirePlatformRole('ADMIN')
   async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    await this.categoriesService.remove(user.role, id);
+    await this.categoriesService.remove(user.platformRole, id);
   }
 }

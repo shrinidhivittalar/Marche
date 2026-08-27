@@ -27,6 +27,6 @@ export class AuditController {
     description: 'Auth events only — see AuditService.record. Newest first.',
   })
   list(@CurrentUser() user: AuthenticatedUser, @Query() query: AuditLogQueryDto) {
-    return this.auditService.list(user.role, query);
+    return this.auditService.list(user.platformRole, query);
   }
 }

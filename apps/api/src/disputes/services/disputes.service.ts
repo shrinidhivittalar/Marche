@@ -7,7 +7,11 @@ import { assertAdminRole } from '../../marketplace/marketplace-access.util';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { paginate } from '../../marketplace/pagination';
 import type { DisputeListQueryDto } from '../dto/dispute-list-query.dto';
-import type { Dispute } from '@marche/db';
+import type { Dispute, PlatformRole } from '@marche/db';
+
+function isAdminOrAbove(platformRole: PlatformRole): boolean {
+  return platformRole === 'ADMIN' || platformRole === 'SUPER_ADMIN';
+}
 
 @Injectable()
 export class DisputesService {
@@ -64,16 +68,20 @@ export class DisputesService {
   }
 
   /** Either party to the connection, or an admin. */
-  async listForConnection(userId: string, role: string, connectionId: string): Promise<Dispute[]> {
-    if (role !== 'ADMIN') {
+  async listForConnection(
+    userId: string,
+    platformRole: PlatformRole,
+    connectionId: string,
+  ): Promise<Dispute[]> {
+    if (!isAdminOrAbove(platformRole)) {
       await this.connectionsService.findById(userId, connectionId); // party check
     }
     return this.disputesRepository.listForConnection(connectionId);
   }
 
   /** Admin-only queue across every connection, oldest first. */
-  async listAll(role: string, query: DisputeListQueryDto) {
-    assertAdminRole(role);
+  async listAll(platformRole: PlatformRole, query: DisputeListQueryDto) {
+    assertAdminRole(platformRole);
     const { page, limit, status } = query;
 
     const [data, total] = await Promise.all([
@@ -86,12 +94,12 @@ export class DisputesService {
 
   /** Admin-only. Idempotent: resolving an already-resolved dispute just returns it unchanged. */
   async resolve(
-    role: string,
+    platformRole: PlatformRole,
     disputeId: string,
     resolvedByUserId: string,
     resolution: string,
   ): Promise<Dispute> {
-    assertAdminRole(role);
+    assertAdminRole(platformRole);
     const dispute = await this.disputesRepository.findById(disputeId);
     if (!dispute) {
       throw new NotFoundException('Dispute not found');

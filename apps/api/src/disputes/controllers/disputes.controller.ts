@@ -27,7 +27,7 @@ export class DisputesController {
     summary: 'Every dispute (Admin only), oldest first, optionally filtered by status',
   })
   listAll(@CurrentUser() user: AuthenticatedUser, @Query() query: DisputeListQueryDto) {
-    return this.disputesService.listAll(user.role, query);
+    return this.disputesService.listAll(user.platformRole, query);
   }
 
   @Patch(':id/resolve')
@@ -42,6 +42,6 @@ export class DisputesController {
     @Param('id') id: string,
     @Body() dto: ResolveDisputeDto,
   ) {
-    return this.disputesService.resolve(user.role, id, user.id, dto.resolution);
+    return this.disputesService.resolve(user.platformRole, id, user.id, dto.resolution);
   }
 }
