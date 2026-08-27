@@ -1,0 +1,149 @@
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AdminService } from '../services/admin.service';
+import type { UsersRepository, UserWithCapabilities } from '../repositories/users.repository';
+import type { AuditService } from '../../audit/audit.service';
+
+function buildUser(overrides: Partial<UserWithCapabilities> = {}): UserWithCapabilities {
+  return {
+    id: 'target_1',
+    email: 'target@example.com',
+    passwordHash: 'hashed',
+    name: 'Target',
+    role: 'CLIENT',
+    platformRole: 'USER',
+    status: 'ACTIVE',
+    emailVerifiedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    capabilities: [],
+    ...overrides,
+  } as UserWithCapabilities;
+}
+
+describe('AdminService.changePlatformRole', () => {
+  let usersRepository: jest.Mocked<UsersRepository>;
+  let auditService: jest.Mocked<AuditService>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    usersRepository = {
+      findById: jest.fn(),
+      countByPlatformRole: jest.fn(),
+      updatePlatformRoleIfCurrent: jest.fn(),
+    } as unknown as jest.Mocked<UsersRepository>;
+    auditService = { record: jest.fn() } as unknown as jest.Mocked<AuditService>;
+    service = new AdminService(usersRepository, auditService);
+  });
+
+  it('rejects a self-change, regardless of direction', async () => {
+    await expect(service.changePlatformRole('actor_1', 'actor_1', 'ADMIN')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(usersRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it('404s when the target does not exist', async () => {
+    usersRepository.findById.mockResolvedValue(null);
+
+    await expect(service.changePlatformRole('actor_1', 'missing', 'ADMIN')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('404s for a soft-deleted target', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ deletedAt: new Date() }));
+
+    await expect(service.changePlatformRole('actor_1', 'target_1', 'ADMIN')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('is a true no-op when the requested role equals the current one — no write, no audit', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'ADMIN' }));
+
+    const result = await service.changePlatformRole('actor_1', 'target_1', 'ADMIN');
+
+    expect(result).toEqual({ changed: false, platformRole: 'ADMIN' });
+    expect(usersRepository.updatePlatformRoleIfCurrent).not.toHaveBeenCalled();
+    expect(auditService.record).not.toHaveBeenCalled();
+  });
+
+  it('promotes USER to ADMIN and audits the transition', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'USER' }));
+    usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(1);
+
+    const result = await service.changePlatformRole('actor_1', 'target_1', 'ADMIN');
+
+    expect(result).toEqual({ changed: true, platformRole: 'ADMIN' });
+    expect(usersRepository.updatePlatformRoleIfCurrent).toHaveBeenCalledWith(
+      'target_1',
+      'USER',
+      'ADMIN',
+    );
+    expect(auditService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'admin.platform_role.changed',
+        userId: 'actor_1',
+        metadata: { targetUserId: 'target_1', previousRole: 'USER', newRole: 'ADMIN' },
+      }),
+    );
+  });
+
+  it('demotes ADMIN to USER without touching the Super Admin count check', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'ADMIN' }));
+    usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(1);
+
+    await service.changePlatformRole('actor_1', 'target_1', 'USER');
+
+    expect(usersRepository.countByPlatformRole).not.toHaveBeenCalled();
+  });
+
+  it('demotes SUPER_ADMIN to ADMIN when other Super Admins remain', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'SUPER_ADMIN' }));
+    usersRepository.countByPlatformRole.mockResolvedValue(2);
+    usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(1);
+
+    const result = await service.changePlatformRole('actor_1', 'target_1', 'ADMIN');
+
+    expect(result.changed).toBe(true);
+  });
+
+  it('rejects demoting the last Super Admin', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'SUPER_ADMIN' }));
+    usersRepository.countByPlatformRole.mockResolvedValue(1);
+
+    await expect(service.changePlatformRole('actor_1', 'target_1', 'ADMIN')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(usersRepository.updatePlatformRoleIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('rejects demoting the last Super Admin straight to USER too', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'SUPER_ADMIN' }));
+    usersRepository.countByPlatformRole.mockResolvedValue(1);
+
+    await expect(service.changePlatformRole('actor_1', 'target_1', 'USER')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('allows promoting a Super Admin to Super Admin from a different starting role without the last-admin check (unreachable in practice, but the guard only fires on demotion away from SUPER_ADMIN)', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'ADMIN' }));
+    usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(1);
+
+    await service.changePlatformRole('actor_1', 'target_1', 'SUPER_ADMIN');
+
+    expect(usersRepository.countByPlatformRole).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a concurrent-change conflict when the conditional update affects zero rows', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ platformRole: 'USER' }));
+    usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(0);
+
+    await expect(service.changePlatformRole('actor_1', 'target_1', 'ADMIN')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(auditService.record).not.toHaveBeenCalled();
+  });
+});

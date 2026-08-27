@@ -1,0 +1,32 @@
+import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PlatformRoleGuard } from '../guards/platform-role.guard';
+import { RequirePlatformRole } from '../decorators/require-platform-role.decorator';
+import { CurrentUser } from '../current-user.decorator';
+import { AdminService } from '../services/admin.service';
+import { UpdatePlatformRoleDto } from '../dto/update-platform-role.dto';
+import type { AuthenticatedUser } from '../strategies/jwt.strategy';
+
+// Super Admin only. module1-implementation-contract.md §5: this is the one
+// endpoint that can change platformRole after the one-time bootstrap script
+// — never self-service, and an ADMIN calling this gets rejected by
+// PlatformRoleGuard before AdminService ever runs.
+@ApiTags('admin')
+@Controller('admin/users')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PlatformRoleGuard)
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  @Patch(':id/platform-role')
+  @RequirePlatformRole('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Grant or change a user’s platform role (Super Admin only)' })
+  updatePlatformRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdatePlatformRoleDto,
+  ) {
+    return this.adminService.changePlatformRole(user.id, id, dto.platformRole);
+  }
+}

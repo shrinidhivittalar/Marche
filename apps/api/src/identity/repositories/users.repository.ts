@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { Capability, Prisma, User, UserCapability, UserRole } from '@marche/db';
+import type { Capability, PlatformRole, Prisma, User, UserCapability, UserRole } from '@marche/db';
 
 // findById's return shape, with capabilities attached — see the comment on
 // findById below for why. Everything that already only reads the plain
@@ -91,5 +91,28 @@ export class UsersRepository {
       }
       return existing;
     }
+  }
+
+  countByPlatformRole(platformRole: PlatformRole): Promise<number> {
+    return this.prisma.client.user.count({ where: { platformRole, deletedAt: null } });
+  }
+
+  // Conditional update, same pattern as JobsRepository.claimFilled: the
+  // WHERE clause includes the caller's last-read platformRole, so a
+  // concurrent change to the same row between read and write makes this a
+  // no-op (count 0) rather than silently overwriting a decision made in
+  // between — AdminService.changePlatformRole treats 0 as a conflict to
+  // retry, not a success.
+  updatePlatformRoleIfCurrent(
+    userId: string,
+    expectedCurrentRole: PlatformRole,
+    newRole: PlatformRole,
+  ): Promise<number> {
+    return this.prisma.client.user
+      .updateMany({
+        where: { id: userId, platformRole: expectedCurrentRole },
+        data: { platformRole: newRole },
+      })
+      .then((result) => result.count);
   }
 }

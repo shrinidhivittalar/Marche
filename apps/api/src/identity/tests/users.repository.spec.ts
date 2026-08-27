@@ -64,3 +64,46 @@ describe('UsersRepository.grantCapability', () => {
     await expect(usersRepository.grantCapability('user_1', 'CLIENT')).rejects.toBe(violation);
   });
 });
+
+describe('UsersRepository — platform-role admin operations', () => {
+  let user: { count: jest.Mock; updateMany: jest.Mock };
+  let prismaService: jest.Mocked<PrismaService>;
+  let usersRepository: UsersRepository;
+
+  beforeEach(() => {
+    user = { count: jest.fn(), updateMany: jest.fn() };
+    prismaService = { client: { user } } as unknown as jest.Mocked<PrismaService>;
+    usersRepository = new UsersRepository(prismaService);
+  });
+
+  it('countByPlatformRole counts only non-deleted users with that role', async () => {
+    user.count.mockResolvedValue(2);
+
+    const result = await usersRepository.countByPlatformRole('SUPER_ADMIN');
+
+    expect(result).toBe(2);
+    expect(user.count).toHaveBeenCalledWith({
+      where: { platformRole: 'SUPER_ADMIN', deletedAt: null },
+    });
+  });
+
+  it('updatePlatformRoleIfCurrent conditions the write on the expected current role', async () => {
+    user.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await usersRepository.updatePlatformRoleIfCurrent('user_1', 'USER', 'ADMIN');
+
+    expect(result).toBe(1);
+    expect(user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user_1', platformRole: 'USER' },
+      data: { platformRole: 'ADMIN' },
+    });
+  });
+
+  it('updatePlatformRoleIfCurrent returns 0 when the row already moved on', async () => {
+    user.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await usersRepository.updatePlatformRoleIfCurrent('user_1', 'USER', 'ADMIN');
+
+    expect(result).toBe(0);
+  });
+});

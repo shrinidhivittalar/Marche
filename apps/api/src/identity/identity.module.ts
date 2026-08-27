@@ -4,9 +4,11 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './controllers/auth.controller';
 import { UsersController } from './controllers/users.controller';
 import { CapabilitiesController } from './controllers/capabilities.controller';
+import { AdminController } from './controllers/admin.controller';
 import { AuthService } from './services/auth.service';
 import { UsersService } from './services/users.service';
 import { CapabilitiesService } from './services/capabilities.service';
+import { AdminService } from './services/admin.service';
 import { UsersRepository } from './repositories/users.repository';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VerificationTokensRepository } from './repositories/verification-tokens.repository';
@@ -32,11 +34,12 @@ import { EmailThrottlerGuard } from './guards/email-throttler.guard';
     // matching invite can flip to JOINED — see ReferralsService.handleUserJoined.
     ReferralsModule,
   ],
-  controllers: [AuthController, UsersController, CapabilitiesController],
+  controllers: [AuthController, UsersController, CapabilitiesController, AdminController],
   providers: [
     AuthService,
     UsersService,
     CapabilitiesService,
+    AdminService,
     UsersRepository,
     SessionsRepository,
     VerificationTokensRepository,

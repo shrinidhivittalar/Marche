@@ -26,6 +26,7 @@
     "db:studio": "npm run studio -w @marche/db",
     "db:seed": "npm run seed -w @marche/db",
     "db:test:prepare": "npm run test:prepare -w @marche/db",
+    "db:bootstrap-super-admin": "npm run bootstrap-super-admin -w @marche/db",
     "prepare": "husky"
   },
   "lint-staged": {

@@ -20,3 +20,10 @@ export const AUTH_EVENTS = {
   PASSWORD_RESET_COMPLETED: 'auth.password_reset.completed',
   EMAIL_VERIFIED: 'auth.email_verified',
 } as const;
+
+// Module 01 Slice 6 — platform-role elevation/demotion
+// (module1-implementation-contract.md §5). One event type covers both
+// directions; the metadata's previousRole/newRole says which.
+export const ADMIN_EVENTS = {
+  PLATFORM_ROLE_CHANGED: 'admin.platform_role.changed',
+} as const;

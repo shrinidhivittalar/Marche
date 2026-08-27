@@ -14,7 +14,8 @@
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
     "seed": "prisma db seed",
-    "test:prepare": "node scripts/prepare-test-db.mjs"
+    "test:prepare": "node scripts/prepare-test-db.mjs",
+    "bootstrap-super-admin": "ts-node --compiler-options {\"module\":\"commonjs\"} scripts/bootstrap-super-admin.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"commonjs\"} prisma/seed.ts"
