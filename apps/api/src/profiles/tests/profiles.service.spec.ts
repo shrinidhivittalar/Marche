@@ -34,7 +34,7 @@ function buildProfile(overrides: Record<string, unknown> = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
-    user: { role: 'PROVIDER' },
+    user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
     ...overrides,
   };
 }

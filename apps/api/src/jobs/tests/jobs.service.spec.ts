@@ -13,7 +13,11 @@ import type { CreateJobDto } from '../dto/job.dto';
 import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { JobStatus } from '@marche/db';
 
-const OWNER = { id: 'profile_1', userId: 'user_1', user: { role: 'CLIENT' } };
+const OWNER = {
+  id: 'profile_1',
+  userId: 'user_1',
+  user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+};
 
 function build(jobOverrides: Record<string, unknown> = {}) {
   const profiles = {

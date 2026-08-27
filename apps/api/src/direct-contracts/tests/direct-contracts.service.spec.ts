@@ -7,11 +7,15 @@ import {
 import { DirectContractsService } from '../services/direct-contracts.service';
 import type { CreateDirectContractDto } from '../dto/create-direct-contract.dto';
 
-const CLIENT_PROFILE = { id: 'client_profile', userId: 'user_client', user: { role: 'CLIENT' } };
+const CLIENT_PROFILE = {
+  id: 'client_profile',
+  userId: 'user_client',
+  user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+};
 const PROVIDER_PROFILE = {
   id: 'provider_profile',
   userId: 'user_provider',
-  user: { role: 'PROVIDER' },
+  user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
 };
 
 const DTO: CreateDirectContractDto = {
@@ -168,7 +172,7 @@ describe('DirectContractsService.create', () => {
     profilesRepository.findById.mockResolvedValue({
       id: 'client_profile_as_provider',
       userId: 'user_client',
-      user: { role: 'PROVIDER' },
+      user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
     });
 
     await expect(service.create('user_client', DTO)).rejects.toBeInstanceOf(BadRequestException);

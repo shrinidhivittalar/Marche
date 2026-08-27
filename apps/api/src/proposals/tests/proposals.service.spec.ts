@@ -7,8 +7,16 @@ import {
 import { ProposalsService } from '../services/proposals.service';
 import type { CreateProposalDto } from '../dto/proposal.dto';
 
-const PROVIDER = { id: 'provider_profile', userId: 'user_1', user: { role: 'PROVIDER' } };
-const CLIENT = { id: 'client_profile', userId: 'user_2', user: { role: 'CLIENT' } };
+const PROVIDER = {
+  id: 'provider_profile',
+  userId: 'user_1',
+  user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+};
+const CLIENT = {
+  id: 'client_profile',
+  userId: 'user_2',
+  user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+};
 
 // The transaction client the mocked $transaction hands the callback. Identity
 // is what the ordering tests assert on: every write inside acceptance must

@@ -109,6 +109,13 @@ describe('proposal acceptance under concurrency', () => {
         passwordHash: 'integration-test-only',
         name: `${RUN} ${label}`,
         role,
+        // Module 01 Slice 4: hasCapability() no longer falls back to the
+        // legacy role scalar, so a user constructed directly (bypassing
+        // AuthService.register's transactional grant) needs its
+        // UserCapability row created explicitly here — otherwise
+        // ProposalsService.submit()'s assertProviderRole would reject every
+        // provider this helper creates.
+        capabilities: { create: { capability: role } },
       },
     });
     const profile = await prisma.client.profile.create({

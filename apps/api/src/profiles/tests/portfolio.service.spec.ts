@@ -4,7 +4,12 @@ import type { ProfilesRepository } from '../repositories/profiles.repository';
 import type { PortfolioRepository } from '../repositories/portfolio.repository';
 
 function buildProfile(overrides: Record<string, unknown> = {}) {
-  return { id: 'profile_1', userId: 'user_1', user: { role: 'PROVIDER' }, ...overrides };
+  return {
+    id: 'profile_1',
+    userId: 'user_1',
+    user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+    ...overrides,
+  };
 }
 
 describe('PortfolioService', () => {

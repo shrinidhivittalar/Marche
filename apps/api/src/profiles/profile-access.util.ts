@@ -27,10 +27,18 @@ export async function getOwnProfileOrThrow(profilesRepository: ProfilesRepositor
 // whichever they already have — see normalizeCapabilities below.
 type CapabilityLike = Capability | { capability: Capability };
 
-// The shape every capability/role check in this file accepts. Deliberately
-// not tied to one Prisma include or one AuthenticatedUser type: profile.user
+// The shape every capability check in this file accepts. Deliberately not
+// tied to one Prisma include or one AuthenticatedUser type: profile.user
 // (from ProfilesRepository) and the JwtStrategy-populated request.user are
-// two different shapes carrying the same two facts.
+// two different shapes carrying the same fact.
+//
+// `role` is kept on this interface even though hasCapability no longer
+// reads it: every real caller (Prisma's User shape, JwtStrategy's
+// AuthenticatedUser) still carries it regardless, User.role/UserRole are
+// not dropped from the schema in this slice
+// (module1-migration-plan.md §2.2 step 5, deliberately not yet taken), and
+// removing the field here would be a type-signature change with no
+// behavioral effect — not something this slice's cutover needs.
 export interface AuthorizableUser {
   role: UserRole;
   capabilities?: readonly CapabilityLike[];
@@ -44,28 +52,25 @@ function normalizeCapabilities(capabilities: readonly CapabilityLike[] | undefin
 /**
  * Capability-set membership, loaded from the database (never from a JWT
  * claim — capabilities are re-resolved fresh on every request the same way
- * User.status already is), with a legacy-role fallback for the
- * expand/migrate transition (module1-migration-plan.md §2.2,
- * module1-implementation-contract.md §2.4).
+ * User.status already is).
  *
- * Why the fallback exists: Module 01 Slice 1 backfilled a UserCapability
- * row for every user that existed before it shipped, but registration does
- * not yet grant one to new users — that is deferred to a later slice. Without
- * this fallback, every user who registers between Slice 1 and whichever
- * slice adds capability-granting at registration would hold zero
- * capabilities and be locked out of every Client/Provider action despite
- * having a perfectly valid legacy role. Falling back to `role` closes that
- * gap exactly for the users it affects, and is a no-op (the capability row
- * already matches) for every user Slice 1 already backfilled.
- *
- * This fallback must not be deleted until a later slice confirms
- * registration grants a capability row to every new user — removing it
- * before then would silently lock out anyone who registered during the
- * transition window.
+ * Module 01 Slice 4 cutover: UserCapability is now the sole source of
+ * truth. The legacy `user.role` fallback this function used to fall back to
+ * (Slice 2 → Slice 3) has been removed, per
+ * module1-migration-plan.md §2.2 step 4 ("Cutover") — every backend read
+ * path enumerated in module1-migration-plan.md §1.3 goes through this
+ * function, and the audit backing this cutover (see
+ * registration-capability-lifecycle.integration-spec.ts and
+ * platform-role-and-capabilities.integration-spec.ts) confirms every User
+ * row that can exist today — pre-Slice-1 users via the Slice 1 migration's
+ * deterministic backfill, and every user registered since Slice 3 — holds
+ * a matching UserCapability row for its legacy role. `User.role` and the
+ * `UserRole` enum are themselves untouched (schema "contract" step, §2.2
+ * step 5, is a separate, later, explicitly reviewed step this slice does
+ * not take).
  */
 export function hasCapability(user: AuthorizableUser, required: Capability): boolean {
-  const granted = normalizeCapabilities(user.capabilities).includes(required);
-  return granted || user.role === required;
+  return normalizeCapabilities(user.capabilities).includes(required);
 }
 
 export function assertProviderRole(user: AuthorizableUser): void {

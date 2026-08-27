@@ -35,7 +35,11 @@ describe('ReferralsService', () => {
       const { service, referralsRepository, emailService } = build();
       referralsRepository.create.mockResolvedValue({ id: 'referral_1', ...DTO });
 
-      const result = await service.create('user_1', { role: 'CLIENT' }, DTO);
+      const result = await service.create(
+        'user_1',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        DTO,
+      );
 
       expect(referralsRepository.create).toHaveBeenCalledWith({
         referrerProfileId: 'profile_1',
@@ -69,9 +73,9 @@ describe('ReferralsService', () => {
       const { service, referralsRepository, emailService } = build();
       referralsRepository.find.mockResolvedValue({ id: 'referral_1' });
 
-      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.create('user_1', { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] }, DTO),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(referralsRepository.create).not.toHaveBeenCalled();
       expect(emailService.sendReferralInviteEmail).not.toHaveBeenCalled();
     });
@@ -80,9 +84,9 @@ describe('ReferralsService', () => {
       const { service, referralsRepository } = build();
       referralsRepository.create.mockRejectedValue({ code: 'P2002' });
 
-      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.create('user_1', { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] }, DTO),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('propagates an unrelated write failure as-is', async () => {
@@ -90,7 +94,9 @@ describe('ReferralsService', () => {
       const dbError = new Error('database unavailable');
       referralsRepository.create.mockRejectedValue(dbError);
 
-      await expect(service.create('user_1', { role: 'CLIENT' }, DTO)).rejects.toBe(dbError);
+      await expect(
+        service.create('user_1', { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] }, DTO),
+      ).rejects.toBe(dbError);
     });
   });
 
@@ -113,7 +119,11 @@ describe('ReferralsService', () => {
       referralsRepository.listByReferrer.mockResolvedValue([{ id: 'referral_1' }]);
       referralsRepository.countByReferrer.mockResolvedValue(1);
 
-      const result = await service.listMine('user_1', { role: 'CLIENT' }, { page: 1, limit: 20 });
+      const result = await service.listMine(
+        'user_1',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        { page: 1, limit: 20 },
+      );
 
       expect(referralsRepository.listByReferrer).toHaveBeenCalledWith('profile_1', 0, 20);
       expect(result.data).toEqual([{ id: 'referral_1' }]);

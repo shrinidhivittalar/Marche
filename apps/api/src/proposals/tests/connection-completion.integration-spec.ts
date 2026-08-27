@@ -68,6 +68,10 @@ describe('connection auto-completion, against real dates', () => {
         passwordHash: 'integration-test-only',
         name: `${RUN} ${label}`,
         role,
+        // Module 01 Slice 4: a real user always holds a matching
+        // UserCapability row now — see the same comment in
+        // proposals/tests/acceptance.integration-spec.ts.
+        capabilities: { create: { capability: role } },
       },
     });
     const profile = await prisma.client.profile.create({

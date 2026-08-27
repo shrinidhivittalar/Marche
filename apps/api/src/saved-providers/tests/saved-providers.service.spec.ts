@@ -11,7 +11,10 @@ function build() {
   };
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
-    findById: jest.fn().mockResolvedValue({ id: 'profile_provider', user: { role: 'PROVIDER' } }),
+    findById: jest.fn().mockResolvedValue({
+      id: 'profile_provider',
+      user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+    }),
   };
   const servicesRepository = {
     findProviderCards: jest.fn().mockResolvedValue([]),
@@ -41,7 +44,11 @@ describe('SavedProvidersService', () => {
     it('saves a provider profile for the calling client', async () => {
       const { service, savedProvidersRepository } = build();
 
-      await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
+      await service.save(
+        'user_client',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        'profile_provider',
+      );
 
       expect(savedProvidersRepository.create).toHaveBeenCalledWith(
         'profile_client',
@@ -61,11 +68,15 @@ describe('SavedProvidersService', () => {
       const { service, profilesRepository } = build();
       profilesRepository.findById.mockResolvedValue({
         id: 'profile_client_2',
-        user: { role: 'CLIENT' },
+        user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
       });
 
       await expect(
-        service.save('user_client', { role: 'CLIENT' }, 'profile_client_2'),
+        service.save(
+          'user_client',
+          { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+          'profile_client_2',
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -74,7 +85,11 @@ describe('SavedProvidersService', () => {
       profilesRepository.findById.mockResolvedValue(null);
 
       await expect(
-        service.save('user_client', { role: 'CLIENT' }, 'missing'),
+        service.save(
+          'user_client',
+          { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+          'missing',
+        ),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
@@ -83,7 +98,11 @@ describe('SavedProvidersService', () => {
       const existing = { id: 'save_existing' };
       savedProvidersRepository.find.mockResolvedValue(existing);
 
-      const result = await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
+      const result = await service.save(
+        'user_client',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        'profile_provider',
+      );
 
       expect(result).toBe(existing);
       expect(savedProvidersRepository.create).not.toHaveBeenCalled();
@@ -99,7 +118,11 @@ describe('SavedProvidersService', () => {
         .mockResolvedValueOnce(null) // pre-check: not saved yet
         .mockResolvedValueOnce(winner); // post-race: the other request won
 
-      const result = await service.save('user_client', { role: 'CLIENT' }, 'profile_provider');
+      const result = await service.save(
+        'user_client',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        'profile_provider',
+      );
 
       expect(result).toBe(winner);
     });
@@ -111,7 +134,11 @@ describe('SavedProvidersService', () => {
       savedProvidersRepository.find.mockResolvedValue({ id: 'save_1' });
 
       await expect(
-        service.isSaved('user_client', { role: 'CLIENT' }, 'profile_provider'),
+        service.isSaved(
+          'user_client',
+          { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+          'profile_provider',
+        ),
       ).resolves.toBe(true);
     });
 
@@ -119,7 +146,11 @@ describe('SavedProvidersService', () => {
       const { service } = build();
 
       await expect(
-        service.isSaved('user_client', { role: 'CLIENT' }, 'profile_provider'),
+        service.isSaved(
+          'user_client',
+          { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+          'profile_provider',
+        ),
       ).resolves.toBe(false);
     });
 
@@ -137,7 +168,11 @@ describe('SavedProvidersService', () => {
     it('deletes the save for the calling client', async () => {
       const { service, savedProvidersRepository } = build();
 
-      await service.unsave('user_client', { role: 'CLIENT' }, 'profile_provider');
+      await service.unsave(
+        'user_client',
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+        'profile_provider',
+      );
 
       expect(savedProvidersRepository.delete).toHaveBeenCalledWith(
         'profile_client',
@@ -152,7 +187,11 @@ describe('SavedProvidersService', () => {
       );
 
       await expect(
-        service.unsave('user_client', { role: 'CLIENT' }, 'profile_provider'),
+        service.unsave(
+          'user_client',
+          { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+          'profile_provider',
+        ),
       ).resolves.toBeUndefined();
     });
   });
@@ -171,7 +210,7 @@ describe('SavedProvidersService', () => {
 
       const result = await service.listMine(
         'user_client',
-        { role: 'CLIENT' },
+        { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
         { page: 1, limit: 20 },
       );
 
