@@ -13,7 +13,15 @@ import type { CreateJobDto } from '../dto/job.dto';
 import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { JobStatus } from '@marche/db';
 
-const OWNER = { id: 'profile_1', userId: 'user_1', user: { role: 'CLIENT' } };
+const OWNER = {
+  id: 'profile_1',
+  userId: 'user_1',
+  user: {
+    role: 'CLIENT',
+    capabilities: [{ capability: 'CLIENT' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
+};
 
 function build(jobOverrides: Record<string, unknown> = {}) {
   const profiles = {
@@ -110,6 +118,17 @@ describe('JobsService', () => {
       expect(jobs.create).not.toHaveBeenCalled();
     });
 
+    it('creates a draft even with an unverified email — verification is only required to publish', async () => {
+      const { service, profiles, jobs } = build();
+      profiles.findByUserId.mockResolvedValue({
+        ...OWNER,
+        user: { ...OWNER.user, emailVerifiedAt: null },
+      });
+
+      await expect(service.create('user_1', dto)).resolves.toBeDefined();
+      expect(jobs.create).toHaveBeenCalled();
+    });
+
     it('creates as a draft owned by the caller, never live', async () => {
       const { service, jobs } = build();
 
@@ -172,6 +191,17 @@ describe('JobsService', () => {
 
       await service.publish('user_1', 'job_1');
 
+      expect(jobs.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects publishing with an unverified email — a draft may still be created and edited', async () => {
+      const { service, profiles, jobs } = build();
+      profiles.findByUserId.mockResolvedValue({
+        ...OWNER,
+        user: { ...OWNER.user, emailVerifiedAt: null },
+      });
+
+      await expect(service.publish('user_1', 'job_1')).rejects.toBeInstanceOf(ForbiddenException);
       expect(jobs.update).not.toHaveBeenCalled();
     });
 

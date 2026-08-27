@@ -39,11 +39,28 @@ export class ProfilesRepository {
   // Profile has a `deletedAt` column but no soft-delete flow sets it yet.
   // Filtering it out here is defensive: it costs nothing today and means a
   // future soft-delete doesn't silently leave deleted profiles readable.
+  //
+  // user.capabilities is included for the capability-authorization checks
+  // in profile-access.util.ts (Module 01 Slice 2). user.emailVerifiedAt is
+  // included for the separate assertEmailVerified check (Module 01 Slice 5)
+  // — this is the query getOwnProfileOrThrow uses, which is what
+  // JobsService.publish, ProposalsService.submit and
+  // DirectContractsService.create all resolve their caller's profile
+  // through, so one query change covers all three verification gates.
+  // role stays selected too — not read by any authorization check any
+  // more (Slice 4 removed the fallback), but User.role/UserRole are not
+  // dropped from the schema yet (module1-migration-plan.md §2.2 step 5).
   findByUserId(userId: string) {
     return this.prisma.client.profile.findFirst({
       where: { userId, deletedAt: null },
       include: {
-        user: { select: { role: true } },
+        user: {
+          select: {
+            role: true,
+            emailVerifiedAt: true,
+            capabilities: { select: { capability: true } },
+          },
+        },
         avatarMedia: { select: { objectKey: true, status: true } },
       },
     });
@@ -85,7 +102,9 @@ export class ProfilesRepository {
     return this.prisma.client.profile.findFirst({
       where: { AND: [{ id }, readableProfileWhere(viewerUserId)] },
       include: {
-        user: { select: { role: true } },
+        // See the comment on findByUserId — same reason capabilities is
+        // included alongside role here.
+        user: { select: { role: true, capabilities: { select: { capability: true } } } },
         avatarMedia: { select: { objectKey: true, status: true } },
       },
     });
@@ -95,7 +114,9 @@ export class ProfilesRepository {
     return this.prisma.client.profile.findFirst({
       where: { AND: [{ username }, readableProfileWhere(viewerUserId)] },
       include: {
-        user: { select: { role: true } },
+        // Same shape as findById/findByUserId, for toPublicView's shared
+        // parameter type — see the comment on findByUserId.
+        user: { select: { role: true, capabilities: { select: { capability: true } } } },
         avatarMedia: { select: { objectKey: true, status: true } },
       },
     });

@@ -1,7 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SavedProvidersRepository } from '../repositories/saved-providers.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
-import { getOwnProfileOrThrow, assertClientRole } from '../../profiles/profile-access.util';
+import {
+  getOwnProfileOrThrow,
+  assertClientRole,
+  hasCapability,
+  type AuthorizableUser,
+} from '../../profiles/profile-access.util';
 import { ServicesRepository } from '../../marketplace/repositories/services.repository';
 import { MediaService } from '../../media/media.service';
 import { paginate } from '../../marketplace/pagination';
@@ -38,8 +43,12 @@ export class SavedProvidersService {
    * already-saved provider just returns the existing row rather than
    * erroring, the same convention as NotificationsService.markAsRead.
    */
-  async save(userId: string, role: string, providerProfileId: string): Promise<SavedProvider> {
-    assertClientRole(role);
+  async save(
+    userId: string,
+    user: AuthorizableUser,
+    providerProfileId: string,
+  ): Promise<SavedProvider> {
+    assertClientRole(user);
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, userId);
     await this.assertIsProvider(userId, providerProfileId);
 
@@ -60,16 +69,20 @@ export class SavedProvidersService {
   }
 
   /** Whether the caller has saved this provider — what a profile page's Save button renders from. */
-  async isSaved(userId: string, role: string, providerProfileId: string): Promise<boolean> {
-    if (role !== 'CLIENT') return false;
+  async isSaved(
+    userId: string,
+    user: AuthorizableUser,
+    providerProfileId: string,
+  ): Promise<boolean> {
+    if (!hasCapability(user, 'CLIENT')) return false;
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, userId);
     const existing = await this.savedProvidersRepository.find(clientProfile.id, providerProfileId);
     return existing !== null;
   }
 
   /** Idempotent by design, not just by accident: unsaving something never saved is a no-op, not an error. */
-  async unsave(userId: string, role: string, providerProfileId: string): Promise<void> {
-    assertClientRole(role);
+  async unsave(userId: string, user: AuthorizableUser, providerProfileId: string): Promise<void> {
+    assertClientRole(user);
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, userId);
 
     try {
@@ -81,8 +94,8 @@ export class SavedProvidersService {
   }
 
   /** The caller's saved providers, as full provider cards — same shape marketplace search results use. */
-  async listMine(userId: string, role: string, pagination: PaginationQueryDto) {
-    assertClientRole(role);
+  async listMine(userId: string, user: AuthorizableUser, pagination: PaginationQueryDto) {
+    assertClientRole(user);
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, userId);
     const { page, limit } = pagination;
 
@@ -116,7 +129,7 @@ export class SavedProvidersService {
     if (!target) {
       throw new NotFoundException('Profile not found');
     }
-    if (target.user.role !== 'PROVIDER') {
+    if (!hasCapability(target.user, 'PROVIDER')) {
       throw new ConflictException('Only provider profiles can be saved');
     }
   }

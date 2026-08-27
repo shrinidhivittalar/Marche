@@ -7,8 +7,24 @@ import {
 import { ProposalsService } from '../services/proposals.service';
 import type { CreateProposalDto } from '../dto/proposal.dto';
 
-const PROVIDER = { id: 'provider_profile', userId: 'user_1', user: { role: 'PROVIDER' } };
-const CLIENT = { id: 'client_profile', userId: 'user_2', user: { role: 'CLIENT' } };
+const PROVIDER = {
+  id: 'provider_profile',
+  userId: 'user_1',
+  user: {
+    role: 'PROVIDER',
+    capabilities: [{ capability: 'PROVIDER' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
+};
+const CLIENT = {
+  id: 'client_profile',
+  userId: 'user_2',
+  user: {
+    role: 'CLIENT',
+    capabilities: [{ capability: 'CLIENT' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
+};
 
 // The transaction client the mocked $transaction hands the callback. Identity
 // is what the ordering tests assert on: every write inside acceptance must
@@ -140,6 +156,17 @@ describe('ProposalsService', () => {
       const [data] = proposals.create.mock.calls[0];
       expect(data.providerProfileId).toBe('provider_profile');
       expect(data.proposedPrice).toBe(25000);
+    });
+
+    it('rejects submission with an unverified email', async () => {
+      const { service, profiles, proposals } = build();
+      profiles.findByUserId.mockResolvedValue({
+        ...PROVIDER,
+        user: { ...PROVIDER.user, emailVerifiedAt: null },
+      });
+
+      await expect(service.submit('user_1', dto)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(proposals.create).not.toHaveBeenCalled();
     });
 
     it('takes the provider from the authenticated caller, never the request', async () => {
@@ -323,6 +350,23 @@ describe('ProposalsService', () => {
         providerProfileId: 'provider_profile',
       });
       expect(connection).toEqual({ id: 'connection_1' });
+    });
+
+    it('rejects self-acceptance defensively — canonical User.id, not Profile.id (Module 01 Slice 2)', async () => {
+      // The proposal's providerProfileId is swapped to the accepting
+      // client's own profile — findUserIdById resolves that back to
+      // CLIENT.userId ('user_2'), the same id doing the accepting. submit()
+      // already rejects this upstream; this proves accept()'s own
+      // independent re-check fires too, not just the upstream guard.
+      const { service, jobsService, connections } = asClient({
+        proposal: { providerProfileId: CLIENT.id },
+      });
+
+      await expect(service.accept('user_2', 'proposal_1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(jobsService.claimFilled).not.toHaveBeenCalled();
+      expect(connections.create).not.toHaveBeenCalled();
     });
 
     it('conflicts and writes nothing when the requirement was already filled', async () => {

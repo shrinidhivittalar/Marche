@@ -144,7 +144,7 @@ export class ConnectionsService {
    */
   async myCalendar(userId: string): Promise<CalendarEntry[]> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
     await this.connectionsRepository.sweepAutoComplete();
 
     const [pending, confirmed] = await Promise.all([

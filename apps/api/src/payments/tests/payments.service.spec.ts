@@ -25,7 +25,10 @@ function build() {
     findById: jest.fn().mockResolvedValue(CONNECTION),
   };
   const profilesRepository = {
-    findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client', user: { role: 'CLIENT' } }),
+    findByUserId: jest.fn().mockResolvedValue({
+      id: 'profile_client',
+      user: { role: 'CLIENT', capabilities: [{ capability: 'CLIENT' }] },
+    }),
     findUserIdById: jest.fn().mockResolvedValue('user_provider'),
   };
   const razorpay = {
@@ -303,7 +306,7 @@ describe('PaymentsService', () => {
       const { service, paymentsRepository, profilesRepository } = build();
       profilesRepository.findByUserId.mockResolvedValue({
         id: 'profile_provider',
-        user: { role: 'PROVIDER' },
+        user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
       });
       paymentsRepository.listForProvider.mockResolvedValue([{ id: 'payment_2' }]);
       paymentsRepository.countForProvider.mockResolvedValue(1);

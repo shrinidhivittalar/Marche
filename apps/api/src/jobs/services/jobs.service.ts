@@ -9,7 +9,11 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
 import { CategoriesService } from '../../marketplace/services/categories.service';
 import { MediaService } from '../../media/media.service';
-import { assertClientRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
+import {
+  assertClientRole,
+  assertEmailVerified,
+  getOwnProfileOrThrow,
+} from '../../profiles/profile-access.util';
 import { JobsRepository, type JobSearchFilters } from '../repositories/jobs.repository';
 import { paginate } from '../../marketplace/pagination';
 import { NotificationsService } from '../../notifications/services/notifications.service';
@@ -66,7 +70,7 @@ export class JobsService {
 
   async create(userId: string, dto: CreateJobDto): Promise<Job> {
     const profile = await this.getOwnProfile(userId);
-    assertClientRole(profile.user.role);
+    assertClientRole(profile.user);
 
     await this.assertCategoryExists(dto.categoryId);
 
@@ -135,7 +139,11 @@ export class JobsService {
     // Re-checked at publish, not just at create. A client can be suspended
     // between drafting and publishing, and publish is the moment the
     // requirement becomes visible to everyone.
-    assertClientRole(profile.user.role);
+    assertClientRole(profile.user);
+    // Module 01 Slice 5: EMAIL verification is required at DRAFT -> PUBLISHED,
+    // not at create — an unverified user may draft freely, but a requirement
+    // only becomes visible to the marketplace once its owner is verified.
+    assertEmailVerified(profile.user);
 
     // Stamped once, on first publish, and never rewritten. There is no
     // unpublish in Phase 1, but this keeps the rule true if one arrives.

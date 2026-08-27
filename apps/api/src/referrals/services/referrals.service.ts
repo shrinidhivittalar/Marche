@@ -1,7 +1,11 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ReferralsRepository } from '../repositories/referrals.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
-import { getOwnProfileOrThrow, assertClientRole } from '../../profiles/profile-access.util';
+import {
+  getOwnProfileOrThrow,
+  assertClientRole,
+  type AuthorizableUser,
+} from '../../profiles/profile-access.util';
 import { EmailService } from '../../email/email.service';
 import { paginate } from '../../marketplace/pagination';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
@@ -35,8 +39,8 @@ export class ReferralsService {
   ) {}
 
   /** Client refers someone by email. Sends a real invite email; the referral joins on its own once they register. */
-  async create(userId: string, role: string, dto: CreateReferralDto): Promise<Referral> {
-    assertClientRole(role);
+  async create(userId: string, user: AuthorizableUser, dto: CreateReferralDto): Promise<Referral> {
+    assertClientRole(user);
     const profile = await getOwnProfileOrThrow(this.profilesRepository, userId);
 
     const existing = await this.referralsRepository.find(profile.id, dto.email);
@@ -71,8 +75,8 @@ export class ReferralsService {
     return referral;
   }
 
-  async listMine(userId: string, role: string, pagination: PaginationQueryDto) {
-    assertClientRole(role);
+  async listMine(userId: string, user: AuthorizableUser, pagination: PaginationQueryDto) {
+    assertClientRole(user);
     const profile = await getOwnProfileOrThrow(this.profilesRepository, userId);
     const { page, limit } = pagination;
 

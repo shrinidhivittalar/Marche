@@ -2,7 +2,11 @@ import { BadRequestException, ConflictException, Injectable, Logger } from '@nes
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
-import { getOwnProfileOrThrow, assertOwnership } from '../../profiles/profile-access.util';
+import {
+  getOwnProfileOrThrow,
+  assertOwnership,
+  hasCapability,
+} from '../../profiles/profile-access.util';
 import { paginate, type Paginated } from '../../marketplace/pagination';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
@@ -58,6 +62,14 @@ export class PaymentsService {
   /**
    * Starts (or resumes) payment for a connection. Client-only — the party
    * who owes the money is the only one who can open a checkout for it.
+   *
+   * Self-dealing is inherited, not separately checked here (Module 01
+   * Slice 2, module1-implementation-contract.md §6.2): every Connection
+   * this can be created from already cannot have equal
+   * clientProfileId/providerProfileId (the DB CHECK constraint plus
+   * ProposalsService.accept's own invariant), so a self-dealing payment
+   * cannot be constructed. This comment documents that inherited
+   * guarantee for reviewability — it is not asking for new code.
    */
   async createOrder(userId: string, connectionId: string): Promise<CreatedOrder> {
     const connection = await this.getOwnConnectionAsClient(userId, connectionId);
@@ -183,16 +195,22 @@ export class PaymentsService {
     const { page, limit } = pagination;
     const skip = (page - 1) * limit;
 
-    const [data, total] =
-      profile.user.role === 'CLIENT'
-        ? await Promise.all([
-            this.paymentsRepository.listForClient(profile.id, skip, limit),
-            this.paymentsRepository.countForClient(profile.id),
-          ])
-        : await Promise.all([
-            this.paymentsRepository.listForProvider(profile.id, skip, limit),
-            this.paymentsRepository.countForProvider(profile.id),
-          ]);
+    // Capability-aware, not role-exclusive (Module 01 Slice 2) — but still a
+    // single-view branch, not a merged client+provider view: no user can
+    // hold both capabilities through any real flow yet (capability
+    // activation ships in a later slice), so a merged view has nothing to
+    // exercise it and would be speculative. Revisit this branch when
+    // capability activation lands — see
+    // module1-implementation-contract.md §2.4.
+    const [data, total] = hasCapability(profile.user, 'CLIENT')
+      ? await Promise.all([
+          this.paymentsRepository.listForClient(profile.id, skip, limit),
+          this.paymentsRepository.countForClient(profile.id),
+        ])
+      : await Promise.all([
+          this.paymentsRepository.listForProvider(profile.id, skip, limit),
+          this.paymentsRepository.countForProvider(profile.id),
+        ]);
 
     return paginate(data, total, page, limit);
   }

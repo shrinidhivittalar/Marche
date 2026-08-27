@@ -14,7 +14,7 @@ export class EducationService {
 
   async create(userId: string, dto: CreateEducationDto): Promise<Education> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
 
     // Fields are enumerated rather than spread, matching Service.create: a
     // field added to the DTO later reaches the database only when someone

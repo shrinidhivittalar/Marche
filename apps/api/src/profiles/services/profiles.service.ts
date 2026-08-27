@@ -133,7 +133,7 @@ export class ProfilesService {
     if (!profile) {
       throw new NotFoundException('Profile not found');
     }
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
 
     if (dto.nextAvailableDate && new Date(dto.nextAvailableDate) < new Date()) {
       throw new ForbiddenException('nextAvailableDate cannot be in the past');

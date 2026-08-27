@@ -14,6 +14,7 @@ import { ConnectionsRepository } from '../../proposals/repositories/connections.
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
   assertClientRole,
+  assertEmailVerified,
   assertProviderRole,
   getOwnProfileOrThrow,
 } from '../../profiles/profile-access.util';
@@ -50,13 +51,23 @@ export class DirectContractsService {
   /** Client only. Creates the offer; nothing is binding until the provider accepts it. */
   async create(clientUserId: string, dto: CreateDirectContractDto) {
     const clientProfile = await getOwnProfileOrThrow(this.profilesRepository, clientUserId);
-    assertClientRole(clientProfile.user.role);
+    assertClientRole(clientProfile.user);
+    // Module 01 Slice 5: EMAIL verification required of the initiating
+    // client — the target provider has taken no action yet at creation
+    // time (they accept or decline later), so only the actor is gated here,
+    // consistent with the actor-gated pattern at job publish and proposal
+    // submission.
+    assertEmailVerified(clientProfile.user);
 
     const providerProfile = await this.profilesRepository.findById(dto.providerProfileId);
     if (!providerProfile) {
       throw new NotFoundException('Provider not found');
     }
-    assertProviderRole(providerProfile.user.role);
+    assertProviderRole(providerProfile.user);
+    // Self-dealing check (Module 01 Slice 2, module1-implementation-contract.md
+    // §6.2): compares canonical User.id, not Profile.id — providerProfile.userId
+    // and clientUserId are both already User.id values, not resolved through
+    // Profile.id equality.
     if (providerProfile.userId === clientUserId) {
       throw new BadRequestException('You cannot hire yourself');
     }

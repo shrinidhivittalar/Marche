@@ -1,9 +1,12 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { randomBytes } from 'node:crypto';
 import { UsersRepository } from '../repositories/users.repository';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
+import { VerificationsRepository } from '../repositories/verifications.repository';
+import { AuthenticationMethodsRepository } from '../repositories/authentication-methods.repository';
 import { PasswordResetsRepository } from '../repositories/password-resets.repository';
 import { EmailService } from '../../email/email.service';
 import { generateRawToken, hashToken } from '../tokens.util';
@@ -12,9 +15,23 @@ import { AUTH_EVENTS } from '../audit-events';
 import { ProfilesService } from '../../profiles/services/profiles.service';
 import { ReferralsService } from '../../referrals/services/referrals.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GoogleAuthVerifier } from '../google-auth-verifier';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { User } from '@marche/db';
+
+// Postgres' unique-violation code — same duck-typed check already used in
+// skills.service.ts, proposals.service.ts, etc.
+const UNIQUE_VIOLATION = 'P2002';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
+}
 
 type RequestContext = { userAgent?: string; ipAddress?: string };
 
@@ -84,6 +101,8 @@ export class AuthService {
     private readonly usersRepository: UsersRepository,
     private readonly sessionsRepository: SessionsRepository,
     private readonly verificationTokensRepository: VerificationTokensRepository,
+    private readonly verificationsRepository: VerificationsRepository,
+    private readonly authenticationMethodsRepository: AuthenticationMethodsRepository,
     private readonly passwordResetsRepository: PasswordResetsRepository,
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
@@ -91,6 +110,7 @@ export class AuthService {
     private readonly profilesService: ProfilesService,
     private readonly referralsService: ReferralsService,
     private readonly prisma: PrismaService,
+    private readonly googleAuthVerifier: GoogleAuthVerifier,
   ) {}
 
   // Deliberately returns the same status and the same body whether or not the
@@ -121,14 +141,25 @@ export class AuthService {
       return REGISTER_ACKNOWLEDGEMENT;
     }
 
-    // User + Profile must be created together: if the process dies between
-    // them, a user with no profile breaks every downstream profile endpoint.
+    // User + Profile + initial UserCapability must be created together: if
+    // the process dies partway, a user with no profile or no capability row
+    // breaks downstream profile/authorization endpoints. The capability
+    // granted mirrors dto.role exactly (CLIENT|PROVIDER) — RegisterDto has
+    // no ADMIN/SUPER_ADMIN option and no platformRole field, so a public
+    // signup can never produce anything but a USER-platformRole identity
+    // with exactly one capability (module1-implementation-contract.md §5, §2.2).
     const user = await this.prisma.client.$transaction(async (tx) => {
       const created = await this.usersRepository.create(
         { email: dto.email, passwordHash, name: dto.name, role: dto.role },
         tx,
       );
       await this.profilesService.createForNewUser(created.id, created.name, tx);
+      await this.usersRepository.grantCapability(created.id, dto.role, tx);
+      // Module 01 Slice 7: keeps AuthenticationMethod a complete ledger
+      // going forward, not just backfilled once at migration time — every
+      // new password registrant gets its EMAIL_PASSWORD row the same way
+      // every pre-existing user got one from the migration's backfill.
+      await this.authenticationMethodsRepository.createEmailPassword(created.id, tx);
       return created;
     });
 
@@ -340,7 +371,19 @@ export class AuthService {
       throw new UnauthorizedException('This verification link is invalid or has expired');
     }
 
-    const user = await this.usersRepository.markEmailVerified(verification.userId);
+    // module1-implementation-contract.md §8.2: Verification becomes the
+    // write-side system of record the moment anything sets
+    // emailVerifiedAt, so the two are written together, in the same
+    // transaction, rather than emailVerifiedAt alone.
+    const user = await this.prisma.client.$transaction(async (tx) => {
+      const updated = await this.usersRepository.markEmailVerified(verification.userId, tx);
+      await this.verificationsRepository.upsertEmailVerified(
+        verification.userId,
+        updated.emailVerifiedAt!,
+        tx,
+      );
+      return updated;
+    });
     await this.verificationTokensRepository.deleteById(verification.id);
     await this.auditService.record({
       eventType: AUTH_EVENTS.EMAIL_VERIFIED,
@@ -361,6 +404,153 @@ export class AuthService {
       expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
     });
     await this.emailService.sendVerificationEmail(user.email, rawToken);
+  }
+
+  // module1-implementation-contract.md §7.2 — three-way branch, exactly:
+  //   sub already linked            -> authenticate that User
+  //   sub unlinked, email taken     -> conflict, never silently link
+  //   sub unlinked, email unused    -> create a new User atomically
+  // idToken is verified server-side before any of the three paths runs —
+  // sub/email/emailVerified are the only fields ever read from it.
+  async googleLogin(
+    idToken: string,
+    context: RequestContext,
+  ): Promise<(AuthTokens & { user: PublicUser }) | RegisterResult> {
+    const identity = await this.googleAuthVerifier.verify(idToken);
+
+    const existingMethod = await this.authenticationMethodsRepository.findByGoogleSub(identity.sub);
+    if (existingMethod) {
+      const user = await this.usersRepository.findById(existingMethod.userId);
+      if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
+        throw new UnauthorizedException('This account is not active');
+      }
+      const tokens = await this.issueSession(user, context);
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.GOOGLE_LOGIN_EXISTING_USER,
+        userId: user.id,
+        email: user.email,
+        ...context,
+      });
+      return { ...tokens, user: toPublicUser(user) };
+    }
+
+    const existingUserByEmail = await this.usersRepository.findByEmail(identity.email);
+    if (existingUserByEmail) {
+      // Deliberately not linked here — module1-implementation-contract.md
+      // §7.2's explicit rule: an email match alone is never proof of
+      // ownership. The caller is told to log in with their existing method
+      // and link Google from an authenticated session (googleLink below).
+      await this.auditService.record({
+        eventType: AUTH_EVENTS.GOOGLE_EMAIL_COLLISION,
+        userId: existingUserByEmail.id,
+        email: identity.email,
+        ...context,
+      });
+      throw new ConflictException(
+        'An account with this email already exists. Log in with your password, then link Google from your account.',
+      );
+    }
+
+    // New user: User + Profile + AuthenticationMethod(GOOGLE), atomically.
+    // No capability granted — authentication is not marketplace intent
+    // (module1-implementation-contract.md §7.2's explicit deferral to a
+    // follow-up capability-activation step, same endpoint Slice 3 built
+    // for password registrants who want a second capability).
+    //
+    // passwordHash is a random value nobody knows, not a placeholder that
+    // could ever accidentally validate — this account has no password
+    // login until/unless one is set through a separate flow (not built in
+    // this slice), and User.passwordHash has no nullable variant to avoid
+    // a broader schema change for a Google-only account.
+    const user = await this.prisma.client.$transaction(async (tx) => {
+      const unusablePasswordHash = await argon2.hash(randomBytes(32).toString('hex'));
+      const displayName = identity.email.split('@')[0]!;
+      const created = await this.usersRepository.create(
+        {
+          email: identity.email,
+          passwordHash: unusablePasswordHash,
+          name: displayName,
+          role: 'CLIENT',
+        },
+        tx,
+      );
+      await this.profilesService.createForNewUser(created.id, displayName, tx);
+      await this.authenticationMethodsRepository.createGoogle(created.id, identity.sub, tx);
+      if (identity.emailVerified) {
+        // Google already proved this address — no reason to also make the
+        // user click a verification email (module1-implementation-contract.md
+        // §7.2). Both representations written together, in the same
+        // transaction, per §8.2's write-path rule.
+        const verified = await this.usersRepository.markEmailVerified(created.id, tx);
+        await this.verificationsRepository.upsertEmailVerified(
+          created.id,
+          verified.emailVerifiedAt!,
+          tx,
+        );
+        return verified;
+      }
+      return created;
+    });
+
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.GOOGLE_LOGIN_NEW_USER,
+      userId: user.id,
+      email: user.email,
+      ...context,
+    });
+
+    if (!identity.emailVerified) {
+      // Rare — Google accounts are themselves email-verified in the
+      // overwhelming majority of cases — but not impossible, and this
+      // keeps the two signup paths' security property identical rather
+      // than special-casing OAuth to skip it: same as password
+      // registration, the account exists but gets no session until the
+      // address is proven. Unlike leaving the caller stuck with a created,
+      // unverifiable account, this issues the same verification-token/
+      // email flow register() does, so there is still a way forward.
+      await this.issueVerificationToken(user);
+      return REGISTER_ACKNOWLEDGEMENT;
+    }
+
+    const tokens = await this.issueSession(user, context);
+    return { ...tokens, user: toPublicUser(user) };
+  }
+
+  // Self-service only — always the caller's own userId, never a target
+  // parameter (module1-implementation-contract.md §7.2). Idempotent:
+  // relinking the same Google account to the same User is a no-op success.
+  async linkGoogleAccount(userId: string, idToken: string): Promise<{ linked: true }> {
+    const identity = await this.googleAuthVerifier.verify(idToken);
+
+    const existingMethod = await this.authenticationMethodsRepository.findByGoogleSub(identity.sub);
+    if (existingMethod) {
+      if (existingMethod.userId === userId) {
+        return { linked: true };
+      }
+      throw new ConflictException('This Google account is already linked to a different account');
+    }
+
+    try {
+      await this.authenticationMethodsRepository.createGoogle(userId, identity.sub);
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      // Raced with another request linking the same sub (or the same user
+      // linking twice) between the read above and this write.
+      const winner = await this.authenticationMethodsRepository.findByGoogleSub(identity.sub);
+      if (winner?.userId === userId) {
+        return { linked: true };
+      }
+      throw new ConflictException('This Google account is already linked to a different account');
+    }
+
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.GOOGLE_LINKED,
+      userId,
+      metadata: { googleSub: identity.sub },
+    });
+    return { linked: true };
   }
 
   private async issueSession(user: User, context: RequestContext): Promise<AuthTokens> {

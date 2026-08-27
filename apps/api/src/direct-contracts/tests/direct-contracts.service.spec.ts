@@ -7,11 +7,23 @@ import {
 import { DirectContractsService } from '../services/direct-contracts.service';
 import type { CreateDirectContractDto } from '../dto/create-direct-contract.dto';
 
-const CLIENT_PROFILE = { id: 'client_profile', userId: 'user_client', user: { role: 'CLIENT' } };
+const CLIENT_PROFILE = {
+  id: 'client_profile',
+  userId: 'user_client',
+  user: {
+    role: 'CLIENT',
+    capabilities: [{ capability: 'CLIENT' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
+};
 const PROVIDER_PROFILE = {
   id: 'provider_profile',
   userId: 'user_provider',
-  user: { role: 'PROVIDER' },
+  user: {
+    role: 'PROVIDER',
+    capabilities: [{ capability: 'PROVIDER' }],
+    emailVerifiedAt: new Date('2026-01-01'),
+  },
 };
 
 const DTO: CreateDirectContractDto = {
@@ -134,6 +146,16 @@ describe('DirectContractsService.create', () => {
     expect(result.id).toBe('proposal_1');
   });
 
+  it('rejects a client with an unverified email', async () => {
+    const { service, profilesRepository } = build();
+    profilesRepository.findByUserId.mockResolvedValue({
+      ...CLIENT_PROFILE,
+      user: { ...CLIENT_PROFILE.user, emailVerifiedAt: null },
+    });
+
+    await expect(service.create('user_client', DTO)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('rejects a non-client caller', async () => {
     const { service, profilesRepository } = build();
     profilesRepository.findByUserId.mockResolvedValue({
@@ -168,7 +190,7 @@ describe('DirectContractsService.create', () => {
     profilesRepository.findById.mockResolvedValue({
       id: 'client_profile_as_provider',
       userId: 'user_client',
-      user: { role: 'PROVIDER' },
+      user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
     });
 
     await expect(service.create('user_client', DTO)).rejects.toBeInstanceOf(BadRequestException);

@@ -143,6 +143,18 @@ describe('DisputesService', () => {
         ForbiddenException,
       );
     });
+
+    // Module 1 closeout fix: this used to check the caller's legacy
+    // User.role, which never becomes 'ADMIN' for anyone promoted through
+    // Slice 6's PATCH /admin/users/:id/platform-role — only platformRole
+    // does. SUPER_ADMIN must pass too, as a strict superset of ADMIN.
+    it('allows a SUPER_ADMIN', async () => {
+      const { service, disputesRepository } = build();
+
+      await service.listAll('SUPER_ADMIN', { page: 1, limit: 20 });
+
+      expect(disputesRepository.listAll).toHaveBeenCalled();
+    });
   });
 
   describe('resolve', () => {

@@ -26,7 +26,7 @@ export class ExperienceService {
 
   async create(userId: string, dto: CreateExperienceDto): Promise<Experience> {
     const profile = await this.getOwnProfile(userId);
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
     validateDates(dto.startDate, dto.endDate, dto.currentlyWorking);
 
     return this.experienceRepository.create({

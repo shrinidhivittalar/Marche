@@ -56,6 +56,17 @@ describe('CategoriesService', () => {
     it('allows an admin', async () => {
       await expect(service.create('ADMIN', validDto)).resolves.toEqual({ id: 'new' });
     });
+
+    // Module 1 closeout fix, not merely a new case: this check used to
+    // take the caller's legacy User.role, which only ever equals 'ADMIN'
+    // for pre-Module-01 accounts backfilled from it. Every admin promoted
+    // through Slice 6's PATCH /admin/users/:id/platform-role keeps
+    // whatever legacy role they registered with (CLIENT/PROVIDER) forever
+    // — that admin passed PlatformRoleGuard and then got rejected here
+    // anyway. This now takes platformRole directly instead.
+    it('allows a SUPER_ADMIN too — a strict superset of ADMIN, not a separate check', async () => {
+      await expect(service.create('SUPER_ADMIN', validDto)).resolves.toEqual({ id: 'new' });
+    });
   });
 
   describe('slug rules', () => {

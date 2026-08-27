@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ReviewsService } from '../services/reviews.service';
 
 function build() {
@@ -16,6 +16,15 @@ function build() {
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
     findById: jest.fn().mockResolvedValue({ id: 'profile_client', userId: 'user_client' }),
+    // Module 01 Slice 2's self-review defensive check resolves the
+    // reviewee's owning User.id through this — profile_client belongs to
+    // user_client, profile_provider belongs to user_provider, matching the
+    // fixtures below.
+    findUserIdById: jest
+      .fn()
+      .mockImplementation((profileId: string) =>
+        Promise.resolve(profileId === 'profile_client' ? 'user_client' : 'user_provider'),
+      ),
   };
 
   const service = new ReviewsService(
@@ -95,6 +104,23 @@ describe('ReviewsService', () => {
 
       await expect(service.submit('user_client', 'connection_1', 5, 'x')).rejects.toBeInstanceOf(
         ConflictException,
+      );
+    });
+
+    it('rejects self-review defensively, even if a Connection somehow had equal parties (Module 01 Slice 2)', async () => {
+      const { service, connectionsService, profilesRepository } = build();
+      connectionsService.findById.mockResolvedValue({
+        ...completedConnection,
+        // Both sides the same profile — should already be structurally
+        // impossible (DB CHECK + accept-transaction invariant), but this
+        // proves the defensive re-check actually fires if it ever isn't.
+        clientProfileId: 'profile_client',
+        providerProfileId: 'profile_client',
+      });
+      profilesRepository.findUserIdById.mockResolvedValue('user_client');
+
+      await expect(service.submit('user_client', 'connection_1', 5, 'x')).rejects.toBeInstanceOf(
+        ForbiddenException,
       );
     });
 

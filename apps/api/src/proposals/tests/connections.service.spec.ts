@@ -173,7 +173,7 @@ describe('ConnectionsService', () => {
       const { service, connectionsRepository, proposalsRepository, profilesRepository } = build();
       profilesRepository.findByUserId.mockResolvedValue({
         id: 'profile_provider',
-        user: { role: 'PROVIDER' },
+        user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
       });
       proposalsRepository.listSubmittedDatesForProvider.mockResolvedValue([
         { id: 'proposal_1', job: { id: 'job_1', title: 'Same-day pitch', eventDate: PAST_EVENT } },

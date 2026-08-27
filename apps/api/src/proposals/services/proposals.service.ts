@@ -10,7 +10,11 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { JobsService } from '../../jobs/services/jobs.service';
 import { MediaService } from '../../media/media.service';
-import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
+import {
+  assertEmailVerified,
+  assertProviderRole,
+  getOwnProfileOrThrow,
+} from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { ProposalsRepository } from '../repositories/proposals.repository';
@@ -57,7 +61,10 @@ export class ProposalsService {
     // Re-read at submission rather than trusted from an earlier check: a
     // provider can be suspended or have their role changed between opening
     // the form and sending it, and this is the moment an offer becomes real.
-    assertProviderRole(profile.user.role);
+    assertProviderRole(profile.user);
+    // Module 01 Slice 5: EMAIL verification required at submission — the
+    // moment an offer becomes real to the client on the other side.
+    assertEmailVerified(profile.user);
 
     const job = await this.jobsRepository.findById(dto.jobId);
     if (!job) {
@@ -68,7 +75,17 @@ export class ProposalsService {
     // requirement" is a clearer answer than "this requirement is not
     // accepting proposals", which is what a client-owned draft would
     // otherwise return.
-    if (job.clientProfileId === profile.id) {
+    //
+    // Self-dealing check (Module 01 Slice 2, primary enforcement point per
+    // module1-implementation-contract.md §6.2): compares canonical User.id,
+    // not Profile.id. profile.userId is the caller's own User.id (profile
+    // was already resolved from userId above); the job's owning user is
+    // looked up the same way, rather than compared as job.clientProfileId
+    // === profile.id — the two forms are provably equivalent given
+    // Profile.userId's uniqueness (contract §6.1), but the canonical form
+    // is what must be written here.
+    const clientUserId = await this.profilesRepository.findUserIdById(job.clientProfileId);
+    if (clientUserId === userId) {
       throw new ForbiddenException('You cannot propose on your own requirement');
     }
 
@@ -172,6 +189,22 @@ export class ProposalsService {
   async accept(userId: string, proposalId: string) {
     const { proposal, job, profile } = await this.getProposalOnOwnJob(userId, proposalId);
 
+    // Defensive re-check (Module 01 Slice 2,
+    // module1-implementation-contract.md §6.2): submit() already rejects a
+    // provider proposing on their own requirement, so this should be
+    // unreachable in practice — repeated here, at the other end of the
+    // same transaction pair, in case that upstream guard is ever bypassed,
+    // weakened, or the two checks drift apart. Compares canonical User.id,
+    // not Profile.id (contract §6.1) — profile.userId is the accepting
+    // client's own User.id (getProposalOnOwnJob resolved it from userId
+    // already); providerUserId is looked up fresh here rather than trusted
+    // from anywhere upstream, and reused below for the post-commit
+    // notifications instead of being fetched a second time.
+    const providerUserId = await this.profilesRepository.findUserIdById(proposal.providerProfileId);
+    if (providerUserId === userId) {
+      throw new ForbiddenException('You cannot accept your own proposal');
+    }
+
     const connection = await this.prisma.client.$transaction(
       async (tx) => {
         // Throws 409 if the requirement is no longer claimable. The rule about
@@ -223,8 +256,8 @@ export class ProposalsService {
     // After commit, not before (module6.md, "Transaction Boundary"). Two
     // distinct events, deliberately not collapsed into one: ProposalAccepted
     // is the decision, ConnectionEstablished is the channel it opens, and the
-    // provider is the recipient of both.
-    const providerUserId = await this.profilesRepository.findUserIdById(proposal.providerProfileId);
+    // provider is the recipient of both. providerUserId was already resolved
+    // above for the self-dealing check — reused here rather than re-queried.
     if (providerUserId) {
       await this.notificationsService.proposalAccepted(providerUserId, {
         jobId: job.id,

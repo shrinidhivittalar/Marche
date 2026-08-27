@@ -19,6 +19,6 @@ export class SavedProvidersController {
     description: 'Same card shape provider search results use.',
   })
   listMine(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationQueryDto) {
-    return this.savedProvidersService.listMine(user.id, user.role, pagination);
+    return this.savedProvidersService.listMine(user.id, user, pagination);
   }
 }

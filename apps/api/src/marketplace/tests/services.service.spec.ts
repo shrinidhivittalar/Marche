@@ -7,7 +7,11 @@ import { ProfilesRepository } from '../../profiles/repositories/profiles.reposit
 import type { CreateServiceDto } from '../dto/service.dto';
 import type { SearchServicesDto } from '../dto/search-services.dto';
 
-const OWNER = { id: 'profile_1', userId: 'user_1', user: { role: 'PROVIDER' } };
+const OWNER = {
+  id: 'profile_1',
+  userId: 'user_1',
+  user: { role: 'PROVIDER', capabilities: [{ capability: 'PROVIDER' }] },
+};
 
 function build() {
   const profiles = { findByUserId: jest.fn().mockResolvedValue(OWNER) };

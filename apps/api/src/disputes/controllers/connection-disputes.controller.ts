@@ -19,7 +19,7 @@ export class ConnectionDisputesController {
   @Get()
   @ApiOperation({ summary: 'Disputes on this connection (either party, or Admin)' })
   list(@CurrentUser() user: AuthenticatedUser, @Param('connectionId') connectionId: string) {
-    return this.disputesService.listForConnection(user.id, user.role, connectionId);
+    return this.disputesService.listForConnection(user.id, user.platformRole, connectionId);
   }
 
   @Post()

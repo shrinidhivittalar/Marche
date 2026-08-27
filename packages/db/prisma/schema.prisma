@@ -11,6 +11,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Legacy fixed role. Kept temporarily during the Module 01 identity refactor's
+// expand/migrate/contract migration (production-refactor/module1-migration-plan.md
+// §2.2) — User.platformRole + UserCapability below are the new source of
+// truth once every read path is migrated over; role is not read by any new
+// code and must not be dropped until that migration is verified complete in
+// production (see production-refactor/module1-migration-plan.md §2.2 step 5).
 enum UserRole {
   CLIENT
   PROVIDER
@@ -24,13 +30,34 @@ enum UserStatus {
   DELETED
 }
 
+// Platform-operator authority — orthogonal to marketplace capability
+// (see Capability below). A single scalar, not a join table: exactly one
+// value per user, matching module1-implementation-contract.md §4.1's
+// explicit YAGNI reasoning (three fixed values, single assignment, no
+// product requirement for multi-role stacking).
+enum PlatformRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Which side(s) of the marketplace a User may act on. Independent of
+// PlatformRole — see module1-implementation-contract.md §0's four-concept
+// table. A User may hold zero, one, or both capabilities (UserCapability
+// below); this enum only names the two possible values.
+enum Capability {
+  CLIENT
+  PROVIDER
+}
+
 model User {
-  id              String     @id @default(uuid())
-  email           String     @unique
+  id              String       @id @default(uuid())
+  email           String       @unique
   passwordHash    String
   name            String
   role            UserRole
-  status          UserStatus @default(ACTIVE)
+  platformRole    PlatformRole @default(USER)
+  status          UserStatus   @default(ACTIVE)
   emailVerifiedAt DateTime?
 
   createdAt DateTime  @default(now())
@@ -49,8 +76,101 @@ model User {
   disputesReceived   Dispute[]           @relation("DisputesReceived")
   disputesResolved   Dispute[]           @relation("DisputesResolved")
   workDiaryEntries   WorkDiaryEntry[]
+  capabilities       UserCapability[]
+  verifications      Verification[]
+  authMethods        AuthenticationMethod[]
 
   @@map("users")
+}
+
+// One row per active capability a User holds. Grant-only in this slice —
+// no deactivation flow (module1-implementation-contract.md §2.3). The
+// (userId, capability) unique constraint is both the natural idempotency
+// key for the future activation endpoint and the thing that makes "does
+// this user hold X" a simple existence check.
+model UserCapability {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability  Capability
+  activatedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+
+  @@unique([userId, capability])
+  @@index([userId])
+  @@map("user_capabilities")
+}
+
+// A different axis from Capability entirely (module1-implementation-contract.md
+// §0): this answers "how much has this identity been verified/trusted?",
+// never "what is this identity allowed to do?". Only EMAIL is written by
+// Module 01 Slice 5 — the other five values exist so a future slice that
+// implements PHONE/IDENTITY/etc. needs no further migration, per
+// module1-implementation-contract.md §8.1's "architecture-ready" distinction.
+enum VerificationType {
+  EMAIL
+  PHONE
+  IDENTITY
+  PROVIDER
+  CREDENTIAL
+  BUSINESS
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+// System of record for verification state. User.emailVerifiedAt is kept as
+// a denormalized, fast-path read column for the login hot path
+// (module1-implementation-contract.md §8.2) — this table is the write-side
+// source of truth: whatever sets emailVerifiedAt also upserts the matching
+// row here, in the same transaction. unique(userId, type) makes that upsert
+// the natural idempotency key, same pattern as UserCapability above.
+model Verification {
+  id         String              @id @default(uuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       VerificationType
+  status     VerificationStatus
+  verifiedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@map("verifications")
+}
+
+enum AuthProvider {
+  EMAIL_PASSWORD
+  GOOGLE
+}
+
+// One row per way a User can authenticate. EMAIL_PASSWORD rows are
+// backfilled for every existing user at migration time (providerAccountId
+// null) so this table is a complete ledger from day one, not a
+// Google-only afterthought (module1-implementation-contract.md §7.1).
+//
+// providerAccountId is Google's `sub` claim — permanent, provider-issued,
+// and the only trustworthy linking key (never email alone). Unique where
+// not null: one Google account can never be attached to two Marché users.
+// (userId, provider) unique: a User can hold at most one row per provider
+// — no duplicate Google methods for the same identity.
+model AuthenticationMethod {
+  id                String       @id @default(uuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          AuthProvider
+  providerAccountId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("authentication_methods")
 }
 
 model Session {
