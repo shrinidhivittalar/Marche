@@ -36,6 +36,7 @@ import { isBidWithinBudget } from '../lib/formatBudget';
 import {
   BackendUser,
   forgotPasswordRequest,
+  googleLoginRequest,
   loginRequest,
   logoutRequest,
   meRequest,
@@ -81,6 +82,12 @@ interface AppContextType {
     role: 'client' | 'vendor';
   }) => Promise<void>;
   loginWithCredentials: (email: string, password: string) => Promise<void>;
+  // Resolves with verificationEmailSent:true on the (rare) path where
+  // Google's token didn't confirm the email and the backend fell back to
+  // the same email-verification flow register() uses — no session is
+  // created in that case, same as registerAccount. Otherwise resolves
+  // false once the session is live, same contract as loginWithCredentials.
+  loginWithGoogle: (idToken: string) => Promise<{ verificationEmailSent: boolean }>;
   logoutAccount: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   submitPasswordReset: (token: string, newPassword: string) => Promise<void>;
@@ -607,6 +614,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const mappedUser = buildUserFromBackend(user);
     setCurrentUser(mappedUser);
     navigate(mappedUser.role === 'vendor' ? '/provider/dashboard' : '/client/dashboard');
+  };
+
+  const loginWithGoogle = async (idToken: string) => {
+    const result = await googleLoginRequest(idToken);
+    if (!('accessToken' in result)) {
+      // Google didn't confirm the email — same non-session outcome as
+      // registerAccount; the caller shows the same "check your email"
+      // messaging that path already has.
+      return { verificationEmailSent: true };
+    }
+    setAccessToken(result.accessToken);
+    const mappedUser = buildUserFromBackend(result.user);
+    setCurrentUser(mappedUser);
+    navigate(mappedUser.role === 'vendor' ? '/provider/dashboard' : '/client/dashboard');
+    return { verificationEmailSent: false };
   };
 
   const logoutAccount = async () => {
@@ -1468,6 +1490,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authLoading,
         registerAccount,
         loginWithCredentials,
+        loginWithGoogle,
         logoutAccount,
         requestPasswordReset,
         submitPasswordReset,

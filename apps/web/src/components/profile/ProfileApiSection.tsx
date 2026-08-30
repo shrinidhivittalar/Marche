@@ -6,7 +6,8 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { ImageUploader } from '../media/ImageUploader';
 import { todayISODate } from '../../lib/formatTime';
 import type { UploadedImage } from '../../lib/media-api';
-import { ApiError } from '../../lib/api';
+import { ApiError, linkGoogleRequest } from '../../lib/api';
+import { triggerGoogleSignIn } from '../../lib/google-identity';
 import {
   profilesApi,
   type ApiProfile,
@@ -14,6 +15,10 @@ import {
   type Visibility,
 } from '../../lib/marketplace-api';
 import { SkillsCard, ExperienceCard, EducationCard, LanguagesCard } from './ProfileCards';
+
+// Same env var AuthPages.tsx reads — must be the same Google OAuth Client
+// ID as the backend's GOOGLE_CLIENT_ID (apps/web/.env.example).
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 // The real Profiles module (docs/modules/module2.md), as opposed to the
 // mock profile fields this app shipped with. Rendered only when there is a
@@ -134,6 +139,8 @@ export const ProfileApiSection: React.FC = () => {
           run(() => profilesApi.updateMe(token, fields as never), 'Profile saved.')
         }
       />
+
+      <ConnectedAccountsCard token={token} />
 
       {isProvider && (
         <>
@@ -376,6 +383,61 @@ function CoreProfileForm({
           }
         >
           {saving ? 'Saving…' : 'Save profile'}
+        </Button>
+        <Feedback error={error} success={success} />
+      </div>
+    </Card>
+  );
+}
+
+// Lets an account created with email/password attach Google as an
+// additional sign-in method (POST /auth/google/link). No endpoint exists to
+// report whether Google is already linked, so this stays a stateless
+// "Link Google account" action rather than a linked/unlinked toggle — the
+// backend itself is idempotent (linking the same Google account twice just
+// returns { linked: true } again) and reports a clear conflict if that
+// Google account is already linked elsewhere.
+function ConnectedAccountsCard({ token }: { token: string }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  if (!GOOGLE_CLIENT_ID) return null;
+
+  const handleLinkGoogle = () => {
+    setError(null);
+    setSuccess(null);
+    setSubmitting(true);
+    triggerGoogleSignIn(GOOGLE_CLIENT_ID, async (idToken) => {
+      try {
+        await linkGoogleRequest(token, idToken);
+        setSuccess('Google account linked.');
+      } catch (err) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : 'Something went wrong. Please check your connection and try again.',
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    }).catch(() => {
+      setError('Could not open Google sign-in. Please try again.');
+      setSubmitting(false);
+    });
+  };
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="connected-accounts-card">
+      <h2 className="text-lg font-semibold text-ink">Connected accounts</h2>
+      <div className="flex items-center gap-3">
+        <Button
+          variant="outline"
+          disabled={submitting}
+          data-testid="link-google"
+          onClick={handleLinkGoogle}
+        >
+          {submitting ? 'Connecting…' : 'Link Google account'}
         </Button>
         <Feedback error={error} success={success} />
       </div>

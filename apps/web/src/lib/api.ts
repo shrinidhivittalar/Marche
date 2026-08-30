@@ -69,6 +69,28 @@ export function loginRequest(data: { email: string; password: string }) {
   });
 }
 
+// Mirrors /auth/login's shape when Google's token already confirms the
+// email; matches /auth/register's acknowledgement shape on the rarer path
+// where it doesn't and the backend falls back to the same verification-email
+// flow (see AuthService.googleLogin) — never both fields at once.
+export function googleLoginRequest(idToken: string) {
+  return apiFetch<{ accessToken: string; user: BackendUser } | { status: string }>('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ idToken }),
+  });
+}
+
+// Attaches a Google account to the caller's own already-authenticated
+// account (POST /auth/google/link). Distinct from googleLoginRequest above,
+// which signs in/registers — this never creates a session, it only links.
+export function linkGoogleRequest(accessToken: string, idToken: string) {
+  return apiFetch<{ linked: true }>('/auth/google/link', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ idToken }),
+  });
+}
+
 // Concurrent refreshes share one request, and this is not an optimisation.
 // Refresh tokens are single-use and rotating: the server revokes the old
 // session on every refresh. Two calls with the same cookie therefore mean
