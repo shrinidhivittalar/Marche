@@ -45,6 +45,12 @@ import {
   resetPasswordRequest,
   verifyEmailRequest,
 } from '../lib/api';
+import {
+  availableModes as deriveAvailableModes,
+  modeForLegacyRole,
+  reconcileMode,
+  type ActiveMode,
+} from '../lib/active-mode';
 
 type JobDraftInput = Omit<
   Job,
@@ -67,8 +73,22 @@ type EditableJobFields = Pick<Job, 'title' | 'budgetMin' | 'budgetMax' | 'locati
 
 interface AppContextType {
   currentUser: User;
+  // Demo-only. Replaces the entire user with a DEMO_USERS persona — see the
+  // implementation. It is NOT the mode switcher: activeMode/setActiveMode
+  // below are, and they never touch currentUser.
   setCurrentUserRole: (role: UserRole) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
+  // Which side of the marketplace the UI is presenting. Presentation state
+  // only — switching it changes no identity, no token, and grants nothing;
+  // the API re-checks capabilities per request. null means this account has
+  // no capability-backed marketplace mode. See lib/active-mode.ts.
+  activeMode: ActiveMode | null;
+  // The modes this user may enter, derived from their real capability
+  // grants. Empty for an account holding no capabilities.
+  availableModes: ActiveMode[];
+  // Ignores any mode the user does not hold, so a stale caller or a
+  // hand-crafted call cannot put the UI into an unavailable mode.
+  setActiveMode: (mode: ActiveMode) => void;
   isAuthenticated: boolean;
   // Exposed so the Profiles and Marketplace clients can authorise their
   // requests. In memory only — never persisted; the httpOnly refresh cookie
@@ -212,6 +232,13 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'marche_app_state_v8';
+
+// Kept separate from the `_user_role` key below, which persists the legacy
+// demo-persona role and is read back as the initial currentUser. This one
+// holds only a mode name — never identity — and is always validated
+// against the signed-in user's real capabilities before being applied, so
+// a value left behind by a previous user cannot carry into the next one.
+const ACTIVE_MODE_KEY = `${LOCAL_STORAGE_KEY}_active_mode`;
 const TERMS_VERSION = 'marche-terms-v1';
 // Mirrors the access-token TTL in apps/api/src/identity/services/auth.service.ts.
 // Renewed a minute early so a request in flight when the timer fires is still
@@ -317,6 +344,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // what survives a reload; this is restored via silent refresh on mount.
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // The user's raw mode preference — what they last chose, or what was left
+  // in storage. Deliberately NOT the mode the app runs on: it is only a
+  // hint, and is validated against real capabilities on every render below.
+  // Kept separate from currentUser so switching mode cannot touch identity.
+  const [preferredMode, setPreferredMode] = useState<string | null>(() =>
+    localStorage.getItem(ACTIVE_MODE_KEY),
+  );
+
+  const availableModes = useMemo(
+    () => deriveAvailableModes(currentUser.capabilities),
+    [currentUser.capabilities],
+  );
+
+  // Derived during render rather than mirrored into state by an effect, so
+  // there is no window in which the app runs on a stale mode. Capabilities
+  // arrive after the silent refresh and can change between sessions (a
+  // grant added or revoked, or a different user signing in on this
+  // browser); recomputing here is what stops a stored mode outliving the
+  // capability that justified it.
+  //
+  // The legacy role is the tiebreaker for a dual-capability user with
+  // nothing stored: it is the surface they are already on, so honouring it
+  // keeps this change invisible to them instead of relocating a provider
+  // into the client UI. It can only ever select between capabilities they
+  // already hold — see defaultMode.
+  const activeMode = useMemo(
+    () =>
+      reconcileMode(preferredMode, currentUser.capabilities, modeForLegacyRole(currentUser.role)),
+    [preferredMode, currentUser.capabilities, currentUser.role],
+  );
+
+  // Only ever writes, never clears. On a full page load capabilities have
+  // not arrived yet, so activeMode is briefly null for everyone —
+  // clearing here would delete the stored preference on every reload, and
+  // lose it outright for anyone who closed the tab during the silent
+  // refresh. Nothing is lost by leaving a stale value behind instead:
+  // reconcileMode rejects a mode the user cannot enter, and logout removes
+  // the key explicitly.
+  useEffect(() => {
+    if (activeMode) {
+      localStorage.setItem(ACTIVE_MODE_KEY, activeMode);
+    }
+  }, [activeMode]);
+
+  // Never widens access: a mode the user does not hold is ignored outright
+  // rather than clamped to something else, so a bad call is a no-op instead
+  // of a silent redirect somewhere unexpected. Note what this does NOT do —
+  // it does not call setCurrentUser, so id, email, name, capabilities and
+  // the access token are all untouched by a mode switch.
+  const setActiveMode = (mode: ActiveMode) => {
+    if (!availableModes.includes(mode)) return;
+    setPreferredMode(mode);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -584,6 +665,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.history.back();
   };
 
+  // Demo/legacy only — NOT the mode switcher, despite the name.
+  //
+  // This swaps the entire user out for a DEMO_USERS persona, which for a
+  // real signed-in user would silently replace their id, email, name and
+  // capabilities while leaving the access token valid — the session and
+  // the displayed identity would then disagree. Real mode switching is
+  // setActiveMode, which changes presentation state only.
+  //
+  // Left in place rather than deleted: it is still part of the signed-out
+  // demo experience this app falls back to (see loadUserWithOverrides and
+  // the DEMO_USERS initial state), and removing it is a separate decision
+  // about that fallback, not part of introducing activeMode. It currently
+  // has no callers outside this file, and must not gain one.
   const setCurrentUserRole = (role: UserRole) => {
     if (DEMO_USERS[role]) {
       setCurrentUser(loadUserWithOverrides(role));
@@ -644,6 +738,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setAccessToken(null);
     setCurrentUser(loadUserWithOverrides('client'));
+    // Cleared explicitly, in both state and storage: the next user to sign
+    // in on this browser must not inherit this one's preference.
+    // Reconciliation would also reject it once their capabilities arrive,
+    // but clearing it here means it is gone immediately, and the write-only
+    // effect above deliberately never removes it.
+    setPreferredMode(null);
+    localStorage.removeItem(ACTIVE_MODE_KEY);
     navigate('/auth/signin');
   };
 
@@ -1489,6 +1590,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentUser,
         setCurrentUserRole,
+        activeMode,
+        availableModes,
+        setActiveMode,
         updateCurrentUser,
         isAuthenticated: accessToken !== null,
         accessToken,

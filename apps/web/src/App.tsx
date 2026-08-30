@@ -76,6 +76,7 @@ import { BrowseServicesPage } from './pages/marketplace/BrowseServicesPage';
 import { MyServicesPage } from './pages/provider/MyServicesPage';
 import { PublicProfilePage } from './pages/marketplace/PublicProfilePage';
 import { ServiceDetailPage } from './pages/marketplace/ServiceDetailPage';
+import { effectiveMode } from './lib/active-mode';
 
 const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
@@ -133,7 +134,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
 ];
 
 function AppContent() {
-  const { route, goBack, currentUser, authLoading, accessToken } = useApp();
+  const { route, goBack, currentUser, authLoading, accessToken, activeMode } = useApp();
 
   // Full-bleed views without sidebar. Landing/Sign In/Sign Up always render light —
   // they're pre-authentication brand surfaces, not part of the user's themed workspace.
@@ -197,10 +198,11 @@ function AppContent() {
     );
   }
 
-  // Route rendering below is gated on currentUser.role, not on being signed
-  // in — logout resets currentUser to a default demo profile rather than
-  // clearing it, so the role checks alone can't tell a real session from a
-  // logged-out one. Browser back/forward changes the URL without touching
+  // Route rendering below is gated on who the user is (their capabilities,
+  // and the platform role for admin), not on being signed in — logout
+  // resets currentUser to a default demo profile rather than clearing it,
+  // so those checks alone can't tell a real session from a logged-out one.
+  // Browser back/forward changes the URL without touching
   // React state, so without this, going back after logout can land on a
   // protected route's path and render it with no access token. Catch that
   // here rather than trusting the URL.
@@ -212,20 +214,49 @@ function AppContent() {
     );
   }
 
-  // Sends a role to its own home instead of whatever route it just tried to reach —
-  // used both for unmatched routes and for routes that belong to a different role.
+  // Which marketplace surface this user is looking at. For an account with
+  // capability rows this is their activeMode; for one without any (Google
+  // sign-ups, un-backfilled legacy accounts) it falls back to the legacy
+  // role so those users keep the UI they already had — see effectiveMode's
+  // comment. Admin is not a marketplace mode and resolves to null here; its
+  // routes keep their own role check below.
+  const surface = effectiveMode(activeMode, currentUser.capabilities, currentUser.role);
+
+  // Whether the user may enter each area at all. A mode the user cannot
+  // hold is never in availableModes, so selecting one grants nothing — and
+  // none of this is a security boundary regardless: the API re-checks the
+  // caller's capabilities on every request.
+  //
+  // Note one deliberate consequence for admins. The two axes are
+  // independent (Module 1): platformRole governs /admin/*, capabilities
+  // govern the marketplace. So an admin who *also* holds a CLIENT or
+  // PROVIDER capability can now enter that marketplace area, where the
+  // previous `role !== 'client'` check refused them. That is the intended
+  // reading rather than an oversight: the grant is real, and the API would
+  // authorize their actions there, so refusing only in the UI would have
+  // been the inconsistency. Admins hold no capability rows today (the
+  // Module 1 backfill gave them none), so nothing changes in practice —
+  // this is about what happens when a capability is deliberately granted
+  // to one. Admin routes themselves are untouched and still platform-RBAC.
+  const clientAreaAllowed = surface === 'CLIENT';
+  const providerAreaAllowed = surface === 'PROVIDER';
+
+  // Sends a user to their own home instead of whatever route it just tried to reach —
+  // used both for unmatched routes and for routes that belong to a different surface.
   const roleHome = () => {
-    if (currentUser.role === 'vendor') return <ProviderHomePage />;
+    // Checked first: admin is a platform role, not a mode, and an admin has
+    // no marketplace surface to fall back to.
     if (currentUser.role === 'admin') return <AdminAuditDashboard />;
+    if (surface === 'PROVIDER') return <ProviderHomePage />;
     return <ClientDashboard />;
   };
 
   if (route === '/provider/onboarding') {
-    return currentUser.role === 'vendor' ? <ProviderOnboardingPage /> : roleHome();
+    return providerAreaAllowed ? <ProviderOnboardingPage /> : roleHome();
   }
 
   if (route === '/client/onboarding') {
-    return currentUser.role === 'client' ? <ClientOnboardingPage /> : roleHome();
+    return clientAreaAllowed ? <ClientOnboardingPage /> : roleHome();
   }
 
   // Dynamic Route Matchers
@@ -234,13 +265,12 @@ function AppContent() {
     // from reaching them directly by URL, so enforce it here. Routes with legitimate
     // cross-role use (e.g. admin's "Jobs" nav reusing /provider/dashboard, or /profile/:id
     // and /contracts/:id being viewed by both client and vendor) are deliberately excluded.
+    // Admin stays on the platform role — it is a separate authorization
+    // axis from CLIENT/PROVIDER capabilities and must not be expressed as a
+    // marketplace mode.
     if (route.startsWith('/admin/') && currentUser.role !== 'admin') return roleHome();
-    if (route.startsWith('/client/') && currentUser.role !== 'client') return roleHome();
-    if (
-      route.startsWith('/provider/') &&
-      route !== '/provider/dashboard' &&
-      currentUser.role !== 'vendor'
-    ) {
+    if (route.startsWith('/client/') && !clientAreaAllowed) return roleHome();
+    if (route.startsWith('/provider/') && route !== '/provider/dashboard' && !providerAreaAllowed) {
       return roleHome();
     }
 
