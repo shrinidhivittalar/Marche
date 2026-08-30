@@ -59,7 +59,7 @@ const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { currentUser, route, navigate, apiMessagesUnreadCount } = useApp();
+  const { currentUser, route, navigate, logoutAccount, apiMessagesUnreadCount } = useApp();
   const {
     notifications,
     loading: notificationsLoading,
@@ -462,10 +462,13 @@ export const Sidebar: React.FC = () => {
               </button>
             )}
 
-            <button
-              onClick={() => navigate('/auth/signin')}
-              className={identityItemClass('danger')}
-            >
+            {/* logoutAccount, not a bare navigate to the sign-in page:
+                navigating alone left the refresh-token cookie live on the
+                server and the access token in memory, so the session was
+                still usable and going back landed on a protected route
+                fully signed in. It also owns clearing the stored
+                active-mode preference. */}
+            <button onClick={() => void logoutAccount()} className={identityItemClass('danger')}>
               <LogOut className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Log Out</span>}
             </button>

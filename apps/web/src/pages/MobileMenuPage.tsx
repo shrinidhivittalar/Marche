@@ -20,7 +20,7 @@ import { useTheme } from '@marche/ui';
 type MenuLink = { label: string; path: string; icon: React.ElementType };
 
 export const MobileMenuPage: React.FC = () => {
-  const { currentUser, navigate } = useApp();
+  const { currentUser, navigate, logoutAccount } = useApp();
   const { unreadNotifications } = useUnreadCounts();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -29,15 +29,15 @@ export const MobileMenuPage: React.FC = () => {
     currentUser.role === 'vendor'
       ? '/provider/profile'
       : currentUser.role === 'client'
-      ? '/client/profile'
-      : '/admin/profile';
+        ? '/client/profile'
+        : '/admin/profile';
 
   const homePath =
     currentUser.role === 'vendor'
       ? '/provider/dashboard'
       : currentUser.role === 'client'
-      ? '/client/dashboard'
-      : '/admin/audit';
+        ? '/client/dashboard'
+        : '/admin/audit';
 
   // This screen is the mobile "More" tab's overflow menu — the desktop sidebar already
   // surfaces all of this, so bounce back to the dashboard if the viewport widens while here
@@ -70,7 +70,8 @@ export const MobileMenuPage: React.FC = () => {
     { label: 'Finances', path: '/provider/finances', icon: IndianRupee },
   ];
 
-  const roleLinks = currentUser.role === 'client' ? clientLinks : currentUser.role === 'vendor' ? vendorLinks : [];
+  const roleLinks =
+    currentUser.role === 'client' ? clientLinks : currentUser.role === 'vendor' ? vendorLinks : [];
 
   return (
     <div className="max-w-xl mx-auto pb-24">
@@ -85,7 +86,9 @@ export const MobileMenuPage: React.FC = () => {
         />
         <div className="min-w-0 flex-1 text-left">
           <p className="text-sm font-bold text-ink truncate">{currentUser.name}</p>
-          <p className="text-xs text-ink-muted truncate">{currentUser.companyOrTitle || currentUser.role}</p>
+          <p className="text-xs text-ink-muted truncate">
+            {currentUser.companyOrTitle || currentUser.role}
+          </p>
         </div>
         <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
       </button>
@@ -145,8 +148,10 @@ export const MobileMenuPage: React.FC = () => {
       </div>
 
       <div className="sticky bottom-20 mt-6 pt-4 bg-bg border-t border-border">
+        {/* Same fix as the sidebar's Log Out — see the comment there.
+            navigating alone never revoked the session server-side. */}
         <button
-          onClick={() => navigate('/auth/signin')}
+          onClick={() => void logoutAccount()}
           className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 bg-bg transition-colors cursor-pointer"
         >
           <LogOut className="w-[18px] h-[18px] shrink-0" />
