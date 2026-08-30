@@ -38,12 +38,26 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
 export type BackendRole = 'CLIENT' | 'PROVIDER' | 'ADMIN';
 
+// Mirrors the API's Capability enum (packages/db's UserCapability). A user
+// holds zero, one, or both — they are independent grants, not a single
+// role, which is exactly what the legacy scalar `role` below cannot
+// express.
+export type BackendCapability = 'CLIENT' | 'PROVIDER';
+
 export interface BackendUser {
   id: string;
   email: string;
   name: string;
+  // Legacy scalar role. Still returned by the API and still what this app's
+  // routing and mode selection read — kept for compatibility, unchanged.
   role: BackendRole;
   emailVerified: boolean;
+  // The user's real, DB-backed capabilities. Carried into session state so
+  // later work can drive the UI from them instead of `role`; nothing reads
+  // them yet. Never an authorization input — the API re-checks capabilities
+  // against the database on every request and ignores whatever the client
+  // believes it holds.
+  capabilities: BackendCapability[];
 }
 
 // Resolves for an address that is already registered exactly as it does for a

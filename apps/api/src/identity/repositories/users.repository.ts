@@ -25,8 +25,17 @@ function isUniqueViolation(error: unknown): boolean {
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findByEmail(email: string): Promise<User | null> {
-    return this.prisma.client.user.findUnique({ where: { email } });
+  // Capabilities are included for the same reason findById includes them:
+  // this is the read behind password login, and login's response body now
+  // carries the caller's capabilities (AuthService.toPublicUser) so the
+  // frontend can hold them as session state. Additive — the callers that
+  // only read plain User fields (the register duplicate-check,
+  // forgotPassword, googleLogin's email-collision check) are unaffected.
+  findByEmail(email: string): Promise<UserWithCapabilities | null> {
+    return this.prisma.client.user.findUnique({
+      where: { email },
+      include: { capabilities: true },
+    });
   }
 
   // Capabilities are included here, not fetched separately, because this is
@@ -42,17 +51,24 @@ export class UsersRepository {
     });
   }
 
+  // Both of these include capabilities so their result satisfies
+  // toPublicUser, which googleLogin's new-user path hands them to directly.
+  // For a user this call just created the relation is genuinely empty
+  // rather than assumed empty — read back from the database like every
+  // other capability read, instead of hardcoding [] on the belief that
+  // nothing in that transaction granted one.
   create(
     data: { email: string; passwordHash: string; name: string; role: UserRole },
     tx?: Prisma.TransactionClient,
-  ): Promise<User> {
-    return (tx ?? this.prisma.client).user.create({ data });
+  ): Promise<UserWithCapabilities> {
+    return (tx ?? this.prisma.client).user.create({ data, include: { capabilities: true } });
   }
 
-  markEmailVerified(userId: string, tx?: Prisma.TransactionClient): Promise<User> {
+  markEmailVerified(userId: string, tx?: Prisma.TransactionClient): Promise<UserWithCapabilities> {
     return (tx ?? this.prisma.client).user.update({
       where: { id: userId },
       data: { emailVerifiedAt: new Date() },
+      include: { capabilities: true },
     });
   }
 

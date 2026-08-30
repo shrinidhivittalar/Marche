@@ -14,22 +14,38 @@ import type { ProfilesService } from '../../profiles/services/profiles.service';
 import type { ReferralsService } from '../../referrals/services/referrals.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { GoogleAuthVerifier } from '../google-auth-verifier';
-import type { User } from '@marche/db';
+import type { UserWithCapabilities } from '../repositories/users.repository';
+import type { Capability } from '@marche/db';
 
-function buildUser(overrides: Partial<User> = {}): User {
+// Capability rows as the repository returns them. findByEmail and findById
+// both include the relation, so a user fixture that reaches toPublicUser
+// must carry it too — an empty array means "holds none", which is a real
+// state (a Google-created account, an admin), not a missing fixture.
+function capabilityRows(capabilities: Capability[]) {
+  return capabilities.map((capability, index) => ({
+    id: `cap_${index}`,
+    userId: 'user_1',
+    capability,
+    createdAt: new Date(),
+  }));
+}
+
+function buildUser(overrides: Partial<UserWithCapabilities> = {}): UserWithCapabilities {
   return {
     id: 'user_1',
     email: 'jane@example.com',
     passwordHash: 'hashed',
     name: 'Jane',
     role: 'CLIENT',
+    platformRole: 'USER',
     status: 'ACTIVE',
     emailVerifiedAt: null,
+    capabilities: capabilityRows(['CLIENT']),
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
     ...overrides,
-  } as User;
+  } as UserWithCapabilities;
 }
 
 describe('AuthService', () => {
@@ -409,6 +425,63 @@ describe('AuthService', () => {
         expect.objectContaining({ eventType: 'auth.login.success', email: 'jane@example.com' }),
       );
     });
+
+    // The login response is where a fresh sign-in gets its capabilities —
+    // without them here the frontend holds only the legacy scalar role
+    // until the next page reload hits GET /users/me.
+    it('returns the caller’s DB-backed capabilities in the login response', async () => {
+      const passwordHash = await argon2.hash('Password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({ passwordHash, emailVerifiedAt: new Date() }),
+      );
+
+      const result = await authService.login(
+        { email: 'jane@example.com', password: 'Password123' },
+        {},
+      );
+
+      expect(result.user.capabilities).toEqual(['CLIENT']);
+    });
+
+    it('returns both capabilities for a user holding CLIENT and PROVIDER', async () => {
+      const passwordHash = await argon2.hash('Password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({
+          passwordHash,
+          emailVerifiedAt: new Date(),
+          capabilities: capabilityRows(['CLIENT', 'PROVIDER']),
+        }),
+      );
+
+      const result = await authService.login(
+        { email: 'jane@example.com', password: 'Password123' },
+        {},
+      );
+
+      expect(result.user.capabilities).toEqual(['CLIENT', 'PROVIDER']);
+    });
+
+    // A capability is a grant, never an inference from the legacy role
+    // column — this user's role says PROVIDER but the only row is CLIENT.
+    it('never synthesises a capability from the legacy role column', async () => {
+      const passwordHash = await argon2.hash('Password123');
+      usersRepository.findByEmail.mockResolvedValue(
+        buildUser({
+          passwordHash,
+          emailVerifiedAt: new Date(),
+          role: 'PROVIDER',
+          capabilities: capabilityRows(['CLIENT']),
+        }),
+      );
+
+      const result = await authService.login(
+        { email: 'jane@example.com', password: 'Password123' },
+        {},
+      );
+
+      expect(result.user.capabilities).toEqual(['CLIENT']);
+      expect(result.user.role).toBe('PROVIDER');
+    });
   });
 
   describe('resetPassword', () => {
@@ -730,6 +803,31 @@ describe('AuthService', () => {
       );
     });
 
+    // Google sign-in must hand back the same capability information a
+    // password login does — the frontend cannot tell the two paths apart
+    // and must end up with the same session state either way.
+    it('returns the linked user’s capabilities, same as a password login', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
+        id: 'method_1',
+        userId: 'user_1',
+        provider: 'GOOGLE',
+        providerAccountId: 'google-sub-1',
+        createdAt: new Date(),
+      });
+      usersRepository.findById.mockResolvedValue(
+        buildUser({ id: 'user_1', capabilities: capabilityRows(['CLIENT', 'PROVIDER']) }) as never,
+      );
+
+      const result = await authService.googleLogin('id-token', {});
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          user: expect.objectContaining({ capabilities: ['CLIENT', 'PROVIDER'] }),
+        }),
+      );
+    });
+
     it('rejects when the linked user is not active', async () => {
       googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
       authenticationMethodsRepository.findByGoogleSub.mockResolvedValue({
@@ -791,6 +889,27 @@ describe('AuthService', () => {
       // anywhere in the new-user path.
       expect(usersRepository.grantCapability).not.toHaveBeenCalled();
       expect('accessToken' in result).toBe(true);
+    });
+
+    // The response side of the assertion above: a Google-created account is
+    // granted nothing, so it must report holding nothing rather than being
+    // handed a capability its `role: 'CLIENT'` default might imply.
+    it('reports no capabilities for a brand-new Google account', async () => {
+      googleAuthVerifier.verify.mockResolvedValue(verifiedIdentity);
+      authenticationMethodsRepository.findByGoogleSub.mockResolvedValue(null);
+      usersRepository.findByEmail.mockResolvedValue(null);
+      const created = buildUser({ id: 'new_user', emailVerifiedAt: null, capabilities: [] });
+      usersRepository.create.mockResolvedValue(created);
+      usersRepository.markEmailVerified.mockResolvedValue({
+        ...created,
+        emailVerifiedAt: new Date(),
+      });
+
+      const result = await authService.googleLogin('id-token', {});
+
+      expect(result).toEqual(
+        expect.objectContaining({ user: expect.objectContaining({ capabilities: [] }) }),
+      );
     });
 
     it('marks the new user verified from Google’s claim, both representations, in the same transaction', async () => {

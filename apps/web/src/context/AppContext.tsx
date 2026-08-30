@@ -273,6 +273,11 @@ function buildUserFromBackend(backendUser: BackendUser): User {
     email: backendUser.email,
     avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(backendUser.name)}&background=random`,
     role: backendRoleToUserRole(backendUser.role),
+    // Carried straight through from the API. `role` above still drives
+    // every routing/mode decision in this app — that migration is separate
+    // and deliberately not part of this change; this only makes the real
+    // capability set available to build on.
+    capabilities: backendUser.capabilities,
     verified: backendUser.emailVerified,
     memberSince: new Date().toISOString(),
   };

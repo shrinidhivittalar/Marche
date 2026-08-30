@@ -2,7 +2,7 @@ import { ConflictException, Injectable, Logger, UnauthorizedException } from '@n
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
-import { UsersRepository } from '../repositories/users.repository';
+import { UsersRepository, type UserWithCapabilities } from '../repositories/users.repository';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import { VerificationsRepository } from '../repositories/verifications.repository';
@@ -18,7 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleAuthVerifier } from '../google-auth-verifier';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
-import type { User } from '@marche/db';
+import type { Capability, User } from '@marche/db';
 
 // Postgres' unique-violation code — same duck-typed check already used in
 // skills.service.ts, proposals.service.ts, etc.
@@ -75,6 +75,14 @@ export interface PublicUser {
   name: string;
   role: string;
   emailVerified: boolean;
+  // The caller's own DB-backed capabilities (Module 01 Slice 2), added so
+  // the frontend can hold them as session state — until now they existed
+  // on request.user server-side (JwtStrategy.validate) but were dropped
+  // before serialization, leaving the client with only the legacy scalar
+  // role. Informational only: authorization stays server-side through
+  // hasCapability()/assertProviderRole()/assertClientRole(), which read the
+  // database per request and never trust anything the client sends back.
+  capabilities: Capability[];
 }
 
 export interface RegisterResult {
@@ -83,13 +91,21 @@ export interface RegisterResult {
 
 const REGISTER_ACKNOWLEDGEMENT: RegisterResult = { status: 'verification_email_sent' };
 
-export function toPublicUser(user: User): PublicUser {
+// Takes UserWithCapabilities, not User, deliberately: every path that
+// produces this response body must have loaded the capability rows. A
+// looser signature (capabilities optional, defaulted to []) would let a
+// caller that forgot to include them return "this user has no
+// capabilities" — indistinguishable from the truth, and wrong. Requiring
+// the loaded shape makes that a compile error instead, the same reasoning
+// as ProfilesRepository.withDetails's required viewerIsOwner argument.
+export function toPublicUser(user: UserWithCapabilities): PublicUser {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
     emailVerified: user.emailVerifiedAt !== null,
+    capabilities: user.capabilities.map((row) => row.capability),
   };
 }
 
