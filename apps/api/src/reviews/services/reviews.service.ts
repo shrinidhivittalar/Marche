@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ReviewsRepository } from '../repositories/reviews.repository';
 import { ConnectionsService } from '../../proposals/services/connections.service';
+import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
@@ -44,6 +45,7 @@ export class ReviewsService {
   constructor(
     private readonly reviewsRepository: ReviewsRepository,
     private readonly connectionsService: ConnectionsService,
+    private readonly connectionsRepository: ConnectionsRepository,
     private readonly profilesRepository: ProfilesRepository,
   ) {}
 
@@ -128,6 +130,25 @@ export class ReviewsService {
     }
     const total = visible.reduce((sum, review) => sum + review.rating, 0);
     return { averageRating: total / visible.length, reviewCount: visible.length };
+  }
+
+  /**
+   * The three numbers ProfilesService's public profile view shows —
+   * combined here rather than in ProfilesService because both halves
+   * (completed-connection count, visible-review stats) already live behind
+   * this module's own dependency on ProposalsModule; duplicating either
+   * query or the blind-reveal rule inside profiles/ would be the same logic
+   * living twice. Two independent counts, not sequential — nothing here
+   * depends on the other's result.
+   */
+  async projectStatsForProfile(
+    profileId: string,
+  ): Promise<{ completedProjects: number; averageRating: number | null; totalReviews: number }> {
+    const [completedProjects, { averageRating, reviewCount }] = await Promise.all([
+      this.connectionsRepository.countCompletedByProfile(profileId),
+      this.statsForProfile(profileId),
+    ]);
+    return { completedProjects, averageRating, totalReviews: reviewCount };
   }
 
   /**

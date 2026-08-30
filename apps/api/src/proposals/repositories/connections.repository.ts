@@ -98,6 +98,17 @@ export class ConnectionsRepository {
     return this.prisma.client.connection.count({ where: ownedBy(profileId) });
   }
 
+  // "Completed projects" for a profile's public statistics (either side of
+  // the connection counts — a client's completed hires and a provider's
+  // completed jobs are both "projects" from that profile's own perspective).
+  // A single COUNT, same shape as countByProfile above, filtered to
+  // COMPLETED — the only status that means the work actually happened.
+  countCompletedByProfile(profileId: string) {
+    return this.prisma.client.connection.count({
+      where: { ...ownedBy(profileId), status: 'COMPLETED' },
+    });
+  }
+
   // Dates already committed, for the availability calendar: every active
   // connection with an event date. COMPLETED ones are history, not a future
   // slot to guard, so they're excluded.

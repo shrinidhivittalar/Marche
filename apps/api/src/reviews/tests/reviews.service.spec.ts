@@ -13,6 +13,9 @@ function build() {
   const connectionsService = {
     findById: jest.fn(),
   };
+  const connectionsRepository = {
+    countCompletedByProfile: jest.fn().mockResolvedValue(0),
+  };
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client' }),
     findById: jest.fn().mockResolvedValue({ id: 'profile_client', userId: 'user_client' }),
@@ -30,10 +33,17 @@ function build() {
   const service = new ReviewsService(
     reviewsRepository as never,
     connectionsService as never,
+    connectionsRepository as never,
     profilesRepository as never,
   );
 
-  return { service, reviewsRepository, connectionsService, profilesRepository };
+  return {
+    service,
+    reviewsRepository,
+    connectionsService,
+    connectionsRepository,
+    profilesRepository,
+  };
 }
 
 const completedConnection = {
@@ -236,6 +246,48 @@ describe('ReviewsService', () => {
       const stats = await service.statsForProfile('profile_target');
 
       expect(stats).toEqual({ averageRating: null, reviewCount: 0 });
+    });
+  });
+
+  describe('projectStatsForProfile', () => {
+    it('combines the completed-connection count with visible-review stats', async () => {
+      const { service, reviewsRepository, connectionsRepository } = build();
+      connectionsRepository.countCompletedByProfile.mockResolvedValue(7);
+      reviewsRepository.listByProfile.mockResolvedValue([
+        reviewAt(1, { rating: 4 }),
+        reviewAt(1, { connectionId: 'connection_2', rating: 5 }),
+      ]);
+      reviewsRepository.countByConnectionIds.mockResolvedValue(
+        new Map([
+          ['connection_1', 2],
+          ['connection_2', 2],
+        ]),
+      );
+
+      const stats = await service.projectStatsForProfile('profile_target');
+
+      expect(connectionsRepository.countCompletedByProfile).toHaveBeenCalledWith('profile_target');
+      expect(stats).toEqual({ completedProjects: 7, averageRating: 4.5, totalReviews: 2 });
+    });
+
+    // An account with completed projects but no reviews yet (or none visible
+    // yet) is a real, common state — averageRating must not be inflated or
+    // divide by zero just because completedProjects is nonzero.
+    it('reports no rating when there are completed projects but no visible reviews', async () => {
+      const { service, connectionsRepository } = build();
+      connectionsRepository.countCompletedByProfile.mockResolvedValue(3);
+
+      const stats = await service.projectStatsForProfile('profile_target');
+
+      expect(stats).toEqual({ completedProjects: 3, averageRating: null, totalReviews: 0 });
+    });
+
+    it('reports zero for a profile with no completed projects and no reviews', async () => {
+      const { service } = build();
+
+      const stats = await service.projectStatsForProfile('profile_target');
+
+      expect(stats).toEqual({ completedProjects: 0, averageRating: null, totalReviews: 0 });
     });
   });
 

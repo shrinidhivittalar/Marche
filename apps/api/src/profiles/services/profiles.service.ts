@@ -4,8 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ProfilesRepository } from '../repositories/profiles.repository';
 import { MediaService } from '../../media/media.service';
+import { ReviewsService } from '../../reviews/services/reviews.service';
 import { assertProviderRole } from '../profile-access.util';
 import type { UpdateProfileDto } from '../dto/update-profile.dto';
 import type { UpdateAvailabilityDto } from '../dto/update-availability.dto';
@@ -32,8 +34,10 @@ export interface PublicProfileView {
 }
 
 // Computed on read, never cached — see module2-edge-cases.md's Statistics
-// section. Reviews/Contracts modules don't exist yet, so these are
-// necessarily zero for now; that's expected, not a bug to fix here.
+// section. Sourced from ReviewsService.projectStatsForProfile, which
+// combines a completed-connection count (ProposalsModule) with the
+// visibility-filtered review stats Reviews already computes — not
+// duplicated here.
 export interface ProfileStatistics {
   completedProjects: number;
   averageRating: number | null;
@@ -42,10 +46,38 @@ export interface ProfileStatistics {
 
 @Injectable()
 export class ProfilesService {
+  // Resolved lazily via ModuleRef rather than constructor-injected: Reviews
+  // needs Profiles for its own eligibility checks (ReviewsService), so a
+  // static import back into this module would make profiles.module.ts and
+  // reviews.module.ts a genuine circular ES-module import — forwardRef()
+  // only defers *when* Nest wires the DI graph, not the order the two
+  // files' imports evaluate each other's exports at load time, and that
+  // broke every unrelated test that pulls in ProfilesModule through a
+  // shorter path than AppModule's full graph. ModuleRef with
+  // { strict: false } looks ReviewsService up in the whole application
+  // container instead, so profiles.module.ts needs no import of
+  // ReviewsModule at all. Resolved on first use rather than at
+  // construction/onModuleInit time — Nest's own lifecycle-hook ordering
+  // across independently-wired module subtrees isn't guaranteed to have
+  // ReviewsModule's providers registered yet at that point, but every real
+  // call to this always happens after the whole app has finished
+  // bootstrapping.
+  private reviewsService: ReviewsService | undefined;
+
   constructor(
     private readonly profilesRepository: ProfilesRepository,
     private readonly mediaService: MediaService,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  private getReviewsService(): ReviewsService {
+    if (!this.reviewsService) {
+      this.reviewsService = this.moduleRef.get<ReviewsService, ReviewsService>(ReviewsService, {
+        strict: false,
+      });
+    }
+    return this.reviewsService;
+  }
 
   // Called once, at registration — see AuthService.register. Makes "user
   // exists but has no Profile" structurally impossible instead of
@@ -183,7 +215,14 @@ export class ProfilesService {
     // isOwner decides more than the private-profile gate above: it also
     // decides whether the owner's PRIVATE portfolio pieces come back. This
     // is the public view, so for anyone else they must not.
-    const details = await this.profilesRepository.withDetails(profile.id, isOwner);
+    //
+    // Statistics run alongside the details fetch rather than after it —
+    // they read entirely different tables (Connection/Review vs Profile's
+    // own nested collections), so there is nothing to serialise them for.
+    const [details, statistics] = await Promise.all([
+      this.profilesRepository.withDetails(profile.id, isOwner),
+      this.getReviewsService().projectStatsForProfile(profile.id),
+    ]);
 
     return {
       id: profile.id,
@@ -204,7 +243,7 @@ export class ProfilesService {
       certifications: details?.certifications ?? [],
       skills: details?.skills ?? [],
       languages: details?.languages ?? [],
-      statistics: { completedProjects: 0, averageRating: null, totalReviews: 0 },
+      statistics,
     };
   }
 }
