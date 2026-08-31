@@ -21,7 +21,8 @@ import { NotificationsService } from '../../notifications/services/notifications
 import type { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import type { SearchJobsDto } from '../dto/search-jobs.dto';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
-import type { Job, JobStatus, Prisma } from '@marche/db';
+import { Prisma } from '@marche/db';
+import type { Job, JobStatus } from '@marche/db';
 
 // Which statuses a job may move to from where. The whole lifecycle is one
 // table rather than a scatter of `if (status === ...)` checks, so an
@@ -75,14 +76,18 @@ export class JobsService {
     assertClientRole(profile.user);
 
     await this.assertCategoryExists(dto.categoryId);
-    // Resolves the category's *current* active template — see
-    // CategoryTemplatesService.assertModeAndLocation's own comment for why
-    // there is nothing else to resolve against yet. A no-op for a category
-    // with nothing configured, preserving today's unrestricted behaviour.
-    await this.categoryTemplatesService.assertModeAndLocation(
-      dto.categoryId,
+
+    // Resolves the category's *current* active template and locks this
+    // new Job to it, permanently — see
+    // CategoryTemplate.categoryTemplateId's own schema comment. A no-op
+    // for a category with nothing configured, preserving today's
+    // unrestricted behaviour.
+    const template = await this.categoryTemplatesService.resolveActiveTemplate(dto.categoryId);
+    const categoryData = this.categoryTemplatesService.assertJobRequirements(
+      template,
       dto.serviceMode,
       dto.locationCoarse,
+      dto.categoryData,
     );
 
     // Fields are enumerated rather than spread. The DTO already cannot
@@ -93,6 +98,8 @@ export class JobsService {
     return this.jobsRepository.create({
       clientProfileId: profile.id,
       categoryId: dto.categoryId,
+      categoryTemplateId: template?.id,
+      categoryData: (categoryData as Prisma.InputJsonValue | undefined) ?? undefined,
       title: dto.title,
       description: dto.description,
       budgetMin: dto.budgetMin,
@@ -120,19 +127,50 @@ export class JobsService {
       await this.assertCategoryExists(dto.categoryId);
     }
 
+    // A category change re-resolves and re-locks to whatever is active
+    // for the NEW category right now, discarding the old lock in the same
+    // motion — the old template's fields may not even exist under the new
+    // category, so there is nothing meaningful to carry forward.
+    // Otherwise, this Job's own existing lock governs — never "whatever
+    // the category's active template happens to be today", so that a
+    // later admin edit to the template can never retroactively change
+    // what an already-created Job is held to. See
+    // CategoryTemplatesService.resolveLockedTemplate's own comment.
+    const categoryChanged = dto.categoryId !== undefined && dto.categoryId !== job.categoryId;
+    const template = categoryChanged
+      ? await this.categoryTemplatesService.resolveActiveTemplate(dto.categoryId!)
+      : job.categoryTemplateId
+        ? await this.categoryTemplatesService.resolveLockedTemplate(
+            job.categoryId,
+            job.categoryTemplateId,
+          )
+        : null;
+
+    // A category change requires a fresh, complete categoryData in the
+    // same request — the old answers are meaningless under the new
+    // template and are never silently carried forward. Otherwise, an
+    // update that doesn't mention categoryData leaves the Job's existing
+    // (already-validated) answers untouched.
+    const categoryDataInput = categoryChanged
+      ? dto.categoryData
+      : dto.categoryData !== undefined
+        ? dto.categoryData
+        : ((job.categoryData as Record<string, unknown> | null) ?? undefined);
+
     // Validated against the *effective* post-update state, not just
     // whichever field this particular call happens to touch — a category
     // change must be checked against the new category's rules even if
     // serviceMode/locationCoarse are not part of this same request, and a
     // serviceMode/location-only change must still be checked against
-    // whatever category the job already has. Carrying the untouched
+    // whatever template already governs the job. Carrying the untouched
     // field forward from the existing row (rather than validating only
     // what changed) is what "be careful about partial updates" means in
     // practice here.
-    await this.categoryTemplatesService.assertModeAndLocation(
-      dto.categoryId ?? job.categoryId,
+    const categoryData = this.categoryTemplatesService.assertJobRequirements(
+      template,
       dto.serviceMode !== undefined ? dto.serviceMode : job.serviceMode,
       dto.locationCoarse !== undefined ? dto.locationCoarse : job.locationCoarse,
+      categoryDataInput,
     );
 
     return this.jobsRepository.update(job.id, {
@@ -150,6 +188,15 @@ export class JobsService {
       // Collapsing the two would make removing every deliverable impossible.
       ...(dto.deliverables !== undefined ? { deliverables: dto.deliverables } : {}),
       ...(dto.categoryId ? { category: { connect: { id: dto.categoryId } } } : {}),
+      ...(categoryChanged
+        ? { categoryTemplate: template ? { connect: { id: template.id } } : { disconnect: true } }
+        : {}),
+      ...(categoryChanged || dto.categoryData !== undefined
+        ? {
+            categoryData:
+              categoryData === null ? Prisma.DbNull : (categoryData as Prisma.InputJsonValue),
+          }
+        : {}),
     });
   }
 

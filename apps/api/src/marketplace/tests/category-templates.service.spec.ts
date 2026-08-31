@@ -324,114 +324,338 @@ describe('CategoryTemplatesService', () => {
     });
   });
 
-  describe('assertModeAndLocation — the shared validator Jobs and Direct Contracts both call', () => {
-    it('is a no-op when the category has no active template — today’s unrestricted behaviour is preserved', async () => {
+  describe('resolveActiveTemplate / resolveLockedTemplate — template resolution', () => {
+    it('resolveActiveTemplate delegates to the repository’s active-template lookup', async () => {
       const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue(null);
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({ id: 'template_1' });
 
-      await expect(
-        service.assertModeAndLocation('category_1', 'REMOTE', null),
-      ).resolves.toBeUndefined();
+      const result = await service.resolveActiveTemplate('category_1');
+
+      expect(categoryTemplatesRepository.findActiveForCategory).toHaveBeenCalledWith('category_1');
+      expect(result).toEqual({ id: 'template_1' });
     });
 
-    it('accepts a serviceMode that is one of allowedModes', async () => {
+    it('resolveLockedTemplate re-reads the Job’s own locked version, scoped by category', async () => {
       const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['ONSITE'],
-        locationRequired: false,
-      });
+      categoryTemplatesRepository.findByIdForCategory.mockResolvedValue({ id: 'template_1' });
 
-      await expect(
-        service.assertModeAndLocation('category_1', 'ONSITE', null),
-      ).resolves.toBeUndefined();
+      const result = await service.resolveLockedTemplate('category_1', 'template_1');
+
+      expect(categoryTemplatesRepository.findByIdForCategory).toHaveBeenCalledWith(
+        'category_1',
+        'template_1',
+      );
+      expect(result).toEqual({ id: 'template_1' });
     });
 
-    it('rejects a serviceMode that is not in allowedModes', async () => {
+    it('resolveLockedTemplate throws if a Job’s own lock points nowhere — data corruption, not a normal 404', async () => {
       const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['ONSITE'],
-        locationRequired: false,
-      });
+      categoryTemplatesRepository.findByIdForCategory.mockResolvedValue(null);
 
       await expect(
-        service.assertModeAndLocation('category_1', 'REMOTE', null),
-      ).rejects.toBeInstanceOf(BadRequestException);
+        service.resolveLockedTemplate('category_1', 'template_missing'),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('assertJobRequirements — the shared validator Jobs and Direct Contracts both call', () => {
+    const template = (over: Record<string, unknown> = {}) => ({
+      id: 'template_1',
+      allowedModes: [] as string[],
+      locationRequired: false,
+      fields: [] as Record<string, unknown>[],
+      ...over,
     });
 
-    it('treats an empty allowedModes as "no restriction configured yet", not "no mode is allowed"', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: [],
-        locationRequired: false,
-      });
+    it('a null template (nothing configured) is entirely unrestricted, and categoryData is dropped', () => {
+      const { service } = build();
 
-      // A template exists (unlike the "no active template" case above),
-      // but nothing configured allowedModes yet — any value must pass.
-      await expect(
-        service.assertModeAndLocation('category_1', 'HYBRID', null),
-      ).resolves.toBeUndefined();
+      expect(service.assertJobRequirements(null, 'REMOTE', null, undefined)).toBeNull();
     });
 
-    it('does not reject an absent serviceMode even when allowedModes is configured', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['ONSITE'],
-        locationRequired: false,
-      });
+    it('a null template rejects categoryData that was supplied anyway — there is nothing for it to mean', () => {
+      const { service } = build();
 
-      await expect(
-        service.assertModeAndLocation('category_1', undefined, null),
-      ).resolves.toBeUndefined();
+      expect(() => service.assertJobRequirements(null, undefined, null, { area: 10 })).toThrow(
+        BadRequestException,
+      );
     });
 
-    it('accepts a supplied locationCoarse when locationRequired is true', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['ONSITE'],
-        locationRequired: true,
-      });
+    it('accepts a serviceMode that is one of allowedModes', () => {
+      const { service } = build();
 
-      await expect(
-        service.assertModeAndLocation('category_1', 'ONSITE', 'Bangalore'),
-      ).resolves.toBeUndefined();
+      expect(
+        service.assertJobRequirements(
+          template({ allowedModes: ['ONSITE'] }),
+          'ONSITE',
+          null,
+          undefined,
+        ),
+      ).toEqual({});
     });
 
-    it('rejects a missing locationCoarse when locationRequired is true', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['ONSITE'],
-        locationRequired: true,
-      });
+    it('rejects a serviceMode that is not in allowedModes', () => {
+      const { service } = build();
 
-      await expect(
-        service.assertModeAndLocation('category_1', 'ONSITE', null),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(() =>
+        service.assertJobRequirements(
+          template({ allowedModes: ['ONSITE'] }),
+          'REMOTE',
+          null,
+          undefined,
+        ),
+      ).toThrow(BadRequestException);
     });
 
-    it('leaves locationCoarse optional when locationRequired is false', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
-        allowedModes: ['REMOTE'],
-        locationRequired: false,
-      });
+    it('treats an empty allowedModes as "no restriction configured yet", not "no mode is allowed"', () => {
+      const { service } = build();
 
-      await expect(
-        service.assertModeAndLocation('category_1', 'REMOTE', undefined),
-      ).resolves.toBeUndefined();
+      // A template exists (unlike the null-template case above), but
+      // nothing configured allowedModes yet — any value must pass.
+      expect(
+        service.assertJobRequirements(template({ allowedModes: [] }), 'HYBRID', null, undefined),
+      ).toEqual({});
     });
 
-    it('the hybrid example: only configured modes pass, all three included means all three pass', async () => {
-      const { service, categoryTemplatesRepository } = build();
-      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+    it('does not reject an absent serviceMode even when allowedModes is configured', () => {
+      const { service } = build();
+
+      expect(
+        service.assertJobRequirements(
+          template({ allowedModes: ['ONSITE'] }),
+          undefined,
+          null,
+          undefined,
+        ),
+      ).toEqual({});
+    });
+
+    it('accepts a supplied locationCoarse when locationRequired is true', () => {
+      const { service } = build();
+
+      expect(
+        service.assertJobRequirements(
+          template({ allowedModes: ['ONSITE'], locationRequired: true }),
+          'ONSITE',
+          'Bangalore',
+          undefined,
+        ),
+      ).toEqual({});
+    });
+
+    it('rejects a missing locationCoarse when locationRequired is true', () => {
+      const { service } = build();
+
+      expect(() =>
+        service.assertJobRequirements(
+          template({ allowedModes: ['ONSITE'], locationRequired: true }),
+          'ONSITE',
+          null,
+          undefined,
+        ),
+      ).toThrow(BadRequestException);
+    });
+
+    it('leaves locationCoarse optional when locationRequired is false', () => {
+      const { service } = build();
+
+      expect(
+        service.assertJobRequirements(
+          template({ allowedModes: ['REMOTE'], locationRequired: false }),
+          'REMOTE',
+          undefined,
+          undefined,
+        ),
+      ).toEqual({});
+    });
+
+    it('the hybrid example: only configured modes pass, all three included means all three pass', () => {
+      const { service } = build();
+      const hybridTemplate = template({
         allowedModes: ['ONSITE', 'REMOTE', 'HYBRID'],
         locationRequired: true,
       });
 
       for (const mode of ['ONSITE', 'REMOTE', 'HYBRID'] as const) {
-        await expect(
-          service.assertModeAndLocation('category_1', mode, 'Bangalore'),
-        ).resolves.toBeUndefined();
+        expect(service.assertJobRequirements(hybridTemplate, mode, 'Bangalore', undefined)).toEqual(
+          {},
+        );
       }
+    });
+
+    describe('categoryData', () => {
+      const painting = template({
+        fields: [
+          {
+            key: 'area',
+            label: 'Area',
+            type: 'NUMBER',
+            required: true,
+            options: null,
+            validation: { min: 10, max: 5000 },
+          },
+          {
+            key: 'rooms',
+            label: 'Rooms',
+            type: 'NUMBER',
+            required: false,
+            options: null,
+            validation: null,
+          },
+          {
+            key: 'paint-type',
+            label: 'Paint type',
+            type: 'SELECT',
+            required: false,
+            options: ['emulsion', 'enamel'],
+            validation: null,
+          },
+          {
+            key: 'finished',
+            label: 'Finished',
+            type: 'BOOLEAN',
+            required: false,
+            options: null,
+            validation: null,
+          },
+          {
+            key: 'notes',
+            label: 'Notes',
+            type: 'TEXT',
+            required: false,
+            options: null,
+            validation: { maxLength: 50 },
+          },
+          {
+            key: 'move-in-date',
+            label: 'Move-in date',
+            type: 'DATE',
+            required: false,
+            options: null,
+            validation: null,
+          },
+          {
+            key: 'colours',
+            label: 'Colours',
+            type: 'MULTI_SELECT',
+            required: false,
+            options: ['red', 'blue'],
+            validation: null,
+          },
+        ],
+      });
+
+      it('accepts a fully valid answer set and returns it unchanged', () => {
+        const { service } = build();
+        const data = {
+          area: 200,
+          rooms: 3,
+          'paint-type': 'emulsion',
+          finished: true,
+          notes: 'A short note',
+          'move-in-date': '2026-12-01',
+          colours: ['red', 'blue'],
+        };
+
+        expect(service.assertJobRequirements(painting, undefined, null, data)).toEqual(data);
+      });
+
+      it('a template with zero required fields accepts an absent categoryData, storing an empty object', () => {
+        const { service } = build();
+        const optionalOnly = template({
+          fields: [
+            {
+              key: 'notes',
+              label: 'Notes',
+              type: 'TEXT',
+              required: false,
+              options: null,
+              validation: null,
+            },
+          ],
+        });
+
+        expect(service.assertJobRequirements(optionalOnly, undefined, null, undefined)).toEqual({});
+      });
+
+      it('rejects a missing required field', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, { rooms: 3 }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects an unknown categoryData key', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, { area: 200, ghost: true }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects a NUMBER field given a non-number, and one outside min/max', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, { area: 'a lot' }),
+        ).toThrow(BadRequestException);
+        expect(() => service.assertJobRequirements(painting, undefined, null, { area: 1 })).toThrow(
+          BadRequestException,
+        );
+      });
+
+      it('rejects a SELECT field value outside its configured options', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, {
+            area: 200,
+            'paint-type': 'gold-leaf',
+          }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects a MULTI_SELECT field with a value outside its configured options', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, {
+            area: 200,
+            colours: ['red', 'purple'],
+          }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects a BOOLEAN field given a non-boolean', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, { area: 200, finished: 'yes' }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects a DATE field that does not parse', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, {
+            area: 200,
+            'move-in-date': 'not-a-date',
+          }),
+        ).toThrow(BadRequestException);
+      });
+
+      it('rejects a TEXT field longer than its configured maxLength', () => {
+        const { service } = build();
+
+        expect(() =>
+          service.assertJobRequirements(painting, undefined, null, {
+            area: 200,
+            notes: 'x'.repeat(51),
+          }),
+        ).toThrow(BadRequestException);
+      });
     });
   });
 });

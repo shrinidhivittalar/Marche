@@ -8,6 +8,12 @@ import { assertAdminRole } from '../marketplace-access.util';
 import type { CreateCategoryTemplateDto } from '../dto/category-template.dto';
 import type { CategoryTemplateFieldType, PlatformRole, Prisma, ServiceMode } from '@marche/db';
 
+// The shape every read off CategoryTemplatesRepository returns — derived
+// from the repository's own return type rather than hand-duplicated, so
+// this can never drift from TEMPLATE_FIELDS.
+type ResolvedTemplate = NonNullable<Awaited<ReturnType<CategoryTemplatesRepository['findById']>>>;
+type ResolvedTemplateField = ResolvedTemplate['fields'][number];
+
 const OPTIONS_TYPES: CategoryTemplateFieldType[] = ['SELECT', 'MULTI_SELECT'];
 const VALIDATION_KEYS: Record<CategoryTemplateFieldType, string[]> = {
   NUMBER: ['min', 'max'],
@@ -118,36 +124,89 @@ export class CategoryTemplatesService {
     );
   }
 
-  // ---------- shared validation, used by Jobs and Direct Contracts ----------
+  // ---------- template resolution + shared validation, used by Jobs and Direct Contracts ----------
 
   /**
-   * The one place "does this serviceMode/locationCoarse satisfy this
-   * category's current rules" is decided. Called from both
+   * The category's *current* active template — used only at the moment a
+   * Job's template lock is (re)established: a brand-new Job, or an
+   * existing one whose categoryId is changing. Never called to validate an
+   * already-locked Job against "whatever is active now" — see
+   * resolveLockedTemplate for that case, and Job.categoryTemplateId's own
+   * schema comment for why the distinction matters.
+   */
+  async resolveActiveTemplate(categoryId: string): Promise<ResolvedTemplate | null> {
+    return this.categoryTemplatesRepository.findActiveForCategory(categoryId);
+  }
+
+  /**
+   * Re-reads a Job's own locked template version — the one that governs
+   * it, permanently, regardless of what an admin has done to the category
+   * since. Scoped by categoryId as a defence-in-depth check, the same
+   * reasoning getVersion already applies to an admin-supplied id.
+   *
+   * Should never return null in practice: a template is immutable and
+   * never deleted (CategoryTemplate's own comment), so a Job's own lock
+   * pointing nowhere would mean data corruption, not a normal runtime
+   * condition — hence a thrown Error rather than a caller-handleable
+   * exception.
+   */
+  async resolveLockedTemplate(
+    categoryId: string,
+    categoryTemplateId: string,
+  ): Promise<ResolvedTemplate> {
+    const template = await this.categoryTemplatesRepository.findByIdForCategory(
+      categoryId,
+      categoryTemplateId,
+    );
+    if (!template) {
+      throw new Error(
+        `Job's locked template ${categoryTemplateId} not found for category ${categoryId}`,
+      );
+    }
+    return template;
+  }
+
+  /**
+   * The one place "does this serviceMode/locationCoarse/categoryData
+   * satisfy this template" is decided. Called from both
    * JobsService.create/update and DirectContractsService.create — Direct
    * Contracts writes its Job directly rather than through JobsService, so
    * without a shared method this check would need to be written twice and
    * would drift the first time one of the two call sites changed.
    *
-   * Resolves the category's *current* active template, not one locked to
-   * a specific Job — Job.categoryTemplateId does not exist yet (a later
-   * slice), so "the rules in force right now" is the only definition
-   * available at create/update time.
+   * Takes an already-resolved template rather than a categoryId: the
+   * caller has already decided, via resolveActiveTemplate or
+   * resolveLockedTemplate, which version governs. A null template means a
+   * category with nothing configured — left entirely unrestricted, the
+   * same "not every category needs one on day one" tolerance the public
+   * template read already applies. An empty `allowedModes` on a template
+   * that *does* exist is read the same way: no restriction configured
+   * yet, never "no mode is allowed" — see CategoryTemplate.allowedModes'
+   * own schema comment for why the default has to mean this.
    *
-   * A category with no active template configured is left entirely
-   * unrestricted — the same "not every category needs one on day one"
-   * tolerance the public template read already applies. An empty
-   * `allowedModes` on a template that *does* exist is read the same way:
-   * no restriction configured yet, never "no mode is allowed" — see
-   * CategoryTemplate.allowedModes' own schema comment for why the default
-   * has to mean this.
+   * Returns the categoryData to persist — null exactly when template is
+   * null (nothing to answer against), otherwise a fully-checked object,
+   * per Job.categoryData's own invariant.
    */
-  async assertModeAndLocation(
-    categoryId: string,
+  assertJobRequirements(
+    template: ResolvedTemplate | null,
     serviceMode: ServiceMode | null | undefined,
     locationCoarse: string | null | undefined,
-  ): Promise<void> {
-    const template = await this.categoryTemplatesRepository.findActiveForCategory(categoryId);
-    if (!template) return;
+    categoryData: Record<string, unknown> | null | undefined,
+  ): Record<string, unknown> | null {
+    if (!template) {
+      // categoryData only means something in the context of a template's
+      // field definitions — supplying it for a category with none
+      // configured is a caller mistake worth surfacing, not silently
+      // discarded input. An absent/empty categoryData is fine: there is
+      // nothing to answer.
+      if (categoryData && Object.keys(categoryData).length > 0) {
+        throw new BadRequestException(
+          'categoryData was supplied, but this category has no requirement template to validate it against',
+        );
+      }
+      return null;
+    }
 
     if (
       serviceMode &&
@@ -161,6 +220,115 @@ export class CategoryTemplatesService {
 
     if (template.locationRequired && !locationCoarse) {
       throw new BadRequestException('locationCoarse is required for this category');
+    }
+
+    return this.assertCategoryData(template, categoryData);
+  }
+
+  // Every required field present, every supplied value the right shape for
+  // its field's type, and no key that isn't one of the template's own
+  // fields. Reuses the same type-appropriate checking
+  // assertValidationAppropriate already applies to a field's *definition*
+  // (min/max, minLength/maxLength, options membership), run here against a
+  // Job's submitted *answer* instead.
+  private assertCategoryData(
+    template: ResolvedTemplate,
+    categoryData: Record<string, unknown> | null | undefined,
+  ): Record<string, unknown> {
+    const data = categoryData ?? {};
+    const fieldsByKey = new Map(template.fields.map((field) => [field.key, field]));
+
+    for (const key of Object.keys(data)) {
+      if (!fieldsByKey.has(key)) {
+        throw new BadRequestException(
+          `Unknown categoryData key "${key}" for this category's template`,
+        );
+      }
+    }
+
+    for (const field of template.fields) {
+      const value = data[field.key];
+      if (value === undefined || value === null) {
+        if (field.required) {
+          throw new BadRequestException(`categoryData.${field.key} ("${field.label}") is required`);
+        }
+        continue;
+      }
+      this.assertFieldValue(field, value);
+    }
+
+    return data;
+  }
+
+  private assertFieldValue(field: ResolvedTemplateField, value: unknown): void {
+    switch (field.type) {
+      case 'TEXT': {
+        if (typeof value !== 'string') {
+          throw new BadRequestException(`categoryData.${field.key} must be a string`);
+        }
+        const validation = (field.validation ?? {}) as { minLength?: number; maxLength?: number };
+        if (typeof validation.minLength === 'number' && value.length < validation.minLength) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be at least ${validation.minLength} characters`,
+          );
+        }
+        if (typeof validation.maxLength === 'number' && value.length > validation.maxLength) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be at most ${validation.maxLength} characters`,
+          );
+        }
+        return;
+      }
+      case 'NUMBER': {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          throw new BadRequestException(`categoryData.${field.key} must be a number`);
+        }
+        const validation = (field.validation ?? {}) as { min?: number; max?: number };
+        if (typeof validation.min === 'number' && value < validation.min) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be at least ${validation.min}`,
+          );
+        }
+        if (typeof validation.max === 'number' && value > validation.max) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be at most ${validation.max}`,
+          );
+        }
+        return;
+      }
+      case 'BOOLEAN': {
+        if (typeof value !== 'boolean') {
+          throw new BadRequestException(`categoryData.${field.key} must be a boolean`);
+        }
+        return;
+      }
+      case 'DATE': {
+        if (typeof value !== 'string' || Number.isNaN(new Date(value).getTime())) {
+          throw new BadRequestException(`categoryData.${field.key} must be a valid date`);
+        }
+        return;
+      }
+      case 'SELECT': {
+        const options = (field.options as string[] | null) ?? [];
+        if (typeof value !== 'string' || !options.includes(value)) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be one of: ${options.join(', ')}`,
+          );
+        }
+        return;
+      }
+      case 'MULTI_SELECT': {
+        const options = (field.options as string[] | null) ?? [];
+        if (
+          !Array.isArray(value) ||
+          value.some((v) => typeof v !== 'string' || !options.includes(v))
+        ) {
+          throw new BadRequestException(
+            `categoryData.${field.key} must be an array of: ${options.join(', ')}`,
+          );
+        }
+        return;
+      }
     }
   }
 

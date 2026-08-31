@@ -662,6 +662,11 @@ model CategoryTemplate {
   fields                CategoryTemplateField[]
   categoriesActiveHere  Category[]              @relation("ActiveCategoryTemplate")
 
+  // The Jobs locked to this exact version — see Job.categoryTemplateId's
+  // own comment. Declared only because Prisma requires both sides of the
+  // relation; nothing queries a template's Jobs through here today.
+  jobs Job[]
+
   @@index([categoryId])
   @@map("category_templates")
 }
@@ -911,11 +916,50 @@ model Job {
   // column, legitimately has none — see CategoryTemplate.allowedModes'
   // own comment for why an unconfigured category must not suddenly
   // reject Jobs that were always valid. Validated at create/update time
-  // against the category's *current* active template
-  // (CategoryTemplatesService.assertModeAndLocation) — not stored
-  // against a locked template version, since Job.categoryTemplateId
-  // does not exist yet (a later slice).
+  // against categoryTemplateId — the version this Job is locked to, not
+  // whatever the category's active template happens to be right now. See
+  // categoryTemplateId's own comment for why authority moved there in
+  // Slice 4; Slice 2 originally validated against the category's current
+  // template, which this superseded.
   serviceMode ServiceMode?
+
+  // Locks this Job to the exact CategoryTemplate version that was active
+  // for its category at the moment the lock was set — at creation, and
+  // again whenever categoryId itself changes (JobsService.update). From
+  // that moment on, this is the one template version that governs
+  // serviceMode, locationRequired and categoryData for this Job's entire
+  // lifecycle — never "whatever is active today". An admin creating a new
+  // version afterward must not retroactively change what an
+  // already-created Job is held to; that is the entire reason this column
+  // exists rather than re-resolving the active template on every read.
+  //
+  // Nullable: a category with nothing configured has no version to lock
+  // to, and the Job remains fully unrestricted — permanently, unless
+  // categoryId later changes into a category that does have one. See
+  // categoryData's own comment for the invariant this maintains.
+  //
+  // Restrict, not SetNull: a template is never deleted once created (see
+  // CategoryTemplate's own comment), so this is largely theoretical, but
+  // a Job silently losing its lock because of an unrelated delete
+  // elsewhere would be a worse failure mode than the delete failing
+  // loudly instead — the same reasoning
+  // categories.activeCategoryTemplateId already uses.
+  categoryTemplateId String?
+  categoryTemplate   CategoryTemplate? @relation(fields: [categoryTemplateId], references: [id], onDelete: Restrict)
+
+  // This Job's answers to categoryTemplateId's fields, keyed by
+  // CategoryTemplateField.key. Validated in full — every required field
+  // present and every value the right shape for its field's type —
+  // against that exact locked version, by
+  // CategoryTemplatesService.assertJobRequirements; never against a
+  // template version this Job wasn't created (or re-categorized) under.
+  //
+  // Invariant: categoryData is null if and only if categoryTemplateId is
+  // null. A category with nothing configured has no fields for this to
+  // answer, so there is nothing to store; a Job with a locked template
+  // always has at least an empty object here, even if every field on
+  // that version happens to be optional.
+  categoryData Json?
 
   eventDate DateTime?
 
@@ -969,6 +1013,7 @@ model Job {
 
   @@index([clientProfileId])
   @@index([categoryId])
+  @@index([categoryTemplateId])
   // Serves the provider discovery query: published jobs, newest first.
   @@index([status, publishedAt])
   // Serves the event_date sort and the "happening before X" filter.

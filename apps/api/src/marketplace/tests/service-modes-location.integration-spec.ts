@@ -216,6 +216,7 @@ describe('service modes + location requirement', () => {
       description: 'A REMOTE video editing requirement, location optional.',
       categoryId,
       serviceMode: 'REMOTE',
+      categoryData: { length: 15 },
     });
     created.jobIds.push(job.id);
     expect(job.serviceMode).toBe('REMOTE');
@@ -293,23 +294,23 @@ describe('service modes + location requirement', () => {
       locationRequired: true,
     });
 
-    // Publishing this pre-existing Job is untouched by Slice 2 — publish()
-    // does not re-run mode/location validation, so a legacy Job is not
-    // retroactively blocked from being published just because a template
-    // now exists for its category.
+    // Publishing this pre-existing Job is untouched — publish() does not
+    // re-run mode/location validation, so a legacy Job is not retroactively
+    // blocked from being published just because a template now exists for
+    // its category.
     const published = await jobs.publish(clientUserId, job.id);
     expect(published.status).toBe('PUBLISHED');
 
-    // An update that does not touch serviceMode/locationCoarse must not be
-    // blocked either — the effective state (still null/null) is compared
-    // against the new template and fails locationRequired only once the
-    // caller actually tries to change something meaningful. Since neither
-    // field is being changed here, but the effective state genuinely does
-    // violate locationRequired now that a template exists, this update path
-    // is expected to enforce the current rule going forward.
+    // Slice 4 revised this boundary: a Job with no template lock stays
+    // governed by that same null lock for its entire lifecycle, unless its
+    // categoryId itself changes — never by "whatever the category's active
+    // template happens to be today". So an update that touches neither
+    // categoryId, serviceMode, locationCoarse nor categoryData is NOT
+    // retroactively blocked by the template created afterward, even though
+    // that template now requires a location this Job has never had.
     await expect(
       jobs.update(clientUserId, job.id, { title: `${RUN} legacy requirement, retitled` }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toBeDefined();
   }, 30_000);
 
   it('DirectContracts.create is validated by the exact same shared rule as Jobs — same rejection, same requirement', async () => {
@@ -358,6 +359,7 @@ describe('service modes + location requirement', () => {
       deliveryDays: 5,
       serviceMode: 'ONSITE',
       locationCoarse: 'HSR Layout, Bangalore',
+      categoryData: { area: 400 },
     });
     const offerJob = await prisma.client.job.findUniqueOrThrow({ where: { id: offer.jobId } });
     created.jobIds.push(offerJob.id);

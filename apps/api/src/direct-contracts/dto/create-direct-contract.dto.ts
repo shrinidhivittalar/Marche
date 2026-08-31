@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -71,10 +72,17 @@ export class CreateDirectContractDto {
   locationCoarse?: string;
 
   // Same rules as an ordinary Job's serviceMode — validated against the
-  // category's current active template by the same shared
-  // CategoryTemplatesService.assertModeAndLocation call JobsService uses.
+  // template this offer locks to by the same shared
+  // CategoryTemplatesService.assertJobRequirements call JobsService uses.
   @ApiPropertyOptional({ enum: ServiceMode })
   @IsOptional()
   @IsEnum(ServiceMode)
   serviceMode?: ServiceMode;
+
+  // Same rules as an ordinary Job's categoryData — see
+  // CreateJobDto.categoryData's own comment.
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  categoryData?: Record<string, unknown>;
 }

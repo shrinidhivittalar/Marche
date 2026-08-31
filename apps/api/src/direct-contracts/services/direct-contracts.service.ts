@@ -13,6 +13,7 @@ import { CategoryTemplatesService } from '../../marketplace/services/category-te
 import { ProposalsRepository } from '../../proposals/repositories/proposals.repository';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import type { Prisma } from '@marche/db';
 import {
   assertClientRole,
   assertEmailVerified,
@@ -79,16 +80,18 @@ export class DirectContractsService {
       throw new BadRequestException('Category not found');
     }
 
-    // Same shared check JobsService.create/update use — not a duplicated
-    // rule. See CategoryTemplatesService.assertModeAndLocation's own
-    // comment for why this has to live in exactly one place: this Job is
-    // created directly (tx.job.create below), never through
+    // Same shared resolve-lock-validate JobsService.create uses — not a
+    // duplicated rule. See CategoryTemplatesService.assertJobRequirements'
+    // own comment for why this has to live in exactly one place: this Job
+    // is created directly (tx.job.create below), never through
     // JobsService.create, so a check written only there would silently
     // never run for a direct contract.
-    await this.categoryTemplatesService.assertModeAndLocation(
-      dto.categoryId,
+    const template = await this.categoryTemplatesService.resolveActiveTemplate(dto.categoryId);
+    const categoryData = this.categoryTemplatesService.assertJobRequirements(
+      template,
       dto.serviceMode,
       dto.locationCoarse,
+      dto.categoryData,
     );
 
     // The job and its proposal come into existence together or not at all —
@@ -110,6 +113,8 @@ export class DirectContractsService {
           budgetMax: dto.price,
           locationCoarse: dto.locationCoarse,
           serviceMode: dto.serviceMode,
+          categoryTemplateId: template?.id,
+          categoryData: (categoryData as Prisma.InputJsonValue | undefined) ?? undefined,
           eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
           status: 'DRAFT',
           isDirect: true,

@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsEnum,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -149,16 +150,27 @@ export class CreateJobDto {
   @MaxLength(120)
   locationCoarse?: string;
 
-  // Validated against the category's current active template's
-  // allowedModes in JobsService — see
-  // CategoryTemplatesService.assertModeAndLocation. A category with no
-  // active template configured, or a template with an empty allowedModes,
-  // accepts any value here unrestricted; the enum check below is only the
-  // structural "is this a real ServiceMode" boundary.
+  // Validated against the template this Job is (or is about to be) locked
+  // to in JobsService — see CategoryTemplatesService.assertJobRequirements.
+  // A category with no active template configured, or a template with an
+  // empty allowedModes, accepts any value here unrestricted; the enum
+  // check below is only the structural "is this a real ServiceMode"
+  // boundary.
   @ApiPropertyOptional({ enum: ServiceMode })
   @IsOptional()
   @IsEnum(ServiceMode)
   serviceMode?: ServiceMode;
+
+  // This category's requirement answers, keyed by
+  // CategoryTemplateField.key — validated in full against the locked
+  // template's fields in JobsService (required fields present, each value
+  // the right shape for its field's type). Structural shape only here: a
+  // plain object. A category with no active template accepts none of
+  // this at all — see assertJobRequirements' own comment.
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  categoryData?: Record<string, unknown>;
 
   // Not validated as future-dated. A client legitimately posts about an
   // event already under way, and a hard "must be in the future" check

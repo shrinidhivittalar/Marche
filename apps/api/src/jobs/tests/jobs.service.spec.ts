@@ -68,7 +68,9 @@ function build(jobOverrides: Record<string, unknown> = {}) {
   // See the dedicated 'service mode + location rules' describe block below
   // for the enforcing path.
   const categoryTemplatesService = {
-    assertModeAndLocation: jest.fn().mockResolvedValue(undefined),
+    resolveActiveTemplate: jest.fn().mockResolvedValue(null),
+    resolveLockedTemplate: jest.fn().mockResolvedValue(null),
+    assertJobRequirements: jest.fn().mockReturnValue(null),
   };
   const mediaService = {
     assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
@@ -168,7 +170,7 @@ describe('JobsService', () => {
   });
 
   describe('service mode + location rules', () => {
-    it('create resolves the category’s active template before writing', async () => {
+    it('create resolves the category’s active template and validates against it before writing', async () => {
       const { service, categoryTemplatesService } = build();
 
       await service.create('user_1', {
@@ -177,18 +179,20 @@ describe('JobsService', () => {
         locationCoarse: 'Bangalore',
       });
 
-      expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
-        'cat_1',
+      expect(categoryTemplatesService.resolveActiveTemplate).toHaveBeenCalledWith('cat_1');
+      expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+        null,
         'ONSITE',
         'Bangalore',
+        undefined,
       );
     });
 
     it('propagates the shared validator’s rejection — a category with rules configured refuses an invalid serviceMode', async () => {
       const { service, categoryTemplatesService, jobs } = build();
-      categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
-        new BadRequestException('serviceMode must be one of: ONSITE for this category'),
-      );
+      categoryTemplatesService.assertJobRequirements.mockImplementation(() => {
+        throw new BadRequestException('serviceMode must be one of: ONSITE for this category');
+      });
 
       await expect(
         service.create('user_1', { ...dto, serviceMode: 'REMOTE' }),
@@ -198,10 +202,10 @@ describe('JobsService', () => {
 
     it('a category with no active template (or an empty allowedModes) accepts any serviceMode — compatibility preserved', async () => {
       const { service, categoryTemplatesService, jobs } = build();
-      // The default mock already resolves undefined (no-op); this test
-      // exists to document the behaviour explicitly, not just rely on the
+      // The default mock already resolves null (no-op); this test exists
+      // to document the behaviour explicitly, not just rely on the
       // fixture default.
-      categoryTemplatesService.assertModeAndLocation.mockResolvedValue(undefined);
+      categoryTemplatesService.assertJobRequirements.mockReturnValue(null);
 
       await expect(
         service.create('user_1', { ...dto, serviceMode: 'HYBRID' }),
@@ -223,6 +227,33 @@ describe('JobsService', () => {
       await service.create('user_1', { ...dto, serviceMode: 'REMOTE' });
 
       expect(jobs.create.mock.calls[0][0].serviceMode).toBe('REMOTE');
+    });
+
+    it('locks the new Job to the resolved template and stores the validated categoryData', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      categoryTemplatesService.resolveActiveTemplate.mockResolvedValue({
+        id: 'template_1',
+        allowedModes: [],
+        locationRequired: false,
+        fields: [],
+      });
+      categoryTemplatesService.assertJobRequirements.mockReturnValue({ area: 200 });
+
+      await service.create('user_1', { ...dto, categoryData: { area: 200 } });
+
+      const written = jobs.create.mock.calls[0][0];
+      expect(written.categoryTemplateId).toBe('template_1');
+      expect(written.categoryData).toEqual({ area: 200 });
+    });
+
+    it('a category with nothing configured never locks the new Job to a template', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', dto);
+
+      const written = jobs.create.mock.calls[0][0];
+      expect(written.categoryTemplateId).toBeUndefined();
+      expect(written.categoryData).toBeUndefined();
     });
   });
 
@@ -368,9 +399,10 @@ describe('JobsService', () => {
     });
 
     describe('service mode + location rules', () => {
-      it('a title-only edit validates against the job’s existing category and carries its existing serviceMode/location forward unchanged', async () => {
+      it('a title-only edit re-reads the Job’s own locked template — never the category’s current active one — and carries existing serviceMode/location forward unchanged', async () => {
         const { service, categoryTemplatesService } = build({
           categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
           serviceMode: 'ONSITE',
           locationCoarse: 'Bangalore',
         });
@@ -379,57 +411,70 @@ describe('JobsService', () => {
 
         // Neither serviceMode nor locationCoarse was part of this request,
         // but the *effective* state — the job's own current values — is
-        // still what gets validated. This is the "be careful about
-        // partial updates" case: a category change elsewhere could make
-        // these stale values invalid, and that must still be caught even
-        // when this particular call never mentions them.
-        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+        // still what gets validated, against the Job's own lock. This is
+        // the "be careful about partial updates" case: an admin creating a
+        // new template version elsewhere must never retroactively change
+        // what this already-locked Job is held to.
+        expect(categoryTemplatesService.resolveLockedTemplate).toHaveBeenCalledWith(
           'cat_1',
+          'template_1',
+        );
+        expect(categoryTemplatesService.resolveActiveTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
           'ONSITE',
           'Bangalore',
+          undefined,
         );
       });
 
-      it('changing categoryId validates against the NEW category, not the job’s existing one', async () => {
+      it('changing categoryId re-locks to the NEW category’s current active template, not the job’s existing lock', async () => {
         const { service, categoryTemplatesService, categories } = build({
           categoryId: 'cat_old',
+          categoryTemplateId: 'template_old',
           serviceMode: 'ONSITE',
         });
         categories.findById.mockResolvedValue({ id: 'cat_new' });
 
         await service.update('user_1', 'job_1', { categoryId: 'cat_new' });
 
-        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
-          'cat_new',
+        expect(categoryTemplatesService.resolveActiveTemplate).toHaveBeenCalledWith('cat_new');
+        // The old lock is never re-read on a category change — the exact
+        // mistake "be careful about partial updates" warns against.
+        expect(categoryTemplatesService.resolveLockedTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
           'ONSITE',
           undefined,
-        );
-        // Never validated against the old category — the exact mistake
-        // "be careful about partial updates" warns against.
-        expect(categoryTemplatesService.assertModeAndLocation).not.toHaveBeenCalledWith(
-          'cat_old',
-          expect.anything(),
-          expect.anything(),
+          undefined,
         );
       });
 
-      it('changing only serviceMode validates it against the job’s current category', async () => {
-        const { service, categoryTemplatesService } = build({ categoryId: 'cat_1' });
+      it('changing only serviceMode validates it against the job’s own locked template', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
+        });
 
         await service.update('user_1', 'job_1', { serviceMode: 'REMOTE' });
 
-        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+        expect(categoryTemplatesService.resolveLockedTemplate).toHaveBeenCalledWith(
           'cat_1',
+          'template_1',
+        );
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
           'REMOTE',
+          undefined,
           undefined,
         );
       });
 
       it('propagates the shared validator’s rejection on update, writing nothing', async () => {
         const { service, categoryTemplatesService, jobs } = build();
-        categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
-          new BadRequestException('locationCoarse is required for this category'),
-        );
+        categoryTemplatesService.assertJobRequirements.mockImplementation(() => {
+          throw new BadRequestException('locationCoarse is required for this category');
+        });
 
         await expect(
           service.update('user_1', 'job_1', { serviceMode: 'ONSITE' }),
@@ -437,9 +482,10 @@ describe('JobsService', () => {
         expect(jobs.update).not.toHaveBeenCalled();
       });
 
-      it('an existing Job with no serviceMode remains valid — null carries forward, not rejected', async () => {
-        const { service, categoryTemplatesService } = build({
+      it('an existing Job with no template lock remains permanently unrestricted — never retroactively invalidated by a template created later', async () => {
+        const { service, categoryTemplatesService, jobs } = build({
           categoryId: 'cat_1',
+          categoryTemplateId: null,
           serviceMode: null,
           locationCoarse: null,
         });
@@ -447,10 +493,56 @@ describe('JobsService', () => {
         await expect(
           service.update('user_1', 'job_1', { title: 'Legacy job, untouched otherwise' }),
         ).resolves.toBeDefined();
-        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
-          'cat_1',
+        // No lock to re-read, category unchanged — the Job's governing
+        // template is null, exactly as it always was.
+        expect(categoryTemplatesService.resolveLockedTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.resolveActiveTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
           null,
           null,
+          null,
+          undefined,
+        );
+        expect(jobs.update).toHaveBeenCalled();
+      });
+
+      it('categoryData is left untouched when an update does not mention it', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
+          categoryData: { area: 200 },
+        });
+
+        await service.update('user_1', 'job_1', { title: 'Only the title changes' });
+
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          undefined,
+          undefined,
+          { area: 200 },
+        );
+      });
+
+      it('a category change discards the old categoryData outright, requiring fresh answers for the new template', async () => {
+        const { service, categoryTemplatesService, categories } = build({
+          categoryId: 'cat_old',
+          categoryTemplateId: 'template_old',
+          categoryData: { rooms: 3 },
+        });
+        categories.findById.mockResolvedValue({ id: 'cat_new' });
+
+        await service.update('user_1', 'job_1', {
+          categoryId: 'cat_new',
+          categoryData: { eventDate: '2026-12-01' },
+        });
+
+        // The old answers never reach the validator — only what this
+        // request itself supplied for the new category.
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          undefined,
+          undefined,
+          { eventDate: '2026-12-01' },
         );
       });
     });

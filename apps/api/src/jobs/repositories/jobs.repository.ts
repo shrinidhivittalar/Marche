@@ -55,6 +55,12 @@ const JOB_FIELDS = {
   locationCoarse: true,
   // Public — the same visibility tier as locationCoarse, never locationExact.
   serviceMode: true,
+  // Which template version's rules this Job is locked to, and its answers
+  // to that version's fields — both public, the same tier as
+  // deliverables: requirement detail a provider needs to decide whether to
+  // bid, not sensitive like locationExact.
+  categoryTemplateId: true,
+  categoryData: true,
   eventDate: true,
   eventStartTime: true,
   eventEndTime: true,
