@@ -95,6 +95,7 @@ model User {
   capabilities       UserCapability[]
   verifications      Verification[]
   authMethods        AuthenticationMethod[]
+  categoryTemplatesCreated CategoryTemplate[]
 
   @@map("users")
 }
@@ -577,8 +578,128 @@ model Category {
   services Service[]
   jobs     Job[]
 
+  // Every version an admin has ever created for this category, immutable
+  // and never deleted — the version history. Named distinctly from the
+  // pointer below because Prisma needs two relations between the same pair
+  // of models disambiguated, the same reason Connection needs
+  // "ClientConnections"/"ProviderConnections" for its two relations to
+  // Profile.
+  templates CategoryTemplate[] @relation("CategoryTemplateVersions")
+
+  // Which one of this category's own templates is current. Nullable: a
+  // category may exist with nothing configured yet — not every category
+  // needs one on day one, and nothing today requires one to exist.
+  // Restrict rather than SetNull: a template is never deleted once
+  // created (see CategoryTemplate's own comment), so this FK's onDelete
+  // behavior is largely theoretical, but Restrict is the safe default —
+  // silently unpointing a category from its active template because of an
+  // unrelated deletion attempt elsewhere would be a worse failure mode
+  // than the delete simply failing.
+  activeCategoryTemplateId String?
+  activeCategoryTemplate   CategoryTemplate? @relation("ActiveCategoryTemplate", fields: [activeCategoryTemplateId], references: [id], onDelete: Restrict)
+
+  // Deliberately no separate isActive/status column here. A "deactivated"
+  // category is a soft-deleted one — the same reasoning Service's own
+  // schema comment already gives for not splitting status and visibility
+  // into two fields: two lifecycle signals would let a category be
+  // deleted-but-active or active-but-hidden with no defined meaning.
+
   @@index([parentId])
+  @@index([activeCategoryTemplateId])
   @@map("categories")
+}
+
+// One configuration version for a Category's requirement form. Immutable
+// once created — nothing here is ever updated or deleted. A "change" is
+// always a brand new row, created and activated (via
+// Category.activeCategoryTemplateId) atomically in the same transaction —
+// see CategoryTemplatesService.createAndActivate. This is the entire
+// versioning strategy: because a version can never change out from under
+// anything that already points at it, a future Job.categoryTemplateId
+// (not part of this slice) can reference one forever and always render
+// correctly, with no extra work required here.
+//
+// Deliberately no draft/publish workflow. Creating a version is
+// activating it — the same "created complete, not built incrementally"
+// shape CreateJobDto already uses, and for the same reason: a half-built
+// template configuration is a form the admin UI can hold in local state
+// until it's ready to submit, not something this table needs to represent.
+model CategoryTemplate {
+  id String @id @default(uuid())
+
+  categoryId String
+  category   Category @relation("CategoryTemplateVersions", fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Who configured this version — an audit trail, not an authorization
+  // check (that already happened before this row was ever created). No
+  // onDelete override: a user is never hard-deleted in this application
+  // (see profiles.repository.ts's own comment on the same point), so this
+  // is a defensive default rather than a modelled cascade.
+  createdByUserId String
+  createdByUser   User   @relation(fields: [createdByUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  fields                CategoryTemplateField[]
+  categoriesActiveHere  Category[]              @relation("ActiveCategoryTemplate")
+
+  @@index([categoryId])
+  @@map("category_templates")
+}
+
+enum CategoryTemplateFieldType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  DATE
+}
+
+// One question on a CategoryTemplate version. Immutable alongside its
+// parent template — see CategoryTemplate's own comment.
+model CategoryTemplateField {
+  id String @id @default(uuid())
+
+  categoryTemplateId String
+  categoryTemplate   CategoryTemplate @relation(fields: [categoryTemplateId], references: [id], onDelete: Cascade)
+
+  // Machine identifier, same lowercase-word shape Category.slug already
+  // validates at the DTO level — this is the key a future
+  // Job.categoryData (Slice 4) will be keyed by.
+  key   String
+  label String
+
+  type CategoryTemplateFieldType
+
+  required Boolean @default(false)
+
+  // Explicit, admin-supplied — same pattern as Category.displayOrder and
+  // every other *Order column in this schema (PortfolioImage, ServiceImage,
+  // JobAttachment). Because templates are immutable, "reordering" a field
+  // set is just creating a new template version with different values
+  // here — no separate reorder endpoint exists or is needed.
+  order Int @default(0)
+
+  // SELECT/MULTI_SELECT only — a plain JSON array of choice strings. No
+  // join table: these are not shared entities, nothing else references
+  // them, and a table would buy nothing but a join, the same reasoning
+  // Service.tags already uses for free-text values.
+  options Json?
+
+  // A small, fixed, type-dependent shape only — { min, max } for NUMBER,
+  // { minLength, maxLength } for TEXT — never a JSON-Schema document or a
+  // rules DSL. Checked structurally against `type` at template-creation
+  // time (CategoryTemplatesService); validating a Job's own submitted
+  // categoryData against this is Slice 4's job, not this one's.
+  validation Json?
+
+  // One key per template version. Two fields in the same version colliding
+  // on their machine key is a mistake, not a feature — same reasoning as
+  // Proposal's (jobId, providerProfileId) uniqueness.
+  @@unique([categoryTemplateId, key])
+  @@index([categoryTemplateId])
+  @@map("category_template_fields")
 }
 
 // A provider's discoverable offering.

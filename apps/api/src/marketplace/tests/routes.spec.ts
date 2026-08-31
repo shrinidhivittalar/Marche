@@ -3,6 +3,7 @@ import { RequestMethod } from '@nestjs/common';
 import { ServicesController } from '../controllers/services.controller';
 import { CategoriesController } from '../controllers/categories.controller';
 import { MarketplaceController } from '../controllers/marketplace.controller';
+import { CategoryTemplatesController } from '../controllers/category-templates.controller';
 
 // Nest builds its router from the decorator metadata below, in declaration
 // order. A literal path declared after a parameterised one on the same verb
@@ -76,6 +77,46 @@ describe('marketplace route registration', () => {
         .filter((r) => r.method !== RequestMethod.GET)
         .map((r) => `${RequestMethod[r.method]} ${r.path}`);
       expect(mutations).toEqual(['POST /', 'PATCH :id', 'DELETE :id']);
+    });
+  });
+
+  describe('CategoryTemplatesController', () => {
+    const routes = routesOf(CategoryTemplatesController);
+    const prototype = CategoryTemplatesController.prototype as Record<string, unknown>;
+    const guardedHandlers = (handler: string) =>
+      Boolean(Reflect.getMetadata('__guards__', prototype[handler] as object));
+
+    it('exposes the public active-template read and the admin version routes', () => {
+      const signature = routes.map((r) =>
+        `${RequestMethod[r.method]} /${r.path}`.replace(/\/$/, ''),
+      );
+      expect(signature).toEqual(
+        expect.arrayContaining([
+          'GET /:slug/template',
+          'GET /:id/templates',
+          'GET /:id/templates/:templateId',
+          'POST /:id/templates',
+        ]),
+      );
+    });
+
+    it('leaves the active-template read unguarded — public, like GET /categories/:slug', () => {
+      expect(guardedHandlers('getActive')).toBe(false);
+    });
+
+    it('guards every admin route', () => {
+      expect(guardedHandlers('listVersions')).toBe(true);
+      expect(guardedHandlers('getVersion')).toBe(true);
+      expect(guardedHandlers('create')).toBe(true);
+    });
+
+    // A "change" is always a new version — no route may ever mutate or
+    // remove one that already exists.
+    it('exposes no PATCH, PUT or DELETE for templates or fields', () => {
+      const verbs = routes.map((r) => r.method);
+      expect(verbs).not.toContain(RequestMethod.PATCH);
+      expect(verbs).not.toContain(RequestMethod.PUT);
+      expect(verbs).not.toContain(RequestMethod.DELETE);
     });
   });
 
