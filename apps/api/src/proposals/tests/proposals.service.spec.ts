@@ -69,6 +69,9 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const connections = {
     create: jest.fn().mockResolvedValue({ id: 'connection_1' }),
   };
+  const priceNegotiations = {
+    hasPending: jest.fn().mockResolvedValue(false),
+  };
   const profiles = {
     findByUserId: jest.fn().mockResolvedValue(PROVIDER),
     // Maps a profileId back to the User behind it, the way the real
@@ -118,6 +121,7 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
   const service = new ProposalsService(
     proposals as never,
     connections as never,
+    priceNegotiations as never,
     profiles as never,
     jobs as never,
     jobsService as never,
@@ -130,6 +134,7 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
     service,
     proposals,
     connections,
+    priceNegotiations,
     profiles,
     jobs,
     jobsService,
@@ -350,6 +355,16 @@ describe('ProposalsService', () => {
         providerProfileId: 'provider_profile',
       });
       expect(connection).toEqual({ id: 'connection_1' });
+    });
+
+    it('refuses to accept while a price negotiation round is still pending', async () => {
+      const { service, priceNegotiations, connections } = asClient();
+      priceNegotiations.hasPending.mockResolvedValue(true);
+
+      await expect(service.accept('user_2', 'proposal_1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(connections.create).not.toHaveBeenCalled();
     });
 
     it('rejects self-acceptance defensively — canonical User.id, not Profile.id (Module 01 Slice 2)', async () => {

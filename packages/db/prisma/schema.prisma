@@ -377,6 +377,8 @@ model Profile {
   proposals           Proposal[]
   clientConnections   Connection[]    @relation("ClientConnections")
   providerConnections Connection[]    @relation("ProviderConnections")
+  priceNegotiationsProposed  ProposalPriceNegotiation[] @relation("PriceNegotiationProposedBy")
+  priceNegotiationsResponded ProposalPriceNegotiation[] @relation("PriceNegotiationRespondedBy")
   reviewsReceived     Review[]
   savedProviders      SavedProvider[] @relation("ClientSavedProviders")
   savedByClients      SavedProvider[] @relation("ProviderSavedByClients")
@@ -900,6 +902,20 @@ model Proposal {
   attachments ProposalAttachment[]
   connection  Connection?
 
+  // The officially agreed commercial terms, if the two parties negotiated
+  // one — null until a ProposalPriceNegotiation round is accepted.
+  // Deliberately separate from proposedPrice rather than overwriting it:
+  // proposedPrice stays the immutable snapshot of what was originally
+  // offered (see its own comment above), and agreedPrice is the current
+  // authoritative figure downstream consumers (Payments today; Contracts
+  // later) should read. Reading agreedPrice ?? proposedPrice is the
+  // intended pattern — see PriceNegotiationsService and
+  // PaymentsService.createOrder.
+  agreedPrice   Decimal?  @db.Decimal(10, 2)
+  agreedPriceAt DateTime?
+
+  priceNegotiations ProposalPriceNegotiation[]
+
   // The rule the whole module turns on: one proposal per provider per
   // requirement. Absolute, not partial — so withdrawal is final for that
   // requirement. A partial index (WHERE status = 'SUBMITTED') would allow
@@ -917,6 +933,64 @@ model Proposal {
   // The mirror: a provider's own proposals, optionally filtered.
   @@index([providerProfileId, status])
   @@map("proposals")
+}
+
+enum ProposalPriceNegotiationStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+// One round of a price negotiation on a Proposal. Append-only: nothing here
+// is ever updated except a still-PROPOSED row's own status/response fields
+// on its own decision, so the original amount of every round — including
+// the very first one, which recorded what the client saw before any
+// negotiation began — stays recoverable forever. This is the audit trail
+// the production invariant requires; Proposal.agreedPrice is only ever a
+// pointer to "whichever accepted row is authoritative right now", never a
+// replacement for the rows themselves.
+//
+// Scoped to one Proposal, not to the Job, deliberately: a Job can carry
+// many Proposals (one per provider), and each is its own negotiation with
+// its own history. Nothing here can cross-contaminate another provider's
+// negotiation on the same Job, because there is no path from one Proposal's
+// rows to another's.
+model ProposalPriceNegotiation {
+  id String @id @default(uuid())
+
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  // Whichever party asked for this amount — the client who owns the Job, or
+  // the provider who owns the Proposal. Either may propose; see
+  // PriceNegotiationsService for the ownership check that enforces this is
+  // always one of exactly those two.
+  proposedByProfileId String
+  proposedByProfile   Profile @relation("PriceNegotiationProposedBy", fields: [proposedByProfileId], references: [id])
+
+  amount Decimal @db.Decimal(10, 2)
+
+  status ProposalPriceNegotiationStatus @default(PROPOSED)
+
+  // Set together, only on a decision — never on propose. Null on a still-
+  // pending or withdrawn round (nobody but the proposer acted on it).
+  respondedByProfileId String?
+  respondedByProfile   Profile?  @relation("PriceNegotiationRespondedBy", fields: [respondedByProfileId], references: [id])
+  respondedAt          DateTime?
+
+  createdAt DateTime @default(now())
+
+  // At most one live ask per Proposal at a time — enforced as a partial
+  // unique index in the migration (Prisma cannot express a WHERE-qualified
+  // unique index directly), the same pattern module5's own header used for
+  // the reasons a plain, non-partial constraint here would not work. This
+  // is what makes "propose a second round while one is still pending"
+  // actually impossible under concurrency, not just checked first and
+  // hoped for: two simultaneous proposals on the same Proposal race on this
+  // index, and the loser gets a 409, not a silently-overwritten round.
+  @@index([proposalId, status])
+  @@map("proposal_price_negotiations")
 }
 
 // A file the provider attached to their offer — a quote, a sample, a shot

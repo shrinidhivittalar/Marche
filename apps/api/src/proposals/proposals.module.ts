@@ -6,10 +6,13 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { ProposalsController } from './controllers/proposals.controller';
 import { JobProposalsController } from './controllers/job-proposals.controller';
 import { ConnectionsController } from './controllers/connections.controller';
+import { PriceNegotiationsController } from './controllers/price-negotiations.controller';
 import { ProposalsRepository } from './repositories/proposals.repository';
 import { ConnectionsRepository } from './repositories/connections.repository';
+import { PriceNegotiationsRepository } from './repositories/price-negotiations.repository';
 import { ProposalsService } from './services/proposals.service';
 import { ConnectionsService } from './services/connections.service';
+import { PriceNegotiationsService } from './services/price-negotiations.service';
 
 // ProfilesRepository, JobsRepository and JobsService come from the modules
 // that own them rather than being re-registered here, so there is one
@@ -24,8 +27,20 @@ import { ConnectionsService } from './services/connections.service';
 // or a service — it reads a requirement, which already did.
 @Module({
   imports: [ProfilesModule, JobsModule, MediaModule, NotificationsModule],
-  controllers: [ProposalsController, JobProposalsController, ConnectionsController],
-  providers: [ProposalsRepository, ConnectionsRepository, ProposalsService, ConnectionsService],
+  controllers: [
+    ProposalsController,
+    JobProposalsController,
+    ConnectionsController,
+    PriceNegotiationsController,
+  ],
+  providers: [
+    ProposalsRepository,
+    ConnectionsRepository,
+    PriceNegotiationsRepository,
+    ProposalsService,
+    ConnectionsService,
+    PriceNegotiationsService,
+  ],
   // ConnectionsService (party-checked single-connection read, including its
   // status) and ConnectionsRepository (also unpaginated id listing) are
   // exported for both MessagesModule and ReviewsModule — messaging is
