@@ -67,6 +67,12 @@ function build() {
   const categoriesRepository = {
     findById: jest.fn().mockResolvedValue({ id: 'category_1', name: 'Photography' }),
   };
+  // No active template by default — every existing test exercises the
+  // unrestricted path. See the dedicated 'service mode + location rules'
+  // describe block for the enforcing path.
+  const categoryTemplatesService = {
+    assertModeAndLocation: jest.fn().mockResolvedValue(undefined),
+  };
   const proposalsRepository = {
     findById: jest.fn().mockResolvedValue(SUBMITTED_PROPOSAL),
     transitionFromSubmitted: jest.fn().mockResolvedValue(1),
@@ -94,6 +100,7 @@ function build() {
     profilesRepository as never,
     jobsRepository as never,
     categoriesRepository as never,
+    categoryTemplatesService as never,
     proposalsRepository as never,
     connectionsRepository as never,
     notificationsService as never,
@@ -102,6 +109,7 @@ function build() {
   return {
     service,
     profilesRepository,
+    categoryTemplatesService,
     jobsRepository,
     categoriesRepository,
     proposalsRepository,
@@ -144,6 +152,68 @@ describe('DirectContractsService.create', () => {
       expect.objectContaining({ proposalId: 'proposal_1' }),
     );
     expect(result.id).toBe('proposal_1');
+  });
+
+  describe('service mode + location rules', () => {
+    it('calls the same shared validator JobsService uses — not a second implementation of the rule', async () => {
+      const { service, categoryTemplatesService } = build();
+
+      await service.create('user_client', {
+        ...DTO,
+        serviceMode: 'ONSITE',
+        locationCoarse: 'Pune',
+      });
+
+      expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+        'category_1',
+        'ONSITE',
+        'Pune',
+      );
+    });
+
+    it('propagates the shared validator’s rejection and never reaches the transaction', async () => {
+      const { service, categoryTemplatesService } = build();
+      categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
+        new BadRequestException('serviceMode must be one of: REMOTE for this category'),
+      );
+      const jobCallsBefore = TX.job.create.mock.calls.length;
+      const proposalCallsBefore = TX.proposal.create.mock.calls.length;
+
+      await expect(
+        service.create('user_client', { ...DTO, serviceMode: 'ONSITE' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(TX.job.create.mock.calls.length).toBe(jobCallsBefore);
+      expect(TX.proposal.create.mock.calls.length).toBe(proposalCallsBefore);
+    });
+
+    it('a category with nothing configured accepts any serviceMode — compatibility preserved', async () => {
+      const { service } = build();
+
+      await expect(
+        service.create('user_client', { ...DTO, serviceMode: 'HYBRID' }),
+      ).resolves.toBeDefined();
+    });
+
+    it('rejects a missing locationCoarse when the category requires one, before writing anything', async () => {
+      const { service, categoryTemplatesService } = build();
+      categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
+        new BadRequestException('locationCoarse is required for this category'),
+      );
+      const jobCallsBefore = TX.job.create.mock.calls.length;
+
+      await expect(service.create('user_client', DTO)).rejects.toBeInstanceOf(BadRequestException);
+      expect(TX.job.create.mock.calls.length).toBe(jobCallsBefore);
+    });
+
+    it('writes serviceMode onto the created job', async () => {
+      const { service } = build();
+
+      await service.create('user_client', { ...DTO, serviceMode: 'REMOTE' });
+
+      expect(TX.job.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ serviceMode: 'REMOTE' }) }),
+      );
+    });
   });
 
   it('rejects a client with an unverified email', async () => {

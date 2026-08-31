@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
+import { CategoryTemplatesService } from '../../marketplace/services/category-templates.service';
 import { ProposalsRepository } from '../../proposals/repositories/proposals.repository';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
@@ -43,6 +44,7 @@ export class DirectContractsService {
     private readonly profilesRepository: ProfilesRepository,
     private readonly jobsRepository: JobsRepository,
     private readonly categoriesRepository: CategoriesRepository,
+    private readonly categoryTemplatesService: CategoryTemplatesService,
     private readonly proposalsRepository: ProposalsRepository,
     private readonly connectionsRepository: ConnectionsRepository,
     private readonly notificationsService: NotificationsService,
@@ -77,6 +79,18 @@ export class DirectContractsService {
       throw new BadRequestException('Category not found');
     }
 
+    // Same shared check JobsService.create/update use — not a duplicated
+    // rule. See CategoryTemplatesService.assertModeAndLocation's own
+    // comment for why this has to live in exactly one place: this Job is
+    // created directly (tx.job.create below), never through
+    // JobsService.create, so a check written only there would silently
+    // never run for a direct contract.
+    await this.categoryTemplatesService.assertModeAndLocation(
+      dto.categoryId,
+      dto.serviceMode,
+      dto.locationCoarse,
+    );
+
     // The job and its proposal come into existence together or not at all —
     // a proposal with no job behind it, or vice versa, is meaningless. Left
     // as DRAFT: never published, never discoverable (job-visibility.ts
@@ -95,6 +109,7 @@ export class DirectContractsService {
           budgetMin: dto.price,
           budgetMax: dto.price,
           locationCoarse: dto.locationCoarse,
+          serviceMode: dto.serviceMode,
           eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
           status: 'DRAFT',
           isDirect: true,

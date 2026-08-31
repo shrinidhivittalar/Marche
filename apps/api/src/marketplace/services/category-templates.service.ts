@@ -6,7 +6,7 @@ import {
 } from '../repositories/category-templates.repository';
 import { assertAdminRole } from '../marketplace-access.util';
 import type { CreateCategoryTemplateDto } from '../dto/category-template.dto';
-import type { CategoryTemplateFieldType, PlatformRole, Prisma } from '@marche/db';
+import type { CategoryTemplateFieldType, PlatformRole, Prisma, ServiceMode } from '@marche/db';
 
 const OPTIONS_TYPES: CategoryTemplateFieldType[] = ['SELECT', 'MULTI_SELECT'];
 const VALIDATION_KEYS: Record<CategoryTemplateFieldType, string[]> = {
@@ -109,7 +109,59 @@ export class CategoryTemplatesService {
       };
     });
 
-    return this.categoryTemplatesRepository.createAndActivate(categoryId, userId, fields);
+    return this.categoryTemplatesRepository.createAndActivate(
+      categoryId,
+      userId,
+      fields,
+      dto.allowedModes ?? [],
+      dto.locationRequired ?? false,
+    );
+  }
+
+  // ---------- shared validation, used by Jobs and Direct Contracts ----------
+
+  /**
+   * The one place "does this serviceMode/locationCoarse satisfy this
+   * category's current rules" is decided. Called from both
+   * JobsService.create/update and DirectContractsService.create — Direct
+   * Contracts writes its Job directly rather than through JobsService, so
+   * without a shared method this check would need to be written twice and
+   * would drift the first time one of the two call sites changed.
+   *
+   * Resolves the category's *current* active template, not one locked to
+   * a specific Job — Job.categoryTemplateId does not exist yet (a later
+   * slice), so "the rules in force right now" is the only definition
+   * available at create/update time.
+   *
+   * A category with no active template configured is left entirely
+   * unrestricted — the same "not every category needs one on day one"
+   * tolerance the public template read already applies. An empty
+   * `allowedModes` on a template that *does* exist is read the same way:
+   * no restriction configured yet, never "no mode is allowed" — see
+   * CategoryTemplate.allowedModes' own schema comment for why the default
+   * has to mean this.
+   */
+  async assertModeAndLocation(
+    categoryId: string,
+    serviceMode: ServiceMode | null | undefined,
+    locationCoarse: string | null | undefined,
+  ): Promise<void> {
+    const template = await this.categoryTemplatesRepository.findActiveForCategory(categoryId);
+    if (!template) return;
+
+    if (
+      serviceMode &&
+      template.allowedModes.length > 0 &&
+      !template.allowedModes.includes(serviceMode)
+    ) {
+      throw new BadRequestException(
+        `serviceMode must be one of: ${template.allowedModes.join(', ')} for this category`,
+      );
+    }
+
+    if (template.locationRequired && !locationCoarse) {
+      throw new BadRequestException('locationCoarse is required for this category');
+    }
   }
 
   private async assertCategoryExists(categoryId: string): Promise<void> {
@@ -200,6 +252,8 @@ export class CategoryTemplatesService {
 // omission is a compile-time fact, not just a runtime one.
 export interface PublicTemplate {
   id: string;
+  allowedModes: ServiceMode[];
+  locationRequired: boolean;
   fields: {
     key: string;
     label: string;
@@ -213,6 +267,8 @@ export interface PublicTemplate {
 
 function toPublicTemplate(template: {
   id: string;
+  allowedModes: ServiceMode[];
+  locationRequired: boolean;
   fields: {
     key: string;
     label: string;
@@ -225,6 +281,8 @@ function toPublicTemplate(template: {
 }): PublicTemplate {
   return {
     id: template.id,
+    allowedModes: template.allowedModes,
+    locationRequired: template.locationRequired,
     fields: template.fields.map((f) => ({
       key: f.key,
       label: f.label,

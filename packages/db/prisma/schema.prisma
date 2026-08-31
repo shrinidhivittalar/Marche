@@ -640,11 +640,40 @@ model CategoryTemplate {
 
   createdAt DateTime @default(now())
 
+  // Which delivery modes a Job under this category version may declare.
+  // Versioned category configuration, same reason the fields themselves
+  // are versioned — an admin narrowing or widening the allowed modes must
+  // not retroactively change what an already-created Job's own answer
+  // meant. Empty (the default, and what every template created before
+  // this column existed already has) means "no restriction configured
+  // yet", not "no mode is allowed" — see
+  // CategoryTemplatesService.assertModeAndLocation for where that
+  // distinction is enforced.
+  allowedModes ServiceMode[] @default([])
+
+  // Whether a Job under this category version must supply
+  // locationCoarse. Versioned for the same reason allowedModes is.
+  // Deliberately unrelated to locationExact — this rule governs whether
+  // the public, coarse label is required at all, never the sensitive
+  // exact value, and it does not change anything about Slice 1's
+  // disclosure model.
+  locationRequired Boolean @default(false)
+
   fields                CategoryTemplateField[]
   categoriesActiveHere  Category[]              @relation("ActiveCategoryTemplate")
 
   @@index([categoryId])
   @@map("category_templates")
+}
+
+// A Job's delivery mode — where the work actually happens, not a category
+// property. Which of these a given category's current template allows is
+// CategoryTemplate.allowedModes; which one a specific Job picked is
+// Job.serviceMode.
+enum ServiceMode {
+  ONSITE
+  REMOTE
+  HYBRID
 }
 
 enum CategoryTemplateFieldType {
@@ -876,6 +905,17 @@ model Job {
   // proposals.service.ts and connections.service.ts for the three call
   // sites; there are no others.
   locationExact Json?
+
+  // Which delivery mode this Job is being offered under. Nullable: a Job
+  // under a category with no active template, or one predating this
+  // column, legitimately has none — see CategoryTemplate.allowedModes'
+  // own comment for why an unconfigured category must not suddenly
+  // reject Jobs that were always valid. Validated at create/update time
+  // against the category's *current* active template
+  // (CategoryTemplatesService.assertModeAndLocation) — not stored
+  // against a locked template version, since Job.categoryTemplateId
+  // does not exist yet (a later slice).
+  serviceMode ServiceMode?
 
   eventDate DateTime?
 

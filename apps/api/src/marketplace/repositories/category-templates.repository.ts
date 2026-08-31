@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { CategoryTemplateFieldType, Prisma } from '@marche/db';
+import type { CategoryTemplateFieldType, Prisma, ServiceMode } from '@marche/db';
 
 // What a template's fields look like on every read — public and admin
 // alike. Declared once so the public active-template read and the admin
@@ -24,6 +24,8 @@ const FIELD_FIELDS = {
 const TEMPLATE_FIELDS = {
   id: true,
   createdAt: true,
+  allowedModes: true,
+  locationRequired: true,
   fields: {
     orderBy: [{ order: 'asc' }, { id: 'asc' }],
     select: FIELD_FIELDS,
@@ -104,12 +106,20 @@ export class CategoryTemplatesRepository {
    * landed without its target ever committing) is a state nothing in this
    * feature is designed to handle. Either both writes land or neither does.
    */
-  async createAndActivate(categoryId: string, createdByUserId: string, fields: CreateFieldInput[]) {
+  async createAndActivate(
+    categoryId: string,
+    createdByUserId: string,
+    fields: CreateFieldInput[],
+    allowedModes: ServiceMode[],
+    locationRequired: boolean,
+  ) {
     const templateId = await this.prisma.client.$transaction(async (tx) => {
       const template = await tx.categoryTemplate.create({
         data: {
           categoryId,
           createdByUserId,
+          allowedModes,
+          locationRequired,
           fields: { create: fields },
         },
       });

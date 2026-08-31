@@ -8,6 +8,7 @@ import {
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
 import { CategoriesService } from '../../marketplace/services/categories.service';
+import { CategoryTemplatesService } from '../../marketplace/services/category-templates.service';
 import { MediaService } from '../../media/media.service';
 import {
   assertClientRole,
@@ -62,6 +63,7 @@ export class JobsService {
     private readonly profilesRepository: ProfilesRepository,
     private readonly categoriesRepository: CategoriesRepository,
     private readonly categoriesService: CategoriesService,
+    private readonly categoryTemplatesService: CategoryTemplatesService,
     private readonly mediaService: MediaService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -73,6 +75,15 @@ export class JobsService {
     assertClientRole(profile.user);
 
     await this.assertCategoryExists(dto.categoryId);
+    // Resolves the category's *current* active template — see
+    // CategoryTemplatesService.assertModeAndLocation's own comment for why
+    // there is nothing else to resolve against yet. A no-op for a category
+    // with nothing configured, preserving today's unrestricted behaviour.
+    await this.categoryTemplatesService.assertModeAndLocation(
+      dto.categoryId,
+      dto.serviceMode,
+      dto.locationCoarse,
+    );
 
     // Fields are enumerated rather than spread. The DTO already cannot
     // carry clientProfileId or status past the ValidationPipe, but listing
@@ -87,6 +98,7 @@ export class JobsService {
       budgetMin: dto.budgetMin,
       budgetMax: dto.budgetMax,
       locationCoarse: dto.locationCoarse,
+      serviceMode: dto.serviceMode,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       eventStartTime: dto.eventStartTime,
       eventEndTime: dto.eventEndTime,
@@ -108,12 +120,28 @@ export class JobsService {
       await this.assertCategoryExists(dto.categoryId);
     }
 
+    // Validated against the *effective* post-update state, not just
+    // whichever field this particular call happens to touch — a category
+    // change must be checked against the new category's rules even if
+    // serviceMode/locationCoarse are not part of this same request, and a
+    // serviceMode/location-only change must still be checked against
+    // whatever category the job already has. Carrying the untouched
+    // field forward from the existing row (rather than validating only
+    // what changed) is what "be careful about partial updates" means in
+    // practice here.
+    await this.categoryTemplatesService.assertModeAndLocation(
+      dto.categoryId ?? job.categoryId,
+      dto.serviceMode !== undefined ? dto.serviceMode : job.serviceMode,
+      dto.locationCoarse !== undefined ? dto.locationCoarse : job.locationCoarse,
+    );
+
     return this.jobsRepository.update(job.id, {
       title: dto.title,
       description: dto.description,
       budgetMin: dto.budgetMin,
       budgetMax: dto.budgetMax,
       locationCoarse: dto.locationCoarse,
+      serviceMode: dto.serviceMode,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       eventStartTime: dto.eventStartTime,
       eventEndTime: dto.eventEndTime,

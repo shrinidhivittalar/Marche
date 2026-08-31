@@ -53,6 +53,8 @@ const JOB_FIELDS = {
   // never be reachable through it. See findLocationExact below for the only
   // sanctioned way to read the exact value.
   locationCoarse: true,
+  // Public — the same visibility tier as locationCoarse, never locationExact.
+  serviceMode: true,
   eventDate: true,
   eventStartTime: true,
   eventEndTime: true,

@@ -106,14 +106,20 @@ describe('CategoryTemplatesRepository', () => {
       const { repository, tx, categoryTemplate } = build();
       categoryTemplate.findUnique.mockResolvedValue({ id: 'template_2', fields: [] });
 
-      await repository.createAndActivate('category_1', 'user_1', [
-        { key: 'area', label: 'Area', type: 'NUMBER', required: true, order: 0 },
-      ]);
+      await repository.createAndActivate(
+        'category_1',
+        'user_1',
+        [{ key: 'area', label: 'Area', type: 'NUMBER', required: true, order: 0 }],
+        ['ONSITE'],
+        true,
+      );
 
       expect(tx.categoryTemplate.create).toHaveBeenCalledWith({
         data: {
           categoryId: 'category_1',
           createdByUserId: 'user_1',
+          allowedModes: ['ONSITE'],
+          locationRequired: true,
           fields: {
             create: [{ key: 'area', label: 'Area', type: 'NUMBER', required: true, order: 0 }],
           },
@@ -129,7 +135,7 @@ describe('CategoryTemplatesRepository', () => {
       const { repository, categoryTemplate } = build();
       categoryTemplate.findUnique.mockResolvedValue({ id: 'template_2', fields: [] });
 
-      const result = await repository.createAndActivate('category_1', 'user_1', []);
+      const result = await repository.createAndActivate('category_1', 'user_1', [], [], false);
 
       expect(categoryTemplate.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'template_2' } }),
@@ -141,7 +147,7 @@ describe('CategoryTemplatesRepository', () => {
       const { repository, tx, categoryTemplate, category } = build();
       categoryTemplate.findUnique.mockResolvedValue({ id: 'template_2', fields: [] });
 
-      await repository.createAndActivate('category_1', 'user_1', []);
+      await repository.createAndActivate('category_1', 'user_1', [], [], false);
 
       expect(tx.categoryTemplate.create).toHaveBeenCalled();
       expect(tx.category.update).toHaveBeenCalled();

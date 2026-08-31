@@ -22,6 +22,7 @@ const CONNECTION_FIELDS = {
       // (the client who owns the Job, the provider it was created for) are
       // always entitled to it, but it is never selected here.
       locationCoarse: true,
+      serviceMode: true,
       // Lets a caller distinguish a direct contract from a marketplace hire
       // (see DirectContractsService) — the provider Contracts page's Direct
       // Contracts tab filters on this rather than needing a second endpoint.

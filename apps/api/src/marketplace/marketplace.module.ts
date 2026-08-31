@@ -41,6 +41,20 @@ import { CategoryTemplatesService } from './services/category-templates.service'
   // findProviderCards to render saved-provider cards in the same shape
   // provider search results already use, rather than re-selecting the same
   // fields a second time.
-  exports: [CategoriesService, ServicesService, CategoriesRepository, ServicesRepository],
+  //
+  // CategoryTemplatesService is exported for JobsModule and
+  // DirectContractsModule, both of which already import this module for
+  // CategoriesRepository/CategoriesService — this is the same shared
+  // assertModeAndLocation check both call, not two separate instances of
+  // it. CategoryTemplatesRepository is exported alongside it for the same
+  // one-instance reasoning CategoriesRepository already has above.
+  exports: [
+    CategoriesService,
+    ServicesService,
+    CategoriesRepository,
+    ServicesRepository,
+    CategoryTemplatesService,
+    CategoryTemplatesRepository,
+  ],
 })
 export class MarketplaceModule {}

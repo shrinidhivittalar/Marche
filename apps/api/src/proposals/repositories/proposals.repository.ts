@@ -69,6 +69,7 @@ const OWN_PROPOSAL_FIELDS = {
       // JobsRepository.findHiredProviderProfileId confirms this caller is
       // the one who was hired — never here.
       locationCoarse: true,
+      serviceMode: true,
       proposalDeadline: true,
       // Lets the provider's proposal-detail screen tell a direct contract
       // offer (DirectContractsService) apart from an ordinary proposal they

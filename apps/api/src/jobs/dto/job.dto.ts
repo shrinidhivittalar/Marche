@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsDateString,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -17,6 +18,7 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from 'class-validator';
+import { ServiceMode } from '@marche/db';
 
 // Rejected at validation rather than in the service, so an inverted range
 // is reported as the mistake it is instead of silently matching nothing.
@@ -146,6 +148,17 @@ export class CreateJobDto {
   @IsString()
   @MaxLength(120)
   locationCoarse?: string;
+
+  // Validated against the category's current active template's
+  // allowedModes in JobsService — see
+  // CategoryTemplatesService.assertModeAndLocation. A category with no
+  // active template configured, or a template with an empty allowedModes,
+  // accepts any value here unrestricted; the enum check below is only the
+  // structural "is this a real ServiceMode" boundary.
+  @ApiPropertyOptional({ enum: ServiceMode })
+  @IsOptional()
+  @IsEnum(ServiceMode)
+  serviceMode?: ServiceMode;
 
   // Not validated as future-dated. A client legitimately posts about an
   // event already under way, and a hard "must be in the future" check

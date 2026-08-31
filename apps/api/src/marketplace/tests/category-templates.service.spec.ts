@@ -162,6 +162,8 @@ describe('CategoryTemplatesService', () => {
             options: ['apartment', 'house', 'commercial'],
           }),
         ],
+        [],
+        false,
       );
     });
 
@@ -215,6 +217,8 @@ describe('CategoryTemplatesService', () => {
         'category_1',
         'user_1',
         [expect.objectContaining({ validation: { min: 10, max: 5000 } })],
+        [],
+        false,
       );
     });
 
@@ -317,6 +321,117 @@ describe('CategoryTemplatesService', () => {
       await expect(
         service.getVersion(role as never, 'category_1', 'template_1'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('assertModeAndLocation — the shared validator Jobs and Direct Contracts both call', () => {
+    it('is a no-op when the category has no active template — today’s unrestricted behaviour is preserved', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue(null);
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'REMOTE', null),
+      ).resolves.toBeUndefined();
+    });
+
+    it('accepts a serviceMode that is one of allowedModes', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE'],
+        locationRequired: false,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'ONSITE', null),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects a serviceMode that is not in allowedModes', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE'],
+        locationRequired: false,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'REMOTE', null),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('treats an empty allowedModes as "no restriction configured yet", not "no mode is allowed"', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: [],
+        locationRequired: false,
+      });
+
+      // A template exists (unlike the "no active template" case above),
+      // but nothing configured allowedModes yet — any value must pass.
+      await expect(
+        service.assertModeAndLocation('category_1', 'HYBRID', null),
+      ).resolves.toBeUndefined();
+    });
+
+    it('does not reject an absent serviceMode even when allowedModes is configured', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE'],
+        locationRequired: false,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', undefined, null),
+      ).resolves.toBeUndefined();
+    });
+
+    it('accepts a supplied locationCoarse when locationRequired is true', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE'],
+        locationRequired: true,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'ONSITE', 'Bangalore'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects a missing locationCoarse when locationRequired is true', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE'],
+        locationRequired: true,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'ONSITE', null),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('leaves locationCoarse optional when locationRequired is false', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['REMOTE'],
+        locationRequired: false,
+      });
+
+      await expect(
+        service.assertModeAndLocation('category_1', 'REMOTE', undefined),
+      ).resolves.toBeUndefined();
+    });
+
+    it('the hybrid example: only configured modes pass, all three included means all three pass', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      categoryTemplatesRepository.findActiveForCategory.mockResolvedValue({
+        allowedModes: ['ONSITE', 'REMOTE', 'HYBRID'],
+        locationRequired: true,
+      });
+
+      for (const mode of ['ONSITE', 'REMOTE', 'HYBRID'] as const) {
+        await expect(
+          service.assertModeAndLocation('category_1', mode, 'Bangalore'),
+        ).resolves.toBeUndefined();
+      }
     });
   });
 });

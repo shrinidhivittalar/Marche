@@ -63,6 +63,13 @@ function build(jobOverrides: Record<string, unknown> = {}) {
       .mockResolvedValue({ DRAFT: 0, PUBLISHED: 0, FILLED: 0, CANCELLED: 0 }),
   };
   const categoriesService = { resolveFilterIds: jest.fn().mockResolvedValue(['cat_1']) };
+  // No active template by default — every existing test exercises the
+  // "category with nothing configured" path, which must stay unrestricted.
+  // See the dedicated 'service mode + location rules' describe block below
+  // for the enforcing path.
+  const categoryTemplatesService = {
+    assertModeAndLocation: jest.fn().mockResolvedValue(undefined),
+  };
   const mediaService = {
     assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
     markPrivate: jest.fn().mockResolvedValue(undefined),
@@ -78,12 +85,14 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     profiles as unknown as ProfilesRepository,
     categories as unknown as CategoriesRepository,
     categoriesService as unknown as CategoriesService,
+    categoryTemplatesService as never,
     mediaService as never,
     notificationsService as never,
   );
   return {
     service,
     jobs,
+    categoryTemplatesService,
     profiles,
     categories,
     categoriesService,
@@ -155,6 +164,65 @@ describe('JobsService', () => {
       const written = jobs.create.mock.calls[0][0];
       expect(written.clientProfileId).toBe('profile_1');
       expect(written.status).toBeUndefined();
+    });
+  });
+
+  describe('service mode + location rules', () => {
+    it('create resolves the category’s active template before writing', async () => {
+      const { service, categoryTemplatesService } = build();
+
+      await service.create('user_1', {
+        ...dto,
+        serviceMode: 'ONSITE',
+        locationCoarse: 'Bangalore',
+      });
+
+      expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+        'cat_1',
+        'ONSITE',
+        'Bangalore',
+      );
+    });
+
+    it('propagates the shared validator’s rejection — a category with rules configured refuses an invalid serviceMode', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
+        new BadRequestException('serviceMode must be one of: ONSITE for this category'),
+      );
+
+      await expect(
+        service.create('user_1', { ...dto, serviceMode: 'REMOTE' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(jobs.create).not.toHaveBeenCalled();
+    });
+
+    it('a category with no active template (or an empty allowedModes) accepts any serviceMode — compatibility preserved', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      // The default mock already resolves undefined (no-op); this test
+      // exists to document the behaviour explicitly, not just rely on the
+      // fixture default.
+      categoryTemplatesService.assertModeAndLocation.mockResolvedValue(undefined);
+
+      await expect(
+        service.create('user_1', { ...dto, serviceMode: 'HYBRID' }),
+      ).resolves.toBeDefined();
+      expect(jobs.create).toHaveBeenCalled();
+    });
+
+    it('optional location remains optional when nothing requires it', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', { ...dto, locationCoarse: undefined });
+
+      expect(jobs.create).toHaveBeenCalled();
+    });
+
+    it('writes serviceMode onto the created job', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', { ...dto, serviceMode: 'REMOTE' });
+
+      expect(jobs.create.mock.calls[0][0].serviceMode).toBe('REMOTE');
     });
   });
 
@@ -297,6 +365,94 @@ describe('JobsService', () => {
       await service.update('user_1', 'job_1', { title: 'A corrected title' });
 
       expect(jobs.update).toHaveBeenCalled();
+    });
+
+    describe('service mode + location rules', () => {
+      it('a title-only edit validates against the job’s existing category and carries its existing serviceMode/location forward unchanged', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          serviceMode: 'ONSITE',
+          locationCoarse: 'Bangalore',
+        });
+
+        await service.update('user_1', 'job_1', { title: 'A corrected title' });
+
+        // Neither serviceMode nor locationCoarse was part of this request,
+        // but the *effective* state — the job's own current values — is
+        // still what gets validated. This is the "be careful about
+        // partial updates" case: a category change elsewhere could make
+        // these stale values invalid, and that must still be caught even
+        // when this particular call never mentions them.
+        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+          'cat_1',
+          'ONSITE',
+          'Bangalore',
+        );
+      });
+
+      it('changing categoryId validates against the NEW category, not the job’s existing one', async () => {
+        const { service, categoryTemplatesService, categories } = build({
+          categoryId: 'cat_old',
+          serviceMode: 'ONSITE',
+        });
+        categories.findById.mockResolvedValue({ id: 'cat_new' });
+
+        await service.update('user_1', 'job_1', { categoryId: 'cat_new' });
+
+        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+          'cat_new',
+          'ONSITE',
+          undefined,
+        );
+        // Never validated against the old category — the exact mistake
+        // "be careful about partial updates" warns against.
+        expect(categoryTemplatesService.assertModeAndLocation).not.toHaveBeenCalledWith(
+          'cat_old',
+          expect.anything(),
+          expect.anything(),
+        );
+      });
+
+      it('changing only serviceMode validates it against the job’s current category', async () => {
+        const { service, categoryTemplatesService } = build({ categoryId: 'cat_1' });
+
+        await service.update('user_1', 'job_1', { serviceMode: 'REMOTE' });
+
+        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+          'cat_1',
+          'REMOTE',
+          undefined,
+        );
+      });
+
+      it('propagates the shared validator’s rejection on update, writing nothing', async () => {
+        const { service, categoryTemplatesService, jobs } = build();
+        categoryTemplatesService.assertModeAndLocation.mockRejectedValue(
+          new BadRequestException('locationCoarse is required for this category'),
+        );
+
+        await expect(
+          service.update('user_1', 'job_1', { serviceMode: 'ONSITE' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(jobs.update).not.toHaveBeenCalled();
+      });
+
+      it('an existing Job with no serviceMode remains valid — null carries forward, not rejected', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          serviceMode: null,
+          locationCoarse: null,
+        });
+
+        await expect(
+          service.update('user_1', 'job_1', { title: 'Legacy job, untouched otherwise' }),
+        ).resolves.toBeDefined();
+        expect(categoryTemplatesService.assertModeAndLocation).toHaveBeenCalledWith(
+          'cat_1',
+          null,
+          null,
+        );
+      });
     });
   });
 

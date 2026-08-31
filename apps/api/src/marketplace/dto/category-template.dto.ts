@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -16,7 +17,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { CategoryTemplateFieldType } from '@marche/db';
+import { CategoryTemplateFieldType, ServiceMode } from '@marche/db';
 
 // Same machine-key shape Category.slug already validates — a stable
 // identifier a future Job.categoryData (Slice 4) will be keyed by.
@@ -96,4 +97,19 @@ export class CreateCategoryTemplateDto {
   @ValidateNested({ each: true })
   @Type(() => CreateCategoryTemplateFieldDto)
   fields!: CreateCategoryTemplateFieldDto[];
+
+  // Absent or empty means "no restriction configured yet" — read that way
+  // by CategoryTemplatesService.assertModeAndLocation, never as "no mode
+  // is allowed". See CategoryTemplate.allowedModes' own schema comment.
+  @ApiPropertyOptional({ enum: ServiceMode, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(ServiceMode, { each: true })
+  allowedModes?: ServiceMode[];
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  locationRequired?: boolean;
 }

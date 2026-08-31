@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -12,6 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { ServiceMode } from '@marche/db';
 
 // Same field-level-authorization-boundary role as CreateJobDto/
 // CreateProposalDto: everything a client may set for a direct hire is here
@@ -67,4 +69,12 @@ export class CreateDirectContractDto {
   @IsString()
   @MaxLength(200)
   locationCoarse?: string;
+
+  // Same rules as an ordinary Job's serviceMode — validated against the
+  // category's current active template by the same shared
+  // CategoryTemplatesService.assertModeAndLocation call JobsService uses.
+  @ApiPropertyOptional({ enum: ServiceMode })
+  @IsOptional()
+  @IsEnum(ServiceMode)
+  serviceMode?: ServiceMode;
 }
