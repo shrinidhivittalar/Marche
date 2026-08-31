@@ -478,35 +478,58 @@ export class AuthService {
     // login until/unless one is set through a separate flow (not built in
     // this slice), and User.passwordHash has no nullable variant to avoid
     // a broader schema change for a Google-only account.
-    const user = await this.prisma.client.$transaction(async (tx) => {
-      const unusablePasswordHash = await argon2.hash(randomBytes(32).toString('hex'));
-      const displayName = identity.email.split('@')[0]!;
-      const created = await this.usersRepository.create(
-        {
-          email: identity.email,
-          passwordHash: unusablePasswordHash,
-          name: displayName,
-          role: 'CLIENT',
-        },
-        tx,
-      );
-      await this.profilesService.createForNewUser(created.id, displayName, tx);
-      await this.authenticationMethodsRepository.createGoogle(created.id, identity.sub, tx);
-      if (identity.emailVerified) {
-        // Google already proved this address — no reason to also make the
-        // user click a verification email (module1-implementation-contract.md
-        // §7.2). Both representations written together, in the same
-        // transaction, per §8.2's write-path rule.
-        const verified = await this.usersRepository.markEmailVerified(created.id, tx);
-        await this.verificationsRepository.upsertEmailVerified(
-          created.id,
-          verified.emailVerifiedAt!,
+    const user = await this.prisma.client.$transaction(
+      async (tx) => {
+        const unusablePasswordHash = await argon2.hash(randomBytes(32).toString('hex'));
+        const displayName = identity.email.split('@')[0]!;
+        const created = await this.usersRepository.create(
+          {
+            email: identity.email,
+            passwordHash: unusablePasswordHash,
+            name: displayName,
+            role: 'CLIENT',
+          },
           tx,
         );
-        return verified;
-      }
-      return created;
-    });
+        await this.profilesService.createForNewUser(created.id, displayName, tx);
+        await this.authenticationMethodsRepository.createGoogle(created.id, identity.sub, tx);
+        if (identity.emailVerified) {
+          // Google already proved this address — no reason to also make the
+          // user click a verification email (module1-implementation-contract.md
+          // §7.2). Both representations written together, in the same
+          // transaction, per §8.2's write-path rule.
+          const verified = await this.usersRepository.markEmailVerified(created.id, tx);
+          await this.verificationsRepository.upsertEmailVerified(
+            created.id,
+            verified.emailVerifiedAt!,
+            tx,
+          );
+          return verified;
+        }
+        return created;
+      },
+      // Same override, for the same reason, as ProposalsService.accept —
+      // see the longer note there. Prisma's default interactive-transaction
+      // timeout is 5s, and this body spends it on work that is legitimately
+      // slow rather than stuck: an argon2 hash (deliberately expensive) plus
+      // five sequential round trips to a hosted database, each carrying real
+      // network latency. That total sat just under the default, which is the
+      // worst place to be — it passed often enough to look fine and then
+      // 500'd on a new user's very first Google sign-up. Module 2 Slice A's
+      // capability includes on create/markEmailVerified added enough to that
+      // total to push it over consistently.
+      //
+      // Raised rather than shrunk by dropping those includes: the response
+      // genuinely needs the capability rows, and the includes are correct.
+      // Nothing in here is unsafe to wait for either — atomicity is what the
+      // transaction is for, and the account must not half-exist.
+      //
+      // The lasting fix is fewer round trips in here (the argon2 hash in
+      // particular does not need to hold a transaction open), which is a
+      // change to how this write is expressed and does not belong in the
+      // commit that found the problem.
+      { timeout: 15_000, maxWait: 5_000 },
+    );
 
     await this.auditService.record({
       eventType: AUTH_EVENTS.GOOGLE_LOGIN_NEW_USER,
