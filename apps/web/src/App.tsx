@@ -76,7 +76,6 @@ import { BrowseServicesPage } from './pages/marketplace/BrowseServicesPage';
 import { MyServicesPage } from './pages/provider/MyServicesPage';
 import { PublicProfilePage } from './pages/marketplace/PublicProfilePage';
 import { ServiceDetailPage } from './pages/marketplace/ServiceDetailPage';
-import { effectiveMode } from './lib/active-mode';
 
 const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/client/dashboard': () => <ClientDashboard key="dashboard" view="dashboard" />,
@@ -134,7 +133,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
 ];
 
 function AppContent() {
-  const { route, goBack, currentUser, authLoading, accessToken, activeMode } = useApp();
+  const { route, goBack, currentUser, authLoading, accessToken, surface } = useApp();
 
   // Full-bleed views without sidebar. Landing/Sign In/Sign Up always render light —
   // they're pre-authentication brand surfaces, not part of the user's themed workspace.
@@ -214,14 +213,6 @@ function AppContent() {
     );
   }
 
-  // Which marketplace surface this user is looking at. For an account with
-  // capability rows this is their activeMode; for one without any (Google
-  // sign-ups, un-backfilled legacy accounts) it falls back to the legacy
-  // role so those users keep the UI they already had — see effectiveMode's
-  // comment. Admin is not a marketplace mode and resolves to null here; its
-  // routes keep their own role check below.
-  const surface = effectiveMode(activeMode, currentUser.capabilities, currentUser.role);
-
   // Whether the user may enter each area at all. A mode the user cannot
   // hold is never in availableModes, so selecting one grants nothing — and
   // none of this is a security boundary regardless: the API re-checks the
@@ -269,7 +260,14 @@ function AppContent() {
     // axis from CLIENT/PROVIDER capabilities and must not be expressed as a
     // marketplace mode.
     if (route.startsWith('/admin/') && currentUser.role !== 'admin') return roleHome();
-    if (route.startsWith('/client/') && !clientAreaAllowed) return roleHome();
+    // /client/settings is excluded for the same reason /provider/dashboard
+    // is below: it has legitimate cross-surface use. It is the only
+    // settings screen that exists and is account-level rather than
+    // client-specific, so a dual-capability user in PROVIDER mode must
+    // still be able to open it — the sidebar offers it in both modes.
+    if (route.startsWith('/client/') && route !== '/client/settings' && !clientAreaAllowed) {
+      return roleHome();
+    }
     if (route.startsWith('/provider/') && route !== '/provider/dashboard' && !providerAreaAllowed) {
       return roleHome();
     }
@@ -287,12 +285,15 @@ function AppContent() {
     return roleHome();
   };
 
+  // Which destinations count as "root" for the mobile back button. Admin is
+  // checked first: it is a platform role, not a marketplace mode, and its
+  // set is the only one that includes /admin/audit.
   const rootRoutes =
-    currentUser.role === 'client'
-      ? CLIENT_ROOT_ROUTES
-      : currentUser.role === 'vendor'
+    currentUser.role === 'admin'
+      ? ADMIN_ROOT_ROUTES
+      : surface === 'PROVIDER'
         ? VENDOR_ROOT_ROUTES
-        : ADMIN_ROOT_ROUTES;
+        : CLIENT_ROOT_ROUTES;
   const showMobileBack = !rootRoutes.has(route);
 
   return (

@@ -112,6 +112,48 @@ export function modeForLegacyRole(role: 'client' | 'vendor' | 'admin'): ActiveMo
   return null;
 }
 
+// Where each surface starts. Declared once so navigation, the route gates
+// and the post-switch redirect cannot disagree about what "home" means.
+const MODE_HOME: Record<ActiveMode, string> = {
+  CLIENT: '/client/dashboard',
+  PROVIDER: '/provider/dashboard',
+};
+
+// The route prefix each surface owns. Used to decide whether the current
+// route still belongs to the surface after a mode switch.
+const MODE_PREFIX: Record<ActiveMode, string> = {
+  CLIENT: '/client/',
+  PROVIDER: '/provider/',
+};
+
+export function homePathForMode(mode: ActiveMode): string {
+  return MODE_HOME[mode];
+}
+
+// Routes that sit under a surface's prefix but are reachable from both
+// modes, and so must not trigger a redirect on switch. /client/settings is
+// account-level — the only settings screen that exists — and App.tsx's
+// route gate excludes it for the same reason. Keep the two in step.
+const CROSS_MODE_ROUTES = new Set(['/client/settings']);
+
+/**
+ * Whether a route belongs to a surface other than the one given — i.e.
+ * whether switching to `mode` strands the user on a page they can no
+ * longer reach.
+ *
+ * Only routes owned by the *other* marketplace surface count. Shared
+ * routes (/messages, /notifications, /contracts/:id, /profile/:id, /menu)
+ * belong to neither and are valid in both modes, so switching while on one
+ * must not move the user — the mode changed, but what they were reading
+ * did not. The same holds for the cross-mode exceptions above, which are
+ * prefixed like one surface but reachable from both.
+ */
+export function routeBelongsToOtherMode(route: string, mode: ActiveMode): boolean {
+  if (CROSS_MODE_ROUTES.has(route)) return false;
+  const other: ActiveMode = mode === 'CLIENT' ? 'PROVIDER' : 'CLIENT';
+  return route.startsWith(MODE_PREFIX[other]);
+}
+
 /**
  * Which surface to render for a user, including the compatibility path for
  * accounts that carry no capability rows at all.

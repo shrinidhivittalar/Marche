@@ -20,24 +20,27 @@ import { useTheme } from '@marche/ui';
 type MenuLink = { label: string; path: string; icon: React.ElementType };
 
 export const MobileMenuPage: React.FC = () => {
-  const { currentUser, navigate, logoutAccount } = useApp();
+  const { currentUser, navigate, logoutAccount, surface, availableModes, setActiveMode } = useApp();
   const { unreadNotifications } = useUnreadCounts();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
-  const profilePath =
-    currentUser.role === 'vendor'
-      ? '/provider/profile'
-      : currentUser.role === 'client'
-        ? '/client/profile'
-        : '/admin/profile';
+  // Admin first everywhere below — a platform role, not a marketplace mode.
+  const isAdmin = currentUser.role === 'admin';
 
-  const homePath =
-    currentUser.role === 'vendor'
+  // Both profile routes resolve the same underlying Profile; only which one
+  // is surfaced follows the mode.
+  const profilePath = isAdmin
+    ? '/admin/profile'
+    : surface === 'PROVIDER'
+      ? '/provider/profile'
+      : '/client/profile';
+
+  const homePath = isAdmin
+    ? '/admin/audit'
+    : surface === 'PROVIDER'
       ? '/provider/dashboard'
-      : currentUser.role === 'client'
-        ? '/client/dashboard'
-        : '/admin/audit';
+      : '/client/dashboard';
 
   // This screen is the mobile "More" tab's overflow menu — the desktop sidebar already
   // surfaces all of this, so bounce back to the dashboard if the viewport widens while here
@@ -61,7 +64,6 @@ export const MobileMenuPage: React.FC = () => {
     { label: 'Transactions', path: '/client/finances/transactions', icon: IndianRupee },
     { label: 'Budgets', path: '/client/finances/budgets', icon: IndianRupee },
     { label: 'Work diaries', path: '/client/work-diaries', icon: Clock },
-    { label: 'Settings', path: '/client/settings', icon: Settings },
   ];
 
   const vendorLinks: MenuLink[] = [
@@ -70,8 +72,15 @@ export const MobileMenuPage: React.FC = () => {
     { label: 'Finances', path: '/provider/finances', icon: IndianRupee },
   ];
 
-  const roleLinks =
-    currentUser.role === 'client' ? clientLinks : currentUser.role === 'vendor' ? vendorLinks : [];
+  // Account-level, not client-only. /client/settings is the one settings
+  // screen that exists, so it is appended to both surfaces rather than
+  // lost when a dual-capability user switches to PROVIDER — it keeps its
+  // existing position at the end of the client list.
+  const SETTINGS_LINK: MenuLink = { label: 'Settings', path: '/client/settings', icon: Settings };
+
+  const modeLinks = isAdmin
+    ? []
+    : [...(surface === 'PROVIDER' ? vendorLinks : clientLinks), SETTINGS_LINK];
 
   return (
     <div className="max-w-xl mx-auto pb-24">
@@ -92,6 +101,33 @@ export const MobileMenuPage: React.FC = () => {
         </div>
         <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
       </button>
+
+      {/* Mode switcher — the same AppContext state the desktop sidebar
+          drives, so the two can never disagree. Shown only to a user who
+          genuinely holds both capabilities. Presentation only: switching
+          leaves currentUser and the access token untouched, and grants
+          nothing — the API re-checks capabilities on every request. */}
+      {availableModes.length > 1 && (
+        <div className="grid grid-cols-2 gap-2 mb-6" role="group" aria-label="Active mode">
+          {availableModes.map((mode) => {
+            const isCurrent = mode === surface;
+            return (
+              <button
+                key={mode}
+                onClick={() => setActiveMode(mode)}
+                aria-pressed={isCurrent}
+                className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors cursor-pointer ${
+                  isCurrent
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-surface text-ink border-border hover:bg-surface-subtle'
+                }`}
+              >
+                {mode === 'CLIENT' ? 'Hiring' : 'Providing'}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="space-y-1">
         <button
@@ -131,7 +167,7 @@ export const MobileMenuPage: React.FC = () => {
           </span>
         </button>
 
-        {roleLinks.map((link) => {
+        {modeLinks.map((link) => {
           const Icon = link.icon;
           return (
             <button

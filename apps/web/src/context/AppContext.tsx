@@ -47,8 +47,11 @@ import {
 } from '../lib/api';
 import {
   availableModes as deriveAvailableModes,
+  effectiveMode,
+  homePathForMode,
   modeForLegacyRole,
   reconcileMode,
+  routeBelongsToOtherMode,
   type ActiveMode,
 } from '../lib/active-mode';
 
@@ -83,6 +86,12 @@ interface AppContextType {
   // the API re-checks capabilities per request. null means this account has
   // no capability-backed marketplace mode. See lib/active-mode.ts.
   activeMode: ActiveMode | null;
+  // What the UI should actually present: activeMode, plus the legacy
+  // compatibility fallback for accounts holding no capability rows at all
+  // (see effectiveMode). This — not activeMode — is what route gates and
+  // navigation must both read, so they cannot disagree about which surface
+  // a Google sign-up or un-backfilled account is on.
+  surface: ActiveMode | null;
   // The modes this user may enter, derived from their real capability
   // grants. Empty for an account holding no capabilities.
   availableModes: ActiveMode[];
@@ -389,15 +398,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [activeMode]);
 
-  // Never widens access: a mode the user does not hold is ignored outright
-  // rather than clamped to something else, so a bad call is a no-op instead
-  // of a silent redirect somewhere unexpected. Note what this does NOT do —
-  // it does not call setCurrentUser, so id, email, name, capabilities and
-  // the access token are all untouched by a mode switch.
-  const setActiveMode = (mode: ActiveMode) => {
-    if (!availableModes.includes(mode)) return;
-    setPreferredMode(mode);
-  };
+  // What the UI presents. activeMode is the capability-backed answer;
+  // this adds the legacy fallback for accounts with no capability rows, so
+  // route gates and navigation read one value rather than each deriving
+  // their own and disagreeing.
+  const surface = useMemo(
+    () => effectiveMode(activeMode, currentUser.capabilities, currentUser.role),
+    [activeMode, currentUser.capabilities, currentUser.role],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -663,6 +671,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const goBack = () => {
     window.history.back();
+  };
+
+  // Defined here, below navigate, because switching mode may need to move
+  // the user — see below.
+  //
+  // Never widens access: a mode the user does not hold is ignored outright
+  // rather than clamped to something else, so a bad call is a no-op instead
+  // of a silent redirect somewhere unexpected. Note what this does NOT do —
+  // it does not call setCurrentUser, so id, email, name, capabilities and
+  // the access token are all untouched by a mode switch.
+  //
+  // The redirect is deliberate rather than left to the route gate. Both end
+  // up on the new surface's home, but relying on the gate means rendering a
+  // bounce the user did not ask for; doing it here makes the mode switch
+  // itself the navigation. Only fires when the current route belongs to the
+  // surface being left — shared routes (/messages, /contracts/:id, ...) are
+  // valid in either mode, and switching while reading one must not throw
+  // the user out of it.
+  const setActiveMode = (mode: ActiveMode) => {
+    if (!availableModes.includes(mode)) return;
+    setPreferredMode(mode);
+    if (routeBelongsToOtherMode(route, mode)) {
+      navigate(homePathForMode(mode));
+    }
   };
 
   // Demo/legacy only — NOT the mode switcher, despite the name.
@@ -1591,6 +1623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         setCurrentUserRole,
         activeMode,
+        surface,
         availableModes,
         setActiveMode,
         updateCurrentUser,

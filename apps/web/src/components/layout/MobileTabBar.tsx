@@ -13,7 +13,7 @@ import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 type Tab = { label: string; path: string; icon: React.ElementType; badge?: number };
 
 export const MobileTabBar: React.FC = () => {
-  const { currentUser, route, navigate } = useApp();
+  const { currentUser, route, navigate, surface } = useApp();
   const { unreadNotifications, unreadMessages } = useUnreadCounts();
 
   const clientTabs: Tab[] = [
@@ -39,12 +39,11 @@ export const MobileTabBar: React.FC = () => {
     { label: 'Alerts', path: '/notifications', icon: Bell, badge: unreadNotifications },
   ];
 
+  // Admin first — a platform role, not a marketplace mode. Everyone else
+  // follows the presentation surface, so switching mode swaps the tab set
+  // immediately and the tabs always point at routes the gate allows.
   const tabs =
-    currentUser.role === 'client'
-      ? clientTabs
-      : currentUser.role === 'vendor'
-        ? vendorTabs
-        : adminTabs;
+    currentUser.role === 'admin' ? adminTabs : surface === 'PROVIDER' ? vendorTabs : clientTabs;
   const isMenuActive = route === '/menu';
 
   return (
