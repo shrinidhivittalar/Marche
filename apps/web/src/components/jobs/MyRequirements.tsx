@@ -237,10 +237,10 @@ function RequirementRow({
 
       <div className="flex items-center gap-3 text-[11px] text-ink-muted flex-wrap">
         <span>{job.category.name}</span>
-        {job.location && (
+        {job.locationCoarse && (
           <span className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />
-            {job.location}
+            {job.locationCoarse}
           </span>
         )}
         {when && (

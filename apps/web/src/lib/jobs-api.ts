@@ -46,7 +46,19 @@ export interface ApiJob {
   // formatted for display rather than parsed into a float that loses paise.
   budgetMin: string | null;
   budgetMax: string | null;
-  location: string | null;
+  /** Coarse (city/area) — always present when a location was given. */
+  locationCoarse: string | null;
+  /**
+   * The sensitive counterpart. Only ever present as a key on reads the
+   * backend has already authorized (the owner's GET /jobs/me/:id; a
+   * proposal/connection read once the caller is the hired provider or the
+   * job owner) — `null` there means genuinely not set, not "not allowed to
+   * see it". On every other read (public search, public detail, an
+   * unhired provider's own proposal view) the key is absent entirely —
+   * check `'locationExact' in job`, not just falsiness, if that
+   * distinction ever matters.
+   */
+  locationExact?: unknown;
   eventDate: string | null;
   /** Wall-clock "HH:MM" at the venue — display as given, never re-zone. */
   eventStartTime: string | null;
@@ -106,7 +118,7 @@ export interface JobBody {
   categoryId: string;
   budgetMin?: number;
   budgetMax?: number;
-  location?: string;
+  locationCoarse?: string;
   eventDate?: string;
   /** 24-hour "HH:MM". Both need an eventDate to belong to. */
   eventStartTime?: string;

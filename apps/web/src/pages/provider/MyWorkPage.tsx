@@ -241,10 +241,10 @@ export const MyWorkPage: React.FC = () => {
                         <CalendarDays className="w-3.5 h-3.5 shrink-0" />
                         {formatEventWhen(proposal.job) ?? 'No date set'}
                       </span>
-                      {proposal.job.location && (
+                      {proposal.job.locationCoarse && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3.5 h-3.5 shrink-0" />
-                          {proposal.job.location}
+                          {proposal.job.locationCoarse}
                         </span>
                       )}
                     </div>

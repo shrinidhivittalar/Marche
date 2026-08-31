@@ -60,10 +60,11 @@ export class CreateDirectContractDto {
   @IsDateString()
   eventDate?: string;
 
+  // Renamed to match Job.locationCoarse — the same field, on the same rename.
   @ApiPropertyOptional({ maxLength: 200 })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(200)
-  location?: string;
+  locationCoarse?: string;
 }

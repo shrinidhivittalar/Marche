@@ -733,7 +733,29 @@ model Job {
   budgetMin Decimal? @db.Decimal(10, 2)
   budgetMax Decimal? @db.Decimal(10, 2)
 
-  location  String?
+  // Renamed from `location` — a semantic correction, not a new field. Every
+  // existing value was already a city/area-level label in practice (see the
+  // frontend's own usage), never a street address, so the rename preserves
+  // meaning exactly; the migration carries the column across unchanged.
+  //
+  // Safe to return to anyone who can see this Job at all: public discovery,
+  // any provider's proposal/connection view, any Job search result.
+  locationCoarse String?
+
+  // The sensitive counterpart: address, coordinates, pincode — whatever
+  // precision the job actually needs, structured loosely as JSON rather than
+  // a fixed set of columns, since which of those a category needs can vary
+  // and none of that shape is fixed by this slice.
+  //
+  // Never present on JOB_FIELDS/OWNER_JOB_FIELDS or any other shared select
+  // constant across Jobs, Proposals or Connections — it is fetched only by
+  // JobsRepository.findLocationExact, called only after the caller is
+  // already proven to be the Job's owner or its hired provider
+  // (JobsRepository.findHiredProviderProfileId). See jobs.service.ts,
+  // proposals.service.ts and connections.service.ts for the three call
+  // sites; there are no others.
+  locationExact Json?
+
   eventDate DateTime?
 
   // Wall-clock "HH:MM" strings, not DateTimes, and deliberately so. These

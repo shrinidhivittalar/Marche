@@ -57,6 +57,7 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     countAttachments: jest.fn().mockResolvedValue(0),
     // Nobody hired by default: the requirement has no connection yet.
     findHiredProviderProfileId: jest.fn().mockResolvedValue(null),
+    findLocationExact: jest.fn().mockResolvedValue(null),
     countPostedByStatus: jest
       .fn()
       .mockResolvedValue({ DRAFT: 0, PUBLISHED: 0, FILLED: 0, CANCELLED: 0 }),
@@ -599,6 +600,31 @@ describe('JobsService', () => {
       const job = await service.findMineById('user_1', 'job_1');
 
       expect(job).toMatchObject({ proposalCount: 0 });
+    });
+  });
+
+  describe('location privacy', () => {
+    it('the owner reading their own job receives locationExact', async () => {
+      const { service, jobs } = build();
+      jobs.findLocationExact.mockResolvedValue({ address: '221B Baker Street' });
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      expect(jobs.findLocationExact).toHaveBeenCalledWith('job_1');
+      expect(job).toMatchObject({ locationExact: { address: '221B Baker Street' } });
+    });
+
+    // update()/publish()/cancel() write through JobsRepository.update, which
+    // now selects explicitly (see jobs.repository.spec.ts's own tests for
+    // the actual select-shape proof) rather than returning the full row.
+    // findMineById above is the one deliberate path that adds locationExact
+    // back in — an owner mutation response must never carry it by accident.
+    it("update()'s response never carries locationExact", async () => {
+      const { service } = build();
+
+      const result = await service.update('user_1', 'job_1', { title: 'Updated' });
+
+      expect(result).not.toHaveProperty('locationExact');
     });
   });
 

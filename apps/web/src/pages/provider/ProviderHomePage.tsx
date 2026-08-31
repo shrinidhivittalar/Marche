@@ -312,10 +312,10 @@ export const ProviderHomePage: React.FC = () => {
                       {job.proposalCount} proposal{job.proposalCount === 1 ? '' : 's'}
                     </span>
                   </div>
-                  {job.location && (
+                  {job.locationCoarse && (
                     <div className="flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
-                      <span className="truncate">{job.location}</span>
+                      <span className="truncate">{job.locationCoarse}</span>
                     </div>
                   )}
                   {job.clientProfile.verifiedAt && (
@@ -370,10 +370,10 @@ export const ProviderHomePage: React.FC = () => {
                       <span className="font-semibold text-ink">{formatEventWhen(selectedJob)}</span>
                     </div>
                   )}
-                  {selectedJob.location && (
+                  {selectedJob.locationCoarse && (
                     <div className="p-3 bg-bg border border-border rounded-xl flex items-center gap-2">
                       <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <span className="font-semibold text-ink">{selectedJob.location}</span>
+                      <span className="font-semibold text-ink">{selectedJob.locationCoarse}</span>
                     </div>
                   )}
                   {formatDeadline(selectedJob) && (

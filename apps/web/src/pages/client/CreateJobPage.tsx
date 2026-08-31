@@ -202,7 +202,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     setTitle(loaded.title);
     setCategoryId(loaded.category.id);
     setDescription(loaded.description);
-    setLocation(loaded.location ?? '');
+    setLocation(loaded.locationCoarse ?? '');
     setEventDate(loaded.eventDate ? loaded.eventDate.slice(0, 10) : '');
     // No stored timingMode: the presence of times is what it meant.
     setTimingMode(loaded.eventStartTime ? 'fixed' : 'flexible');
@@ -362,7 +362,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         : budgetMax > 0
           ? budgetMax
           : undefined,
-    location: location.trim() || undefined,
+    locationCoarse: location.trim() || undefined,
     eventDate: eventDate ? new Date(eventDate).toISOString() : undefined,
     // Times only exist in fixed mode, and only alongside a date — which is
     // what the API enforces too.

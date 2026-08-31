@@ -94,7 +94,7 @@ export class DirectContractsService {
           // agreed price, not a range to be proposed within.
           budgetMin: dto.price,
           budgetMax: dto.price,
-          location: dto.location,
+          locationCoarse: dto.locationCoarse,
           eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
           status: 'DRAFT',
           isDirect: true,

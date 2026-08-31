@@ -137,11 +137,15 @@ export class CreateJobDto {
   @Validate(BudgetRangeOrdered)
   budgetMax?: number;
 
+  // Renamed from `location` — see the schema's own comment. This is the
+  // coarse, publicly-visible label (city/area). There is no exact-address
+  // input on this DTO in this slice; locationExact is populated, if at all,
+  // through a separate mechanism not built yet.
   @ApiPropertyOptional({ maxLength: 120 })
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  location?: string;
+  locationCoarse?: string;
 
   // Not validated as future-dated. A client legitimately posts about an
   // event already under way, and a hard "must be in the future" check

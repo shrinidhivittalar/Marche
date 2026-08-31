@@ -166,7 +166,17 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <Spec icon={Calendar} label="Event" value={when ?? 'No date set'} />
-          <Spec icon={MapPin} label="Venue / City" value={requirement.location ?? 'Not stated'} />
+          <Spec
+            icon={MapPin}
+            label="Venue / City"
+            // The owner's own read — the API already includes locationExact
+            // when set, so show it in preference to the coarse label.
+            value={
+              (typeof requirement.locationExact === 'string' ? requirement.locationExact : null) ??
+              requirement.locationCoarse ??
+              'Not stated'
+            }
+          />
           <Spec icon={CalendarClock} label="Proposal Deadline" value={deadline ?? 'None'} />
           <Spec
             icon={Send}

@@ -52,7 +52,11 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
     findById: jest.fn().mockResolvedValue(proposal),
     findByJobAndProvider: jest.fn().mockResolvedValue(null),
     findByIdForClient: jest.fn().mockResolvedValue({ id: 'proposal_1', view: 'client' }),
-    findByIdForProvider: jest.fn().mockResolvedValue({ id: 'proposal_1', view: 'provider' }),
+    findByIdForProvider: jest.fn().mockResolvedValue({
+      id: 'proposal_1',
+      view: 'provider',
+      job: { id: 'job_1', locationCoarse: 'Bangalore' },
+    }),
     listByJob: jest.fn().mockResolvedValue([]),
     countByJob: jest.fn().mockResolvedValue(0),
     listByProvider: jest.fn().mockResolvedValue([]),
@@ -83,7 +87,13 @@ function build(over: { job?: Record<string, unknown>; proposal?: Record<string, 
       return Promise.resolve(null);
     }),
   };
-  const jobs = { findById: jest.fn().mockResolvedValue(job) };
+  const jobs = {
+    findById: jest.fn().mockResolvedValue(job),
+    // Nobody hired by default — findById's provider branch must not leak
+    // locationExact unless a test explicitly hires this provider.
+    findHiredProviderProfileId: jest.fn().mockResolvedValue(null),
+    findLocationExact: jest.fn().mockResolvedValue(null),
+  };
   const jobsService = {
     claimFilled: jest.fn().mockResolvedValue(undefined),
     // Mirrors the real JobsService.getOwnJob ownership check, reusing this
@@ -589,6 +599,7 @@ describe('ProposalsService', () => {
       await expect(asProvider.service.findById('user_1', 'proposal_1')).resolves.toEqual({
         id: 'proposal_1',
         view: 'provider',
+        job: { id: 'job_1', locationCoarse: 'Bangalore', locationExact: null },
       });
 
       const asClient = build();
@@ -606,6 +617,44 @@ describe('ProposalsService', () => {
       await expect(service.findById('user_9', 'proposal_1')).rejects.toBeInstanceOf(
         ForbiddenException,
       );
+    });
+
+    describe('location privacy', () => {
+      it('a provider who has not been hired sees locationCoarse only — locationExact is null', async () => {
+        const { service, jobs } = build();
+        jobs.findHiredProviderProfileId.mockResolvedValue(null);
+
+        const result = await service.findById('user_1', 'proposal_1');
+
+        expect(result.job).toEqual(
+          expect.objectContaining({ locationCoarse: 'Bangalore', locationExact: null }),
+        );
+        expect(jobs.findLocationExact).not.toHaveBeenCalled();
+      });
+
+      it('the hired provider receives locationExact', async () => {
+        const { service, jobs } = build();
+        jobs.findHiredProviderProfileId.mockResolvedValue('provider_profile');
+        jobs.findLocationExact.mockResolvedValue({ address: '221B Baker Street' });
+
+        const result = await service.findById('user_1', 'proposal_1');
+
+        expect(jobs.findHiredProviderProfileId).toHaveBeenCalledWith('job_1');
+        expect(result.job).toEqual(
+          expect.objectContaining({ locationExact: { address: '221B Baker Street' } }),
+        );
+      });
+
+      it('a different hired provider on the same job does not leak this provider’s exact location', async () => {
+        const { service, jobs } = build();
+        // Someone else was hired — not this caller.
+        jobs.findHiredProviderProfileId.mockResolvedValue('some_other_provider_profile');
+
+        const result = await service.findById('user_1', 'proposal_1');
+
+        expect(result.job).toEqual(expect.objectContaining({ locationExact: null }));
+        expect(jobs.findLocationExact).not.toHaveBeenCalled();
+      });
     });
 
     it('scopes a proposal read to the requirement in the path', async () => {

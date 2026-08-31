@@ -219,11 +219,11 @@ export const SubmitProposalPage: React.FC<SubmitProposalPageProps> = ({ jobId })
                   <p className="text-[11px] text-ink-muted">Event timing</p>
                 </div>
               </div>
-              {requirement.location && (
+              {requirement.locationCoarse && (
                 <div className="flex items-start gap-2.5">
                   <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-ink">{requirement.location}</p>
+                    <p className="text-xs font-bold text-ink">{requirement.locationCoarse}</p>
                     <p className="text-[11px] text-ink-muted">Location</p>
                   </div>
                 </div>

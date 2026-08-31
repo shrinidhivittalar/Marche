@@ -71,7 +71,9 @@ export interface ApiOwnProposal extends ProposalCore {
     /** Wall-clock "HH:MM" at the venue — display as given, never re-zone. */
     eventStartTime: string | null;
     eventEndTime: string | null;
-    location: string | null;
+    locationCoarse: string | null;
+    /** Present, possibly null, only once GET /proposals/:id confirms you were hired for this job. */
+    locationExact?: unknown;
     proposalDeadline: string | null;
     /** True for a direct-contracts-api.ts offer — accepted/declined there, not via accept/reject below. */
     isDirect: boolean;
@@ -102,7 +104,9 @@ export interface ApiConnection {
     title: string;
     status: JobStatus;
     eventDate: string | null;
-    location: string | null;
+    locationCoarse: string | null;
+    /** Present, possibly null, once GET /connections/:id confirms you are a party to this hire. */
+    locationExact?: unknown;
     isDirect: boolean;
   };
   proposal: {

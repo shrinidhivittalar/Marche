@@ -17,7 +17,11 @@ const CONNECTION_FIELDS = {
       title: true,
       status: true,
       eventDate: true,
-      location: true,
+      // Coarse only. locationExact is merged in by ConnectionsService.findById
+      // after its own isParty check — both roles a Connection can be read by
+      // (the client who owns the Job, the provider it was created for) are
+      // always entitled to it, but it is never selected here.
+      locationCoarse: true,
       // Lets a caller distinguish a direct contract from a marketplace hire
       // (see DirectContractsService) — the provider Contracts page's Direct
       // Contracts tab filters on this rather than needing a second endpoint.

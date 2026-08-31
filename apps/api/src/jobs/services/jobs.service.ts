@@ -86,7 +86,7 @@ export class JobsService {
       description: dto.description,
       budgetMin: dto.budgetMin,
       budgetMax: dto.budgetMax,
-      location: dto.location,
+      locationCoarse: dto.locationCoarse,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       eventStartTime: dto.eventStartTime,
       eventEndTime: dto.eventEndTime,
@@ -95,7 +95,7 @@ export class JobsService {
     });
   }
 
-  async update(userId: string, jobId: string, dto: UpdateJobDto): Promise<Job> {
+  async update(userId: string, jobId: string, dto: UpdateJobDto) {
     const { job } = await this.getOwnJob(userId, jobId);
 
     if (!EDITABLE_STATUSES.includes(job.status)) {
@@ -113,7 +113,7 @@ export class JobsService {
       description: dto.description,
       budgetMin: dto.budgetMin,
       budgetMax: dto.budgetMax,
-      location: dto.location,
+      locationCoarse: dto.locationCoarse,
       eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
       eventStartTime: dto.eventStartTime,
       eventEndTime: dto.eventEndTime,
@@ -125,7 +125,7 @@ export class JobsService {
     });
   }
 
-  async publish(userId: string, jobId: string): Promise<Job> {
+  async publish(userId: string, jobId: string) {
     const { job, profile } = await this.getOwnJob(userId, jobId);
 
     // Idempotent: publishing an already-published requirement is a no-op
@@ -159,7 +159,7 @@ export class JobsService {
     return published;
   }
 
-  async cancel(userId: string, jobId: string): Promise<Job> {
+  async cancel(userId: string, jobId: string) {
     const { job } = await this.getOwnJob(userId, jobId);
 
     if (job.status === 'CANCELLED') {
@@ -268,7 +268,14 @@ export class JobsService {
     if (!job) {
       throw new NotFoundException('Requirement not found');
     }
-    return withProposalCount(job);
+
+    // The owner is always entitled to the exact location they themselves
+    // set — getOwnJob above already proved that. Fetched separately rather
+    // than added to OWNER_JOB_FIELDS, so locationExact stays reachable only
+    // from call sites that have already done an authorization check, not
+    // from the shape of a shared select constant.
+    const locationExact = await this.jobsRepository.findLocationExact(jobId);
+    return { ...withProposalCount(job), locationExact };
   }
 
   // ---------- attachments ----------
@@ -446,6 +453,11 @@ export class JobsService {
     return {
       q: dto.q,
       categoryIds,
+      // JobSearchFilters.location, not locationCoarse: this maps the public
+      // ?location= query param (SearchJobsDto, deliberately left named
+      // location — it is a filter criterion, not a response field) through
+      // to JobsRepository, which is the layer that knows the column
+      // underneath it is now locationCoarse.
       location: dto.location,
       minBudget: dto.minBudget,
       maxBudget: dto.maxBudget,

@@ -213,12 +213,12 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
                 </div>
               )}
 
-              {requirement.location && (
+              {requirement.locationCoarse && (
                 <div className="flex items-center gap-3">
                   <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
                   <div>
                     <span className="block text-[10px] text-ink-muted">Venue / City</span>
-                    <span className="font-semibold text-ink">{requirement.location}</span>
+                    <span className="font-semibold text-ink">{requirement.locationCoarse}</span>
                   </div>
                 </div>
               )}

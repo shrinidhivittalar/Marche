@@ -221,7 +221,14 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
           <div className="flex items-start gap-2.5">
             <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-ink">{mine.job.location ?? 'Not stated'}</p>
+              <p className="font-bold text-ink">
+                {/* The API includes locationExact only once this provider is
+                    the hired one for this job — shown in preference to the
+                    coarse label when present. */}
+                {(typeof mine.job.locationExact === 'string' ? mine.job.locationExact : null) ??
+                  mine.job.locationCoarse ??
+                  'Not stated'}
+              </p>
               <p className="text-[11px] text-ink-muted">Location</p>
             </div>
           </div>
