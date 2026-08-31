@@ -2,7 +2,7 @@ import { ConflictException, Injectable, Logger, UnauthorizedException } from '@n
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
-import { UsersRepository } from '../repositories/users.repository';
+import { UsersRepository, type UserWithCapabilities } from '../repositories/users.repository';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { VerificationTokensRepository } from '../repositories/verification-tokens.repository';
 import { VerificationsRepository } from '../repositories/verifications.repository';
@@ -18,7 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleAuthVerifier } from '../google-auth-verifier';
 import type { RegisterDto } from '../dto/register.dto';
 import type { LoginDto } from '../dto/login.dto';
-import type { User } from '@marche/db';
+import type { Capability, User } from '@marche/db';
 
 // Postgres' unique-violation code — same duck-typed check already used in
 // skills.service.ts, proposals.service.ts, etc.
@@ -75,6 +75,14 @@ export interface PublicUser {
   name: string;
   role: string;
   emailVerified: boolean;
+  // The caller's own DB-backed capabilities (Module 01 Slice 2), added so
+  // the frontend can hold them as session state — until now they existed
+  // on request.user server-side (JwtStrategy.validate) but were dropped
+  // before serialization, leaving the client with only the legacy scalar
+  // role. Informational only: authorization stays server-side through
+  // hasCapability()/assertProviderRole()/assertClientRole(), which read the
+  // database per request and never trust anything the client sends back.
+  capabilities: Capability[];
 }
 
 export interface RegisterResult {
@@ -83,13 +91,21 @@ export interface RegisterResult {
 
 const REGISTER_ACKNOWLEDGEMENT: RegisterResult = { status: 'verification_email_sent' };
 
-export function toPublicUser(user: User): PublicUser {
+// Takes UserWithCapabilities, not User, deliberately: every path that
+// produces this response body must have loaded the capability rows. A
+// looser signature (capabilities optional, defaulted to []) would let a
+// caller that forgot to include them return "this user has no
+// capabilities" — indistinguishable from the truth, and wrong. Requiring
+// the loaded shape makes that a compile error instead, the same reasoning
+// as ProfilesRepository.withDetails's required viewerIsOwner argument.
+export function toPublicUser(user: UserWithCapabilities): PublicUser {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
     emailVerified: user.emailVerifiedAt !== null,
+    capabilities: user.capabilities.map((row) => row.capability),
   };
 }
 
@@ -462,35 +478,58 @@ export class AuthService {
     // login until/unless one is set through a separate flow (not built in
     // this slice), and User.passwordHash has no nullable variant to avoid
     // a broader schema change for a Google-only account.
-    const user = await this.prisma.client.$transaction(async (tx) => {
-      const unusablePasswordHash = await argon2.hash(randomBytes(32).toString('hex'));
-      const displayName = identity.email.split('@')[0]!;
-      const created = await this.usersRepository.create(
-        {
-          email: identity.email,
-          passwordHash: unusablePasswordHash,
-          name: displayName,
-          role: 'CLIENT',
-        },
-        tx,
-      );
-      await this.profilesService.createForNewUser(created.id, displayName, tx);
-      await this.authenticationMethodsRepository.createGoogle(created.id, identity.sub, tx);
-      if (identity.emailVerified) {
-        // Google already proved this address — no reason to also make the
-        // user click a verification email (module1-implementation-contract.md
-        // §7.2). Both representations written together, in the same
-        // transaction, per §8.2's write-path rule.
-        const verified = await this.usersRepository.markEmailVerified(created.id, tx);
-        await this.verificationsRepository.upsertEmailVerified(
-          created.id,
-          verified.emailVerifiedAt!,
+    const user = await this.prisma.client.$transaction(
+      async (tx) => {
+        const unusablePasswordHash = await argon2.hash(randomBytes(32).toString('hex'));
+        const displayName = identity.email.split('@')[0]!;
+        const created = await this.usersRepository.create(
+          {
+            email: identity.email,
+            passwordHash: unusablePasswordHash,
+            name: displayName,
+            role: 'CLIENT',
+          },
           tx,
         );
-        return verified;
-      }
-      return created;
-    });
+        await this.profilesService.createForNewUser(created.id, displayName, tx);
+        await this.authenticationMethodsRepository.createGoogle(created.id, identity.sub, tx);
+        if (identity.emailVerified) {
+          // Google already proved this address — no reason to also make the
+          // user click a verification email (module1-implementation-contract.md
+          // §7.2). Both representations written together, in the same
+          // transaction, per §8.2's write-path rule.
+          const verified = await this.usersRepository.markEmailVerified(created.id, tx);
+          await this.verificationsRepository.upsertEmailVerified(
+            created.id,
+            verified.emailVerifiedAt!,
+            tx,
+          );
+          return verified;
+        }
+        return created;
+      },
+      // Same override, for the same reason, as ProposalsService.accept —
+      // see the longer note there. Prisma's default interactive-transaction
+      // timeout is 5s, and this body spends it on work that is legitimately
+      // slow rather than stuck: an argon2 hash (deliberately expensive) plus
+      // five sequential round trips to a hosted database, each carrying real
+      // network latency. That total sat just under the default, which is the
+      // worst place to be — it passed often enough to look fine and then
+      // 500'd on a new user's very first Google sign-up. Module 2 Slice A's
+      // capability includes on create/markEmailVerified added enough to that
+      // total to push it over consistently.
+      //
+      // Raised rather than shrunk by dropping those includes: the response
+      // genuinely needs the capability rows, and the includes are correct.
+      // Nothing in here is unsafe to wait for either — atomicity is what the
+      // transaction is for, and the account must not half-exist.
+      //
+      // The lasting fix is fewer round trips in here (the argon2 hash in
+      // particular does not need to hold a transaction open), which is a
+      // change to how this write is expressed and does not belong in the
+      // commit that found the problem.
+      { timeout: 15_000, maxWait: 5_000 },
+    );
 
     await this.auditService.record({
       eventType: AUTH_EVENTS.GOOGLE_LOGIN_NEW_USER,

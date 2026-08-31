@@ -1,5 +1,5 @@
 import type { ApiNotification } from './notifications-api';
-import type { UserRole } from '../types';
+import type { ActiveMode } from './active-mode';
 
 // Display helpers for a notification as the API returns it. Beside
 // formatProposal.ts for the same reason that one exists: the API sends only
@@ -34,10 +34,19 @@ export function notificationCategory(type: ApiNotification['type']): Notificatio
  *
  * The route itself still enforces its own authorization on load — holding a
  * notification about something is never treated as proof of access to it.
+ *
+ * Takes the viewer's presentation mode rather than their legacy role. Only
+ * one notification type actually branches on the viewer, but for a
+ * dual-capability user the two answers differ: someone whose role is
+ * 'vendor' reading in CLIENT mode was previously sent to the provider
+ * route, which the mode-aware route gate then bounced. Mode is the value
+ * that matches where they actually are. A viewer with no marketplace
+ * surface (an admin) resolves to the client destination, exactly as a
+ * non-'vendor' role did before.
  */
 export function notificationRoute(
   notification: ApiNotification,
-  viewerRole: UserRole,
+  viewerMode: ActiveMode | null,
 ): string | null {
   const { type, data } = notification;
   const proposalId = data?.proposalId;
@@ -58,7 +67,7 @@ export function notificationRoute(
     // Connection page yet, so this lands on each side's own proposal view.
     case 'CONNECTION_ESTABLISHED':
       if (!proposalId) return null;
-      return viewerRole === 'vendor'
+      return viewerMode === 'PROVIDER'
         ? `/provider/proposals/${proposalId}`
         : `/client/proposals/${proposalId}`;
 

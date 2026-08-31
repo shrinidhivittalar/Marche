@@ -1,3 +1,5 @@
+import type { BackendCapability } from './lib/api';
+
 export type UserRole = 'client' | 'vendor' | 'admin';
 
 export type IdentityVerificationStatus = 'not_submitted' | 'pending' | 'verified';
@@ -44,6 +46,12 @@ export interface User {
   email: string;
   avatar: string;
   role: UserRole;
+  // Present only for a real, signed-in user — the demo/mock users this app
+  // still falls back to when signed out have no DB-backed capabilities to
+  // report, which is why this is optional rather than defaulted to []. Set
+  // from the API's authenticated-user response; nothing reads it yet, and
+  // it is never an authorization input (the server re-checks every request).
+  capabilities?: BackendCapability[];
   companyOrTitle?: string;
   rating?: number;
   reviewCount?: number;

@@ -43,6 +43,7 @@ describe('ProfilesService', () => {
   let profilesRepository: jest.Mocked<ProfilesRepository>;
   let service: ProfilesService;
   let mediaService: { signViewUrl: jest.Mock; assertAttachable: jest.Mock };
+  let reviewsService: { projectStatsForProfile: jest.Mock };
 
   beforeEach(() => {
     profilesRepository = {
@@ -63,7 +64,13 @@ describe('ProfilesService', () => {
       signViewUrl: jest.fn().mockResolvedValue(null),
       assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
     };
-    service = new ProfilesService(profilesRepository, mediaService as never);
+    reviewsService = {
+      projectStatsForProfile: jest
+        .fn()
+        .mockResolvedValue({ completedProjects: 0, averageRating: null, totalReviews: 0 }),
+    };
+    const moduleRef = { get: jest.fn().mockReturnValue(reviewsService) };
+    service = new ProfilesService(profilesRepository, mediaService as never, moduleRef as never);
   });
 
   describe('createForNewUser', () => {
@@ -262,6 +269,29 @@ describe('ProfilesService', () => {
       });
     });
 
+    // Statistics are ReviewsService's numbers, passed through untouched —
+    // ProfilesService owns none of the completed-project/rating logic
+    // itself. This is the one test asserting the two are actually wired
+    // together, not just that the zero-value default renders.
+    it('passes through real statistics from ReviewsService.projectStatsForProfile', async () => {
+      profilesRepository.findByUsername.mockResolvedValue(buildProfile() as never);
+      profilesRepository.withDetails.mockResolvedValue(buildDetails() as never);
+      reviewsService.projectStatsForProfile.mockResolvedValue({
+        completedProjects: 7,
+        averageRating: 4.5,
+        totalReviews: 3,
+      });
+
+      const result = await service.getPublicProfileByUsername('jane');
+
+      expect(reviewsService.projectStatsForProfile).toHaveBeenCalledWith('profile_1');
+      expect(result.statistics).toEqual({
+        completedProjects: 7,
+        averageRating: 4.5,
+        totalReviews: 3,
+      });
+    });
+
     // The repository does the filtering; what the service owes it is an
     // honest answer to "is this the owner looking". Get that wrong and a
     // PRIVATE piece is either published to the world or hidden from the
@@ -354,7 +384,14 @@ describe('/u/:username end to end', () => {
       withDetails: jest.fn().mockResolvedValue(buildDetails()),
     } as unknown as jest.Mocked<ProfilesRepository>;
     const media = { signViewUrl: jest.fn().mockResolvedValue(null) };
-    return new ProfilesController(new ProfilesService(repository, media as never) as never);
+    const reviews = {
+      projectStatsForProfile: jest
+        .fn()
+        .mockResolvedValue({ completedProjects: 0, averageRating: null, totalReviews: 0 }),
+    };
+    const moduleRef = { get: jest.fn().mockReturnValue(reviews) };
+    const service = new ProfilesService(repository, media as never, moduleRef as never);
+    return new ProfilesController(service as never);
   }
 
   it('serves an active public profile to an anonymous reader', async () => {

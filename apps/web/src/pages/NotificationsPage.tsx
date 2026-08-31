@@ -13,7 +13,8 @@ import { NotificationIcon } from '../components/notifications/NotificationIcon';
 // entirely (a saved-preference match, not an event about something that
 // happened), so it isn't part of this rewire.
 export const NotificationsPage: React.FC = () => {
-  const { currentUser, navigate, jobs, jobAlertSettings, updateJobAlertSettings } = useApp();
+  const { currentUser, navigate, surface, jobs, jobAlertSettings, updateJobAlertSettings } =
+    useApp();
   const { notifications, loading, error, hasMore, loadMore, markAsRead, markAllRead } =
     useNotifications();
 
@@ -245,7 +246,7 @@ export const NotificationsPage: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {visibleNotifs.map((n) => {
-            const route = notificationRoute(n, currentUser.role);
+            const route = notificationRoute(n, surface);
             const unread = n.readAt === null;
             return (
               <div

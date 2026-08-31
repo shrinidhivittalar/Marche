@@ -25,6 +25,19 @@ import { LanguagesRepository } from './repositories/languages.repository';
 @Module({
   // Profiles attaches uploaded files to portfolio pieces and avatars, so it
   // needs MediaService's ownership checks. It never touches storage itself.
+  //
+  // ReviewsModule is deliberately NOT imported here. ReviewsModule already
+  // imports ProfilesModule (for ProfilesRepository), and statically
+  // importing it back — even behind forwardRef() — makes profiles.module.ts
+  // and reviews.module.ts a genuine circular ES-module import, not just a
+  // Nest DI cycle: forwardRef only defers *when* Nest resolves the
+  // provider, not the order the two files evaluate each other's exports at
+  // load time. In practice that broke every unrelated module-wiring test
+  // that imports ProfilesModule through a shorter path than AppModule's
+  // full graph (Marketplace, SavedProviders, Messages, Disputes, Referrals
+  // all failed with "module at index [0] is undefined"). ProfilesService
+  // instead resolves ReviewsService lazily via ModuleRef — see its
+  // constructor — which needs no static import here at all.
   imports: [MediaModule],
   controllers: [
     ProfilesController,

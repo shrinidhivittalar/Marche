@@ -59,7 +59,16 @@ const SECTION_LINKS: Record<string, { label: string; path: string }[]> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { currentUser, route, navigate, apiMessagesUnreadCount } = useApp();
+  const {
+    currentUser,
+    route,
+    navigate,
+    logoutAccount,
+    surface,
+    availableModes,
+    setActiveMode,
+    apiMessagesUnreadCount,
+  } = useApp();
   const {
     notifications,
     loading: notificationsLoading,
@@ -122,28 +131,28 @@ export const Sidebar: React.FC = () => {
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
-  const navItems =
-    currentUser.role === 'client'
-      ? clientNav
-      : currentUser.role === 'vendor'
-        ? vendorNav
-        : adminNav;
+  // Admin is checked first everywhere below: it is a platform role, not a
+  // marketplace mode, and must not be expressed as CLIENT/PROVIDER. For
+  // everyone else the surface — not the legacy role — decides, so the nav a
+  // user sees always matches the routes the gate will let them reach.
+  const isAdmin = currentUser.role === 'admin';
 
-  const homePath =
-    currentUser.role === 'client'
-      ? '/client/dashboard'
-      : currentUser.role === 'vendor'
-        ? '/provider/dashboard'
-        : currentUser.role === 'admin'
-          ? '/admin/audit'
-          : '/';
+  const navItems = isAdmin ? adminNav : surface === 'PROVIDER' ? vendorNav : clientNav;
 
-  const profilePath =
-    currentUser.role === 'vendor'
+  const homePath = isAdmin
+    ? '/admin/audit'
+    : surface === 'PROVIDER'
+      ? '/provider/dashboard'
+      : '/client/dashboard';
+
+  // Both routes resolve the same underlying Profile — there is one Profile
+  // per User. Only which of the two existing routes is surfaced depends on
+  // mode; no second profile exists.
+  const profilePath = isAdmin
+    ? '/admin/profile'
+    : surface === 'PROVIDER'
       ? '/provider/profile'
-      : currentUser.role === 'client'
-        ? '/client/profile'
-        : '/admin/profile';
+      : '/client/profile';
 
   const identityItemClass = (variant: 'default' | 'danger' = 'default') =>
     `w-full flex items-center rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -310,7 +319,7 @@ export const Sidebar: React.FC = () => {
                     ) : (
                       <div className="max-h-80 overflow-y-auto">
                         {recentNotifs.map((n) => {
-                          const route = notificationRoute(n, currentUser.role);
+                          const route = notificationRoute(n, surface);
                           const unread = n.readAt === null;
                           return (
                             <PopoverClose asChild key={n.id}>
@@ -450,22 +459,65 @@ export const Sidebar: React.FC = () => {
       <div className="pt-3 border-t border-white/10">
         {identityOpen && (
           <div className="mb-1 space-y-0.5">
+            {/* Mode switcher. Only a user who genuinely holds both
+                capabilities sees it — a single-capability user has nothing
+                to switch to, and the option is absent rather than
+                disabled. Selecting a mode changes presentation state only:
+                setActiveMode never touches currentUser, so id, email, name,
+                capabilities and the access token are identical either side
+                of a switch. It is not authorization — the API re-checks
+                capabilities on every request regardless of mode. */}
+            {availableModes.length > 1 && (
+              <div className="pb-1 mb-1 border-b border-white/10 space-y-0.5">
+                {availableModes.map((mode) => {
+                  const isCurrent = mode === surface;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setActiveMode(mode)}
+                      aria-pressed={isCurrent}
+                      className={`${identityItemClass()} ${isCurrent ? '!text-white !bg-white/10' : ''}`}
+                    >
+                      {mode === 'CLIENT' ? (
+                        <Briefcase className="w-4 h-4 shrink-0" />
+                      ) : (
+                        <Users className="w-4 h-4 shrink-0" />
+                      )}
+                      {!collapsed && (
+                        <span className="flex-1 text-left">
+                          {mode === 'CLIENT' ? 'Hiring' : 'Providing'}
+                        </span>
+                      )}
+                      {!collapsed && isCurrent && <CheckCheck className="w-3.5 h-3.5 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <button onClick={() => navigate(profilePath)} className={identityItemClass()}>
               <User className="w-4 h-4 shrink-0" />
               {!collapsed && <span>My Profile</span>}
             </button>
 
-            {currentUser.role === 'client' && (
+            {/* Account-level, not client-only: /client/settings is the one
+                settings screen that exists, and a dual-capability user must
+                not lose access to it by switching to PROVIDER. Admins keep
+                their existing behaviour of not seeing it. */}
+            {!isAdmin && (
               <button onClick={() => navigate('/client/settings')} className={identityItemClass()}>
                 <Settings className="w-4 h-4 shrink-0" />
                 {!collapsed && <span>Settings</span>}
               </button>
             )}
 
-            <button
-              onClick={() => navigate('/auth/signin')}
-              className={identityItemClass('danger')}
-            >
+            {/* logoutAccount, not a bare navigate to the sign-in page:
+                navigating alone left the refresh-token cookie live on the
+                server and the access token in memory, so the session was
+                still usable and going back landed on a protected route
+                fully signed in. It also owns clearing the stored
+                active-mode preference. */}
+            <button onClick={() => void logoutAccount()} className={identityItemClass('danger')}>
               <LogOut className="w-4 h-4 shrink-0" />
               {!collapsed && <span>Log Out</span>}
             </button>
