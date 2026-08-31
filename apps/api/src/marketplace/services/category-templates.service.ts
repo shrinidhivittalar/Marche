@@ -50,6 +50,36 @@ export class CategoryTemplatesService {
     return { template: template ? toPublicTemplate(template) : null };
   }
 
+  /**
+   * One specific, possibly-historical template version, public — the
+   * counterpart to getActiveForSlug for a Job that is locked to a version
+   * other than whatever is active now. Without this, nothing can render a
+   * Job's categoryData with real field labels/types once an admin has
+   * activated a newer version for its category: getActiveForSlug would
+   * return the wrong one.
+   *
+   * 404s a templateId that does not belong to this category, the same
+   * scoping getVersion already applies for the admin route — a caller
+   * cannot pair an arbitrary template id with an unrelated category slug
+   * to read something that isn't there.
+   */
+  async getVersionForSlug(slug: string, templateId: string): Promise<{ template: PublicTemplate }> {
+    const category = await this.categoriesRepository.findBySlug(slug);
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    const template = await this.categoryTemplatesRepository.findByIdForCategory(
+      category.id,
+      templateId,
+    );
+    if (!template) {
+      throw new NotFoundException('Template version not found');
+    }
+
+    return { template: toPublicTemplate(template) };
+  }
+
   // ---------- admin ----------
 
   async listVersions(platformRole: PlatformRole, categoryId: string) {

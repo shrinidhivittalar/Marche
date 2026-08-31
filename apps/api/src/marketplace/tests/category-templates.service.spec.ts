@@ -89,6 +89,49 @@ describe('CategoryTemplatesService', () => {
     });
   });
 
+  describe('getVersionForSlug — the public read for a Job’s locked (possibly non-active) version', () => {
+    it('resolves the category by slug, then the specific version scoped to it — no admin gate', async () => {
+      const { service, categoryTemplatesRepository, categoriesRepository } = build();
+      categoryTemplatesRepository.findByIdForCategory.mockResolvedValue({
+        id: 'template_old',
+        allowedModes: [],
+        locationRequired: false,
+        fields: [],
+      });
+
+      const result = await service.getVersionForSlug('painting', 'template_old');
+
+      expect(categoriesRepository.findBySlug).toHaveBeenCalledWith('painting');
+      expect(categoryTemplatesRepository.findByIdForCategory).toHaveBeenCalledWith(
+        'category_1',
+        'template_old',
+      );
+      expect(result).toEqual({
+        template: { id: 'template_old', allowedModes: [], locationRequired: false, fields: [] },
+      });
+    });
+
+    it('404s for a category slug that does not exist at all', async () => {
+      const { service, categoriesRepository } = build();
+      categoriesRepository.findBySlug.mockResolvedValue(null);
+
+      await expect(service.getVersionForSlug('nope', 'template_1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('404s a template id that does not belong to the resolved category', async () => {
+      const { service, categoryTemplatesRepository } = build();
+      // Scoped query returns nothing — the template exists, just under a
+      // different category, excluded at the database level.
+      categoryTemplatesRepository.findByIdForCategory.mockResolvedValue(null);
+
+      await expect(
+        service.getVersionForSlug('painting', 'template_from_elsewhere'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('authorization', () => {
     it.each(['CLIENT', 'PROVIDER'])('rejects listVersions by %s', async (role) => {
       const { service } = build();

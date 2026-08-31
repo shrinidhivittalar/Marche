@@ -233,6 +233,15 @@ describe('template version locking + categoryData', () => {
     // sees the v1-shaped answer, not a v2 one it was never given.
     const rawJob = await prisma.client.job.findUniqueOrThrow({ where: { id: job.id } });
     expect(rawJob.categoryTemplateId).toBe(v1.id);
+
+    // And the public locked-template-read endpoint returns v1's own field
+    // set — `area` — never v2's `square-metres`, even though v2 is what
+    // getActiveForSlug would now return for this same category.
+    const lockedRead = await templates.getVersionForSlug(`${RUN}-painting-versioned`, v1.id);
+    expect(lockedRead.template.fields.map((f) => f.key)).toEqual(['area']);
+
+    const activeRead = await templates.getActiveForSlug(`${RUN}-painting-versioned`);
+    expect(activeRead.template?.fields.map((f) => f.key)).toEqual(['square-metres']);
   }, 30_000);
 
   it('changing categoryId re-locks to the new category’s active template and discards the old categoryData, requiring fresh answers', async () => {
@@ -293,6 +302,20 @@ describe('template version locking + categoryData', () => {
 
     expect(moved.categoryTemplateId).toBeNull();
     expect(moved.categoryData).toBeNull();
+  }, 30_000);
+
+  it('the public locked-template read 404s a template id that does not belong to the category slug in the path', async () => {
+    const categoryAId = await makeCategory('cross-scope-a');
+    const templateA = await templates.createAndActivate('ADMIN', adminUserId, categoryAId, {
+      fields: [{ key: 'notes', label: 'Notes', type: 'TEXT', required: false, order: 0 }],
+    });
+
+    const categoryBSlug = `${RUN}-cross-scope-b`;
+    await makeCategory('cross-scope-b');
+
+    // templateA is real, but it belongs to category A — reading it through
+    // category B's slug must 404, not silently return it.
+    await expect(templates.getVersionForSlug(categoryBSlug, templateA.id)).rejects.toThrow();
   }, 30_000);
 
   it('DirectContracts.create locks and validates categoryData through the exact same shared rule as Jobs', async () => {

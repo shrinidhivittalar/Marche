@@ -93,6 +93,7 @@ describe('marketplace route registration', () => {
       expect(signature).toEqual(
         expect.arrayContaining([
           'GET /:slug/template',
+          'GET /:slug/template/:templateId',
           'GET /:id/templates',
           'GET /:id/templates/:templateId',
           'POST /:id/templates',
@@ -102,6 +103,13 @@ describe('marketplace route registration', () => {
 
     it('leaves the active-template read unguarded — public, like GET /categories/:slug', () => {
       expect(guardedHandlers('getActive')).toBe(false);
+    });
+
+    // A Job's locked version may not be the category's current active one
+    // — this route has to be just as public as getActive, or nothing can
+    // render an older Job's categoryData correctly.
+    it('leaves the specific-version-by-id read unguarded too', () => {
+      expect(guardedHandlers('getVersionPublic')).toBe(false);
     });
 
     it('guards every admin route', () => {

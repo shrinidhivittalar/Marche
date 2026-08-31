@@ -32,6 +32,23 @@ export class CategoryTemplatesController {
     return this.categoryTemplatesService.getActiveForSlug(slug);
   }
 
+  // The public counterpart to a Job's locked categoryTemplateId: a Job may
+  // be pinned to a version other than whatever this category's active one
+  // is right now, and this is how anyone who can see that Job (including
+  // an anonymous provider browsing it) reads the exact version its
+  // categoryData was validated against. No admin gate — same visibility as
+  // getActive, just for a specific historical version instead of "current".
+  @Get(':slug/template/:templateId')
+  @ApiOperation({
+    summary: 'One specific template version, by id. No authentication.',
+    description:
+      'For rendering an existing Job’s categoryData correctly — its locked version may not ' +
+      'be the category’s current active one.',
+  })
+  getVersionPublic(@Param('slug') slug: string, @Param('templateId') templateId: string) {
+    return this.categoryTemplatesService.getVersionForSlug(slug, templateId);
+  }
+
   // Primary enforcement is PlatformRoleGuard; CategoryTemplatesService's own
   // assertAdminRole call is kept as a defensive backstop — the same current
   // pattern CategoriesController uses, not the stale service-only
