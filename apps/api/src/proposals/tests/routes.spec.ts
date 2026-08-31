@@ -3,6 +3,7 @@ import { RequestMethod } from '@nestjs/common';
 import { ProposalsController } from '../controllers/proposals.controller';
 import { JobProposalsController } from '../controllers/job-proposals.controller';
 import { ConnectionsController } from '../controllers/connections.controller';
+import { PriceNegotiationsController } from '../controllers/price-negotiations.controller';
 
 // Same reasoning as the jobs and marketplace route specs: Nest registers
 // routes in declaration order, so a literal path declared after a
@@ -127,5 +128,42 @@ describe('connections route registration', () => {
     const patches = routes.filter((r) => r.method === RequestMethod.PATCH);
     expect(patches).toHaveLength(1);
     expect(patches[0].path).toBe(':id/complete');
+  });
+});
+
+describe('price negotiations route registration', () => {
+  const routes = routesOf(PriceNegotiationsController);
+
+  it('exposes propose, accept, reject, withdraw and the history read', () => {
+    expect(signatureOf(routes)).toEqual(
+      expect.arrayContaining([
+        'GET /',
+        'POST /',
+        'POST /:negotiationId/accept',
+        'POST /:negotiationId/reject',
+        'POST /:negotiationId/withdraw',
+      ]),
+    );
+  });
+
+  it('is guarded, matching every other route in this module', () => {
+    expect(controllerGuards(PriceNegotiationsController)).toBe(true);
+  });
+
+  // Scoped under the proposal it belongs to, the same reasoning attachment
+  // routes on ProposalsController already use — a negotiation round means
+  // nothing without the proposal id.
+  it('lives under /proposals/:id/price-negotiations', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, PriceNegotiationsController)).toBe(
+      'proposals/:id/price-negotiations',
+    );
+  });
+
+  // Each decision is its own route, same rule as ProposalsController's own
+  // accept/reject/withdraw — no caller can set a status directly.
+  it('exposes no PATCH or PUT — a decided round is never edited, only responded to', () => {
+    const verbs = routes.map((r) => r.method);
+    expect(verbs).not.toContain(RequestMethod.PATCH);
+    expect(verbs).not.toContain(RequestMethod.PUT);
   });
 });

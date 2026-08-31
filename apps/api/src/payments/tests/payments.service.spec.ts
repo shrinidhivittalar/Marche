@@ -84,6 +84,18 @@ describe('PaymentsService', () => {
       expect(result.razorpayKeyId).toBe('rzp_test_key');
     });
 
+    it('charges the negotiated agreedPrice, not the original proposedPrice, when one was agreed', async () => {
+      const { service, connectionsService, razorpay } = build();
+      connectionsService.findById.mockResolvedValue({
+        ...CONNECTION,
+        proposal: { proposedPrice: '9500', agreedPrice: '8200' },
+      });
+
+      await service.createOrder('user_client', 'connection_1');
+
+      expect(razorpay.createOrder).toHaveBeenCalledWith(8200, 'connection_1');
+    });
+
     it('rejects a non-client party', async () => {
       const { service, profilesRepository } = build();
       profilesRepository.findByUserId.mockResolvedValue({ id: 'profile_provider' });

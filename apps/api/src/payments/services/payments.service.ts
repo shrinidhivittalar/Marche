@@ -79,7 +79,10 @@ export class PaymentsService {
       throw new ConflictException('This connection has already been paid for');
     }
 
-    const amount = Number(connection.proposal.proposedPrice);
+    // Negotiated price wins when one exists (PriceNegotiationsService) —
+    // proposedPrice stays the original offer regardless, so this is the one
+    // place that decides which figure is actually charged.
+    const amount = Number(connection.proposal.agreedPrice ?? connection.proposal.proposedPrice);
     const order = await this.razorpay.createOrder(amount, connectionId);
 
     // Retrying an abandoned/failed checkout updates the one row rather than

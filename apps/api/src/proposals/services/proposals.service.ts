@@ -19,6 +19,7 @@ import { paginate } from '../../marketplace/pagination';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { ProposalsRepository } from '../repositories/proposals.repository';
 import { ConnectionsRepository } from '../repositories/connections.repository';
+import { PriceNegotiationsRepository } from '../repositories/price-negotiations.repository';
 import type { CreateProposalDto } from '../dto/proposal.dto';
 import type { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
 import type { Job, Proposal } from '@marche/db';
@@ -46,6 +47,7 @@ export class ProposalsService {
   constructor(
     private readonly proposalsRepository: ProposalsRepository,
     private readonly connectionsRepository: ConnectionsRepository,
+    private readonly priceNegotiationsRepository: PriceNegotiationsRepository,
     private readonly profilesRepository: ProfilesRepository,
     private readonly jobsRepository: JobsRepository,
     private readonly jobsService: JobsService,
@@ -203,6 +205,17 @@ export class ProposalsService {
     const providerUserId = await this.profilesRepository.findUserIdById(proposal.providerProfileId);
     if (providerUserId === userId) {
       throw new ForbiddenException('You cannot accept your own proposal');
+    }
+
+    // A proposal with a price round still PROPOSED is ambiguous: accepting
+    // it now would leave it unclear whether the client meant to accept the
+    // original proposedPrice or the pending ask. The other party must
+    // accept, reject or withdraw the round first, through the price
+    // negotiation endpoints — see PriceNegotiationsService.
+    if (await this.priceNegotiationsRepository.hasPending(proposal.id)) {
+      throw new ConflictException(
+        'This proposal has a pending price change. Resolve it before accepting.',
+      );
     }
 
     const connection = await this.prisma.client.$transaction(

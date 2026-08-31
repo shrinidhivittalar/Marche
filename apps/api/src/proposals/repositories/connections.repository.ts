@@ -25,7 +25,20 @@ const CONNECTION_FIELDS = {
     },
   },
   proposal: {
-    select: { id: true, proposedPrice: true, deliveryDays: true, submittedAt: true },
+    // agreedPrice is the negotiated final figure, if the two parties agreed
+    // to one (PriceNegotiationsService) — null otherwise. proposedPrice
+    // stays the original, immutable snapshot regardless. Consumers reading
+    // "what was agreed" (Payments today) should read
+    // proposal.agreedPrice ?? proposal.proposedPrice, never proposedPrice
+    // alone.
+    select: {
+      id: true,
+      proposedPrice: true,
+      agreedPrice: true,
+      agreedPriceAt: true,
+      deliveryDays: true,
+      submittedAt: true,
+    },
   },
   clientProfile: {
     select: { id: true, username: true, displayName: true, location: true, avatarMediaId: true },
