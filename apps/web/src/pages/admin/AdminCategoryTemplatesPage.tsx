@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
-import { ListChecks, Plus, ChevronRight } from 'lucide-react';
-import { Button, Card, Badge, Checkbox, Label, Alert } from '@marche/ui';
+import { ListChecks, Plus, ChevronRight, Pencil } from 'lucide-react';
+import {
+  Button,
+  Card,
+  Badge,
+  Checkbox,
+  Label,
+  Alert,
+  Input,
+  Textarea,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
@@ -57,29 +71,115 @@ function formatDate(iso: string): string {
   });
 }
 
+// Matches the backend's own slug pattern (CreateCategoryDto) by
+// construction — lowercase words joined by single hyphens, nothing else
+// survives.
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const NO_PARENT = '__none__';
+
 // Picker shown at /admin/categories (no id yet) — there is no separate
 // category-list admin screen, so this doubles as the entry point into the
 // one page /admin/categories/:id.
-const CategoryPicker: React.FC<{ categories: ApiCategory[] }> = ({ categories }) => {
+const CategoryPicker: React.FC<{
+  token: string;
+  categories: ReturnType<typeof useApiResource<ApiCategory[]>>;
+}> = ({ token, categories }) => {
   const { navigate } = useApp();
-  const flat = flattenCategories(categories);
+  // Same reasoning as CategoryDetail's own pageEl — the Modal/Select below
+  // portal to document.body by default, outside this page's
+  // [data-theme="admin"] scope, and would otherwise render unthemed.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  const flat = flattenCategories(categories.data ?? []);
+  // The backend nests one level deep (assertCanBeParent) — a category that
+  // already has a parent can't itself be picked as one, so it's left out
+  // rather than offering a choice that's guaranteed to 400.
+  const topLevel = flat.filter((c) => !c.parentId);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState(NO_PARENT);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const openCreateModal = () => {
+    setName('');
+    setSlug('');
+    setSlugTouched(false);
+    setDescription('');
+    setParentId(NO_PARENT);
+    setSubmitError(null);
+    setCreateOpen(true);
+  };
+
+  const updateName = (value: string) => {
+    setName(value);
+    if (!slugTouched) setSlug(slugify(value));
+  };
+
+  const updateSlug = (value: string) => {
+    setSlugTouched(true);
+    setSlug(value);
+  };
+
+  const canSubmit = name.trim().length >= 2 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug);
+
+  const handleCreate = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const created = await marketplaceApi.createCategory(token, {
+        name: name.trim(),
+        slug,
+        description: description.trim() || undefined,
+        parentId: parentId === NO_PARENT ? undefined : parentId,
+      });
+      setCreateOpen(false);
+      // Refetch before navigating — the detail page resolves the category
+      // from this same shared resource, and a stale list would show
+      // "Category not found" for the one just created.
+      await categories.refetch();
+      navigate(`/admin/categories/${created.id}`);
+    } catch (error) {
+      setSubmitError(error instanceof ApiError ? error.message : 'Unable to create the category.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      <div className="pb-6 border-b border-border">
-        <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-          Category Templates
-        </h1>
-        <p className="text-xs text-ink-muted mt-1">
-          Pick a category to review or create a requirement-form version for it.
-        </p>
+    <div ref={setPageEl} className="space-y-8 max-w-3xl mx-auto">
+      <div className="pb-6 border-b border-border flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
+            Category Templates
+          </h1>
+          <p className="text-xs text-ink-muted mt-1">
+            Pick a category to review or create a requirement-form version for it.
+          </p>
+        </div>
+        <Button icon={Plus} onClick={openCreateModal}>
+          Create Category
+        </Button>
       </div>
 
       {flat.length === 0 ? (
         <EmptyState
           title="No categories yet"
-          description="Categories are created elsewhere — there's nothing to configure a template for yet."
+          description="Create the first category to get started."
           icon={ListChecks}
+          actionLabel="Create Category"
+          onAction={openCreateModal}
         />
       ) : (
         <div className="space-y-2">
@@ -99,6 +199,81 @@ const CategoryPicker: React.FC<{ categories: ApiCategory[] }> = ({ categories })
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create New Category"
+        description="Creates the category immediately — configure its requirement template and settings afterward."
+        container={pageEl}
+      >
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1">
+            <Label className="text-[11px]">Category Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => updateName(e.target.value)}
+              placeholder="e.g. Wedding Photography"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Slug</Label>
+            <Input
+              value={slug}
+              onChange={(e) => updateSlug(e.target.value)}
+              placeholder="wedding-photography"
+              className="font-mono"
+            />
+            <p className="text-[11px] text-ink-muted">
+              Lowercase, hyphen-separated. Auto-filled from the name until edited directly.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Description (optional)</Label>
+            <Textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Shown to clients when browsing categories."
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Parent category (optional)</Label>
+            <Select value={parentId} onValueChange={setParentId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent container={pageEl}>
+                <SelectItem value={NO_PARENT}>No parent — top-level category</SelectItem>
+                {topLevel.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-ink-muted">
+              Categories nest one level deep — a subcategory can't itself have subcategories.
+            </p>
+          </div>
+
+          {submitError && <Alert variant="destructive" title={submitError} />}
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={submitting || !canSubmit}
+              loading={submitting}
+            >
+              Create Category
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -120,7 +295,7 @@ export const AdminCategoryTemplatesPage: React.FC<AdminCategoryTemplatesPageProp
     if (categories.error) {
       return <p className="text-xs text-destructive py-12 text-center">{categories.error}</p>;
     }
-    return <CategoryPicker categories={categories.data ?? []} />;
+    return <CategoryPicker token={token} categories={categories} />;
   }
 
   return <CategoryDetail id={id} token={token} categories={categories} />;
@@ -168,6 +343,18 @@ const CategoryDetail: React.FC<{
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
+
+  // Rename / edit description — deliberately separate from the template
+  // version state above: this edits the Category row itself (PATCH
+  // /categories/:id), not a CategoryTemplate version. Slug is not editable
+  // here — out of scope, and every existing link/route to this category
+  // already uses its id, not its slug, so nothing downstream breaks by
+  // leaving it out.
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const activeTemplateId = active.data?.template?.id ?? null;
 
@@ -254,6 +441,34 @@ const CategoryDetail: React.FC<{
     }
   };
 
+  const openEditModal = () => {
+    if (!category) return;
+    setEditName(category.name);
+    setEditDescription(category.description ?? '');
+    setEditError(null);
+    setEditDetailsOpen(true);
+  };
+
+  const canSubmitEdit = editName.trim().length >= 2;
+
+  const handleEditSave = async () => {
+    if (!canSubmitEdit) return;
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      await marketplaceApi.updateCategory(token, id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+      });
+      setEditDetailsOpen(false);
+      await categories.refetch();
+    } catch (error) {
+      setEditError(error instanceof ApiError ? error.message : 'Unable to save changes.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   if (categories.loading && !category) {
     return <p className="text-xs text-ink-muted py-12 text-center">Loading category…</p>;
   }
@@ -284,10 +499,23 @@ const CategoryDetail: React.FC<{
           >
             ← All categories
           </button>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
-            {category.name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">
+              {category.name}
+            </h1>
+            <button
+              type="button"
+              onClick={openEditModal}
+              aria-label="Edit category name and description"
+              className="text-ink-muted hover:text-ink cursor-pointer"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          </div>
           <p className="text-xs text-ink-muted mt-1 font-mono">{category.slug}</p>
+          {category.description && (
+            <p className="text-xs text-ink-muted mt-1 max-w-md">{category.description}</p>
+          )}
         </div>
         <Button
           icon={Plus}
@@ -427,6 +655,46 @@ const CategoryDetail: React.FC<{
             >
               {submitting ? 'Creating…' : 'Create & Activate'}
             </SpecularButton>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editDetailsOpen}
+        onClose={() => setEditDetailsOpen(false)}
+        title="Edit Category"
+        description="Slug is not editable here — it's referenced by existing links and routes."
+        container={pageEl}
+      >
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1">
+            <Label className="text-[11px]">Category Name</Label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Description (optional)</Label>
+            <Textarea
+              rows={3}
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Shown to clients when browsing categories."
+            />
+          </div>
+
+          {editError && <Alert variant="destructive" title={editError} />}
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setEditDetailsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleEditSave()}
+              disabled={editSubmitting || !canSubmitEdit}
+              loading={editSubmitting}
+            >
+              Save Changes
+            </Button>
           </div>
         </div>
       </Modal>

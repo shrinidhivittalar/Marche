@@ -327,6 +327,24 @@ export const marketplaceApi = {
   categories: () => apiFetch<ApiCategory[]>('/categories', null),
   categoryBySlug: (slug: string) => apiFetch<ApiCategory>(`/categories/${slug}`, null),
 
+  // Admin only — mirrors CreateCategoryDto/UpdateCategoryDto exactly
+  // (categories.controller.ts). No status/lifecycle field exists on the
+  // backend yet, so there is nothing to send for one.
+  createCategory: (
+    token: string,
+    body: { name: string; slug: string; description?: string; parentId?: string },
+  ) => apiFetch<ApiCategory>('/categories', token, { method: 'POST', body: JSON.stringify(body) }),
+
+  updateCategory: (
+    token: string,
+    id: string,
+    body: Partial<{ name: string; description: string }>,
+  ) =>
+    apiFetch<ApiCategory>(`/categories/${id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
   searchServices: (params: ServiceSearchParams) =>
     apiFetch<MarketplaceEnvelope<ApiServiceCard>>(`/services?${toQuery(params)}`, null).then(
       normalisePage,
