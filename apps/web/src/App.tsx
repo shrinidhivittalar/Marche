@@ -67,6 +67,7 @@ import { MobileMenuPage } from './pages/MobileMenuPage';
 
 import { AdminAuditDashboard } from './pages/admin/AdminAuditDashboard';
 import { AdminDisputesPage } from './pages/admin/AdminDisputesPage';
+import { AdminCategoryTemplatesPage } from './pages/admin/AdminCategoryTemplatesPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { MessagesPage } from './pages/MessagesPage';
 
@@ -109,6 +110,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,
   '/admin/disputes': () => <AdminDisputesPage />,
+  '/admin/categories': () => <AdminCategoryTemplatesPage />,
   '/admin/profile': () => <EditProfilePage />,
   '/marketplace': () => <BrowseServicesPage />,
   '/messages': () => <MessagesPage />,
@@ -130,6 +132,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
   { prefix: '/profile/', render: (id) => <PublicProfilePage id={id} /> },
   { prefix: '/services/', render: (id) => <ServiceDetailPage id={id} /> },
   { prefix: '/contracts/', render: (id) => <ContractDetailPage id={id} /> },
+  { prefix: '/admin/categories/', render: (id) => <AdminCategoryTemplatesPage id={id} /> },
 ];
 
 function AppContent() {

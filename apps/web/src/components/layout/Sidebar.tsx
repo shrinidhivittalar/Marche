@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Search,
   Gavel,
+  Tags,
 } from 'lucide-react';
 import {
   Popover,
@@ -127,6 +128,7 @@ export const Sidebar: React.FC = () => {
   const adminNav = [
     { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
     { label: 'Disputes', path: '/admin/disputes', icon: Gavel },
+    { label: 'Categories', path: '/admin/categories', icon: Tags },
     { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
@@ -226,7 +228,8 @@ export const Sidebar: React.FC = () => {
               // because a client finance route is open.
               (item.path === '/client/payments' && route.startsWith('/client/finances/')) ||
               (item.path === '/client/freelancers/hired' &&
-                route.startsWith('/client/freelancers/'));
+                route.startsWith('/client/freelancers/')) ||
+              (item.path === '/admin/categories' && route.startsWith('/admin/categories/'));
             const navButtonClass = `w-full flex items-center rounded-xl text-xs font-medium transition-all cursor-pointer ${
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
             } ${
