@@ -10,6 +10,7 @@ import {
   Pencil,
   Ban,
   Inbox,
+  Layers,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
@@ -17,6 +18,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
 import { jobsApi, type JobStatus } from '../../lib/jobs-api';
+import { CategoryRequirementsDisplay } from '../../components/jobs/CategoryRequirementsDisplay';
 import { proposalsApi } from '../../lib/proposals-api';
 import { formatJobBudget, formatEventWhen, formatDeadline } from '../../lib/formatJob';
 import { formatOffer, formatTurnaround } from '../../lib/formatProposal';
@@ -187,6 +189,9 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
                 : 'Not yet'
             }
           />
+          {requirement.serviceMode && (
+            <Spec icon={Layers} label="Service Mode" value={requirement.serviceMode} />
+          )}
         </div>
 
         <div>
@@ -216,6 +221,12 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
             </div>
           </div>
         )}
+
+        <CategoryRequirementsDisplay
+          categorySlug={requirement.category.slug}
+          categoryTemplateId={requirement.categoryTemplateId}
+          categoryData={requirement.categoryData}
+        />
 
         <div>
           <h3 className="text-xs font-mono uppercase font-bold text-primary mb-3">
