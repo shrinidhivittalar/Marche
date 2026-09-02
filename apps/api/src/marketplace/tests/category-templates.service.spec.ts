@@ -670,6 +670,29 @@ describe('CategoryTemplatesService', () => {
         ).toThrow(BadRequestException);
       });
 
+      it('rejects an empty array for a required MULTI_SELECT field', () => {
+        const { service } = build();
+        const requiredMultiSelect = template({
+          fields: [
+            {
+              key: 'colours',
+              label: 'Colours',
+              type: 'MULTI_SELECT',
+              required: true,
+              options: ['red', 'blue'],
+              validation: null,
+            },
+          ],
+        });
+
+        expect(() =>
+          service.assertJobRequirements(requiredMultiSelect, undefined, null, { colours: [] }),
+        ).toThrow(BadRequestException);
+        expect(
+          service.assertJobRequirements(requiredMultiSelect, undefined, null, { colours: ['red'] }),
+        ).toEqual({ colours: ['red'] });
+      });
+
       it('rejects a BOOLEAN field given a non-boolean', () => {
         const { service } = build();
 

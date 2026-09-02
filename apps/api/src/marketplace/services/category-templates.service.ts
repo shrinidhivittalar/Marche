@@ -357,6 +357,14 @@ export class CategoryTemplatesService {
             `categoryData.${field.key} must be an array of: ${options.join(', ')}`,
           );
         }
+        // An empty array is not undefined/null, so the presence check in
+        // assertCategoryData lets it through — but "required" on a
+        // MULTI_SELECT has to mean at least one selection, the same
+        // meaning it already has for every other field type, not merely
+        // "the key was present".
+        if (field.required && value.length === 0) {
+          throw new BadRequestException(`categoryData.${field.key} ("${field.label}") is required`);
+        }
         return;
       }
     }
