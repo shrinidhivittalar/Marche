@@ -21,6 +21,7 @@ import {
   Search,
   Gavel,
   Tags,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   Popover,
@@ -125,11 +126,21 @@ export const Sidebar: React.FC = () => {
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
+  // The Admin is a platform manager, not a marketplace participant — this
+  // list is deliberately limited to admin pages that actually exist today
+  // (Categories/Disputes/Audit) rather than the full aspirational set
+  // (Dashboard, Users, Payments, Rules), none of which have a real page or
+  // route yet. "Job Management" still reuses /provider/dashboard, same as
+  // "Jobs" did before — there is no separate admin job-management page.
   const adminNav = [
-    { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
-    { label: 'Disputes', path: '/admin/disputes', icon: Gavel },
     { label: 'Categories', path: '/admin/categories', icon: Tags },
-    { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
+    { label: 'Job Management', path: '/provider/dashboard', icon: Briefcase },
+    { label: 'Disputes', path: '/admin/disputes', icon: Gavel },
+    // Was "Payments & Audit" — the page itself only ever showed a
+    // login/logout security audit trail, never payment data, so "Payments"
+    // would have mislabeled it. No separate Payments page exists to give
+    // that label to instead.
+    { label: 'Audit Logs', path: '/admin/audit', icon: ShieldAlert },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
