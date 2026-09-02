@@ -195,10 +195,13 @@ const CategoryDetail: React.FC<{
     }
   };
 
+  // Single-select: picking a mode replaces whatever was selected, and
+  // picking the already-selected one clears it back to "no restriction
+  // configured" (empty array), matching the copy right below the buttons.
+  // allowedModes stays a ServiceMode[] on the wire either way — the backend
+  // contract is unchanged, this only constrains what the admin UI can send.
   const toggleMode = (mode: ServiceMode) => {
-    setAllowedModes((prev) =>
-      prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode],
-    );
+    setAllowedModes((prev) => (prev.length === 1 && prev[0] === mode ? [] : [mode]));
   };
 
   const fieldErrors = validateFields(editableFields);
