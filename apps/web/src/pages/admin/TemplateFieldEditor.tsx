@@ -19,8 +19,16 @@ import type { CategoryTemplateFieldType } from '../../lib/category-templates-api
 // form-builder. `order` is never edited directly; it is always the field's
 // position in the array, per the backend's own convention (order defaults
 // to array index).
+//
+// `key` is still exactly what the backend contract requires — sent as-is
+// in the create payload — but is never shown or hand-edited by an admin.
+// `keyLocked` says where it came from: true for a field prefilled from an
+// already-saved version (its key must never change, since existing Jobs'
+// categoryData is keyed by it), false for a field added this session,
+// whose key is continuously derived from `label` as the admin types.
 export interface EditableField {
   key: string;
+  keyLocked: boolean;
   label: string;
   type: CategoryTemplateFieldType;
   required: boolean;
@@ -40,12 +48,44 @@ const OPTIONS_TYPES: CategoryTemplateFieldType[] = ['SELECT', 'MULTI_SELECT'];
 const KEY_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 export function emptyField(): EditableField {
-  return { key: '', label: '', type: 'TEXT', required: false, options: [], validation: {} };
+  return {
+    key: '',
+    keyLocked: false,
+    label: '',
+    type: 'TEXT',
+    required: false,
+    options: [],
+    validation: {},
+  };
+}
+
+// e.g. "Current wall condition" -> "current-wall-condition". Matches the
+// backend's own key pattern by construction — lowercase words joined by
+// single hyphens, nothing else survives.
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Appends -2, -3, ... until the slug doesn't collide with another field's
+// key already in the template. An empty base (nothing sluggable in the
+// requirement text yet) is returned as-is — validateFields below reports
+// that as "Requirement is required," not a duplicate.
+function uniqueKey(base: string, existingKeys: string[]): string {
+  if (!base || !existingKeys.includes(base)) return base;
+  let suffix = 2;
+  while (existingKeys.includes(`${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
 }
 
 // One error string per field index, or null when that field is valid.
 // Exported so the parent page can gate the submit button on it without
-// re-deriving the same rules.
+// re-deriving the same rules. Same underlying rules as before (a valid,
+// unique, non-empty key is still required) — only the wording changed,
+// since the admin never sees "key" as a concept, only "Requirement".
 export function validateFields(fields: EditableField[]): (string | null)[] {
   const keyCounts = new Map<string, number>();
   for (const field of fields) {
@@ -53,12 +93,13 @@ export function validateFields(fields: EditableField[]): (string | null)[] {
   }
 
   return fields.map((field) => {
-    if (!field.key.trim()) return 'Key is required.';
-    if (!KEY_PATTERN.test(field.key)) {
-      return 'Key must be lowercase words separated by single hyphens (e.g. "guest-count").';
+    if (!field.label.trim()) return 'Requirement is required.';
+    if (!field.key.trim() || !KEY_PATTERN.test(field.key)) {
+      return "This requirement's wording couldn't be turned into a valid identifier — try rephrasing it.";
     }
-    if ((keyCounts.get(field.key) ?? 0) > 1) return 'Key must be unique.';
-    if (!field.label.trim()) return 'Label is required.';
+    if ((keyCounts.get(field.key) ?? 0) > 1) {
+      return 'This requirement collides with another one — try more distinct wording.';
+    }
 
     if (OPTIONS_TYPES.includes(field.type)) {
       const trimmed = field.options.map((o) => o.trim());
@@ -95,6 +136,23 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({ fields
 
   const updateField = (index: number, update: Partial<EditableField>) => {
     onChange(fields.map((f, i) => (i === index ? { ...f, ...update } : f)));
+  };
+
+  // The only place `key` is ever written from the UI. A locked field (one
+  // prefilled from an already-saved version) only has its label updated —
+  // its key is untouchable here, on purpose. A new field's key is
+  // re-derived from the requirement text on every keystroke and kept
+  // unique against every other field's *current* key, so two fields
+  // titled the same way don't silently collide.
+  const updateRequirement = (index: number, label: string) => {
+    const field = fields[index]!;
+    if (field.keyLocked) {
+      updateField(index, { label });
+      return;
+    }
+    const otherKeys = fields.filter((_, i) => i !== index).map((f) => f.key);
+    const key = uniqueKey(slugify(label), otherKeys);
+    onChange(fields.map((f, i) => (i === index ? { ...f, label, key } : f)));
   };
 
   const removeField = (index: number) => {
@@ -143,58 +201,52 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({ fields
                 </button>
               </div>
 
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex-1 space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px]">Key</Label>
-                  <Input
-                    value={field.key}
-                    onChange={(e) => updateField(index, { key: e.target.value })}
-                    placeholder="e.g. guest-count"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[11px]">Label</Label>
+                  <Label className="text-[11px]">Requirement</Label>
                   <Input
                     value={field.label}
-                    onChange={(e) => updateField(index, { label: e.target.value })}
+                    onChange={(e) => updateRequirement(index, e.target.value)}
                     placeholder="e.g. Guest count"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[11px]">Type</Label>
-                  <Select
-                    value={field.type}
-                    onValueChange={(value) =>
-                      updateField(index, {
-                        type: value as CategoryTemplateFieldType,
-                        options: [],
-                        validation: {},
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FIELD_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type.replace('_', ' ')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2 pt-5">
-                  <Checkbox
-                    id={`required-${index}`}
-                    checked={field.required}
-                    onCheckedChange={(checked) =>
-                      updateField(index, { required: checked === true })
-                    }
-                  />
-                  <Label htmlFor={`required-${index}`} className="text-xs">
-                    Required
-                  </Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Answer type</Label>
+                    <Select
+                      value={field.type}
+                      onValueChange={(value) =>
+                        updateField(index, {
+                          type: value as CategoryTemplateFieldType,
+                          options: [],
+                          validation: {},
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FIELD_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type.replace('_', ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-5">
+                    <Checkbox
+                      id={`required-${index}`}
+                      checked={field.required}
+                      onCheckedChange={(checked) =>
+                        updateField(index, { required: checked === true })
+                      }
+                    />
+                    <Label htmlFor={`required-${index}`} className="text-xs">
+                      Required
+                    </Label>
+                  </div>
                 </div>
               </div>
 

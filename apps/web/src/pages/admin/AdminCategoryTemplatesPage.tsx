@@ -36,6 +36,10 @@ function toEditableFields(fields: ApiCategoryTemplate['fields']): EditableField[
     .sort((a, b) => a.order - b.order)
     .map((field) => ({
       key: field.key,
+      // Prefilled from an already-saved version — its key is real and
+      // must never be regenerated from later label edits, unlike a field
+      // added fresh this session.
+      keyLocked: true,
       label: field.label,
       type: field.type,
       required: field.required,
