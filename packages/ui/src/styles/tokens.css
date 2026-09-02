@@ -164,6 +164,144 @@
   --shadow-focus: 0 0 0 3px rgba(185, 28, 28, 0.35);
 }
 
+/* ---- Admin panel theme ----
+   Scoped to the admin content area only (see App.tsx's data-theme="admin"
+   on the outer wrapper), never :root — the Sidebar's own admin branch is
+   hand-styled separately (see Sidebar.tsx, now a dark blue-950 card to
+   match) and every client/provider screen is untouched. The full screen —
+   the gaps around the Sidebar and every <main> surface — sits on the
+   lightest blue in the scale (blue-50), with white cards and blue-100
+   for structural sub-surfaces. success stays a distinct soft green (not
+   the app's default blue success token) so a "Verified/Active" badge
+   never reads as just another primary button once primary itself is
+   blue. Font switches to Manrope (Anton is still used sparingly for h1
+   only, per the base `h1` rule below — unaffected by this block). */
+[data-theme='admin'] {
+  --font-sans:
+    'Manrope', 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-bg: #eff6ff; /* blue-50 — lightest shade, the dominant page background */
+  --color-surface: #ffffff; /* cards, panels */
+  --color-surface-subtle: #dbeafe; /* blue-100 — structural sub-surfaces inside cards */
+  --color-border: #bfdbfe; /* blue-200 */
+  --color-border-strong: #93c5fd; /* blue-300 */
+
+  --color-ink: #0f172a; /* blue-950 — near-black, still legible as body text */
+  --color-ink-muted: #475569;
+
+  --color-primary: #2563eb; /* blue-600 */
+  --color-primary-hover: #1d4ed8; /* blue-700 */
+  --color-primary-active: #1e40af; /* blue-800 */
+  --color-primary-subtle: #dbeafe; /* blue-100 */
+  --color-primary-fg: #ffffff;
+
+  --color-accent: #60a5fa; /* blue-400 */
+  --color-accent-hover: #3b82f6; /* blue-500 */
+  --color-accent-subtle: #eff6ff; /* blue-50 */
+  --color-accent-text: #1d4ed8; /* blue-700 */
+
+  /* Emerald Green, exact brand hex from the Marché style guide. */
+  --color-success: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-subtle: #f0fdf4;
+
+  /* Marché Red — reserved for critical/destructive actions only, never the
+     default admin action color (blue owns that). */
+  --color-danger: #b91c1c;
+  --color-danger-text: #b91c1c;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-fg: #ffffff;
+
+  /* Reserved for financial/escrow/security emphasis blocks, per the
+     brief — not used as the default dark-CTA fill everywhere primary
+     already covers that. */
+  --color-inverse: #1e3a8a; /* blue-900 */
+  --color-inverse-fg: #ffffff;
+
+  /* Minimal elevation — whitespace and borders carry hierarchy, not shadow. */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-card-hover: 0 4px 12px -4px rgba(15, 23, 42, 0.08);
+  --shadow-float: 0 16px 32px -12px rgba(37, 99, 235, 0.14), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+/* ---- Admin panel theme, dark mode ----
+   The existing site-wide dark toggle (ThemeToggle/useTheme) sets
+   data-theme="dark" on <html>, independently of the wrapper's own
+   data-theme="admin" set lower in the tree (see App.tsx) — the two never
+   collide, so this compound selector (html toggled to dark AND inside the
+   admin wrapper) is how admin gets its own dark palette instead of
+   inheriting the app's default dark theme. Naturally wins over the plain
+   [data-theme='admin'] block above via specificity, so no !important
+   needed. One blue scale, not two — the mockup's separate "Trust Blue"
+   swatch was the same job as Primary Blue with a different name, so it
+   isn't duplicated here. The Sidebar is already a permanent dark navy for
+   admin regardless of this toggle (see Sidebar.tsx) — the page canvas here
+   is deliberately a shade darker than that, not the same navy, so the
+   Sidebar still reads as a distinct floating panel instead of dissolving
+   into the background. */
+:root[data-theme='dark'] [data-theme='admin'] {
+  --color-bg: #0a0e1a; /* darker than the Sidebar's #0f172a on purpose */
+  --color-surface: #16213a;
+  --color-surface-subtle: #1c2b4a;
+  --color-border: #2c3d5e;
+  --color-border-strong: #3d5277;
+
+  --color-ink: #f1f5f9;
+  --color-ink-muted: #94a3b8;
+
+  --color-primary: #2563eb; /* blue-600 — unchanged, already reads fine on dark navy */
+  --color-primary-hover: #3b82f6; /* blue-500 — lighter on hover, standard dark-mode direction */
+  --color-primary-active: #1d4ed8; /* blue-700 */
+  --color-primary-subtle: #1e3a5f;
+  --color-primary-fg: #ffffff;
+
+  --color-accent: #60a5fa; /* blue-400 */
+  --color-accent-hover: #93c5fd; /* blue-300 */
+  --color-accent-subtle: #16213a;
+  --color-accent-text: #93c5fd;
+
+  --color-success: #22c55e; /* green-500 */
+  --color-success-text: #4ade80; /* green-400 — brighter for legibility on dark */
+  --color-success-subtle: #0f2a1a;
+
+  --color-danger: #f87171; /* red-400 — Marché Red is too muted to read on navy; brightened same as the app's own default dark theme does */
+  --color-danger-text: #fca5a5;
+  --color-danger-subtle: #3a1414;
+  --color-danger-fg: #ffffff;
+
+  --color-inverse: #1e3a8a; /* blue-900 */
+  --color-inverse-fg: #ffffff;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  /* The Sidebar (the only consumer of --shadow-float) reads this to
+     separate itself from the darker page canvas behind it. */
+  --shadow-float: 0 20px 40px -14px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(37, 99, 235, 0.12);
+  --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.45);
+}
+
+/* Admin-only structural refinements the token overrides above can't reach —
+   radius is a hardcoded Tailwind utility class on these shared components
+   (Card: rounded-2xl, Input/SelectTrigger: rounded-md), not a CSS variable,
+   so it can't flip per-theme via the block above. Scoped to [data-slot]
+   under [data-theme='admin'] only — every client/provider screen using the
+   same Card/Input/Select keeps its existing radius untouched. */
+[data-theme='admin'] [data-slot='card'] {
+  border-radius: 12px;
+}
+[data-theme='admin'] [data-slot='input'],
+[data-theme='admin'] [data-slot='select-trigger'] {
+  border-radius: 8px;
+}
+/* Same reasoning — the style guide's type scale calls for Button text and
+   Label at Manrope 600 (semibold), but Button/Label hardcode font-medium
+   (500) for every other theme. */
+[data-theme='admin'] [data-slot='button'],
+[data-theme='admin'] [data-slot='label'] {
+  font-weight: 600;
+}
+
 /* Printed documents (booking acknowledgements, receipts, etc.) must stay
    legible on paper regardless of the on-screen theme — browsers already
    strip background colors by default when printing, but text color is not

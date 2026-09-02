@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Gavel } from 'lucide-react';
-import { Button, Card, Textarea } from '@marche/ui';
+import { Button, Card, Textarea, Alert } from '@marche/ui';
+import SpecularButton, { ADMIN_SPECULAR_PROPS } from '../../components/admin/SpecularButton';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { disputesApi, type DisputeStatus } from '../../lib/disputes-api';
@@ -173,14 +174,18 @@ export const AdminDisputesPage: React.FC = () => {
               setResolveError(null);
             }}
           />
-          {resolveError && <p className="text-red-600 font-medium">{resolveError}</p>}
+          {resolveError && <Alert variant="destructive" title={resolveError} />}
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => setResolvingId(null)}>
               Cancel
             </Button>
-            <Button onClick={handleResolve} disabled={submitting || !resolution.trim()}>
-              Mark Resolved
-            </Button>
+            <SpecularButton
+              {...ADMIN_SPECULAR_PROPS}
+              onClick={handleResolve}
+              disabled={submitting || !resolution.trim()}
+            >
+              {submitting ? 'Resolving…' : 'Mark Resolved'}
+            </SpecularButton>
           </div>
         </div>
       </Modal>

@@ -1,19 +1,22 @@
-import type { ComponentProps, HTMLAttributes } from "react";
-import { Dialog as DialogPrimitive } from "radix-ui";
-import { X } from "lucide-react";
-import { cn } from "../lib/cn";
+import type { ComponentProps, HTMLAttributes } from 'react';
+import { Dialog as DialogPrimitive } from 'radix-ui';
+import { X } from 'lucide-react';
+import { cn } from '../lib/cn';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 export const DialogPortal = DialogPrimitive.Portal;
 
-export function DialogOverlay({ className, ...props }: ComponentProps<typeof DialogPrimitive.Overlay>) {
+export function DialogOverlay({
+  className,
+  ...props
+}: ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200",
+        'fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200',
         className,
       )}
       {...props}
@@ -23,16 +26,32 @@ export function DialogOverlay({ className, ...props }: ComponentProps<typeof Dia
 
 export interface DialogContentProps extends ComponentProps<typeof DialogPrimitive.Content> {
   showClose?: boolean;
+  /**
+   * Where the portal renders. Radix defaults to `document.body`, which
+   * sits outside any scoped [data-theme] wrapper (e.g. the admin panel's
+   * blue theme) — a nested wrapper's CSS variables never reach a sibling
+   * of `<body>`. Pass the themed ancestor's DOM node here to keep the
+   * dialog's own content inside that scope instead of escaping it.
+   * Undefined keeps Radix's own default, so every existing caller that
+   * doesn't need this is unaffected.
+   */
+  container?: HTMLElement | null;
 }
 
-export function DialogContent({ className, children, showClose = true, ...props }: DialogContentProps) {
+export function DialogContent({
+  className,
+  children,
+  showClose = true,
+  container,
+  ...props
+}: DialogContentProps) {
   return (
-    <DialogPortal>
+    <DialogPortal container={container}>
       <DialogOverlay>
         <DialogPrimitive.Content
           data-slot="dialog-content"
           className={cn(
-            "relative w-full max-w-lg bg-surface border border-border rounded-2xl shadow-card-hover overflow-hidden animate-in zoom-in-95 duration-200 p-6 max-h-[90vh] flex flex-col focus:outline-none",
+            'relative w-full max-w-lg bg-surface border border-border rounded-2xl shadow-card-hover overflow-hidden animate-in zoom-in-95 duration-200 p-6 max-h-[90vh] flex flex-col focus:outline-none',
             className,
           )}
           {...props}
@@ -56,21 +75,30 @@ export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElem
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex items-start justify-between pb-4 border-b border-border", className)}
+      className={cn('flex items-start justify-between pb-4 border-b border-border', className)}
       {...props}
     />
   );
 }
 
 export function DialogBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div data-slot="dialog-body" className={cn("mt-4 overflow-y-auto flex-1 pr-1", className)} {...props} />;
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn('mt-4 overflow-y-auto flex-1 pr-1', className)}
+      {...props}
+    />
+  );
 }
 
 export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn("flex items-center justify-end gap-2 pt-4 mt-4 border-t border-border", className)}
+      className={cn(
+        'flex items-center justify-end gap-2 pt-4 mt-4 border-t border-border',
+        className,
+      )}
       {...props}
     />
   );
@@ -80,17 +108,20 @@ export function DialogTitle({ className, ...props }: ComponentProps<typeof Dialo
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg font-semibold text-ink tracking-tight", className)}
+      className={cn('text-lg font-semibold text-ink tracking-tight', className)}
       {...props}
     />
   );
 }
 
-export function DialogDescription({ className, ...props }: ComponentProps<typeof DialogPrimitive.Description>) {
+export function DialogDescription({
+  className,
+  ...props
+}: ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("mt-1 text-xs text-ink-muted", className)}
+      className={cn('mt-1 text-xs text-ink-muted', className)}
       {...props}
     />
   );

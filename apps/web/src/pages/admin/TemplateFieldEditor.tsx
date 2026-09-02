@@ -129,9 +129,17 @@ export function validateFields(fields: EditableField[]): (string | null)[] {
 interface TemplateFieldEditorProps {
   fields: EditableField[];
   onChange: (fields: EditableField[]) => void;
+  /** Forwarded to each field's "Answer type" SelectContent — see its own
+   * `container` prop comment for why this exists (this editor always
+   * renders inside a Modal, whose portal already needs the same fix). */
+  selectContainer?: HTMLElement | null;
 }
 
-export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({ fields, onChange }) => {
+export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
+  fields,
+  onChange,
+  selectContainer,
+}) => {
   const errors = validateFields(fields);
 
   const updateField = (index: number, update: Partial<EditableField>) => {
@@ -226,7 +234,7 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({ fields
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent container={selectContainer}>
                         {FIELD_TYPES.map((type) => (
                           <SelectItem key={type} value={type}>
                             {type.replace('_', ' ')}

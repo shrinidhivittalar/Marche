@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ListChecks, Plus, ChevronRight } from 'lucide-react';
-import { Button, Card, Badge, Checkbox, Label } from '@marche/ui';
+import { Button, Card, Badge, Checkbox, Label, Alert } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
@@ -12,6 +12,7 @@ import {
 } from '../../lib/category-templates-api';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
+import SpecularButton, { ADMIN_SPECULAR_PROPS } from '../../components/admin/SpecularButton';
 import {
   TemplateFieldEditor,
   emptyField,
@@ -131,6 +132,16 @@ const CategoryDetail: React.FC<{
   categories: ReturnType<typeof useApiResource<ApiCategory[]>>;
 }> = ({ id, token, categories }) => {
   const { navigate } = useApp();
+  // The modal (and its own Select dropdowns) portal to document.body by
+  // default, which sits outside this page's [data-theme="admin"] scope —
+  // see Dialog.tsx/Select.tsx's own comments on `container`. Passing this
+  // node keeps portaled content themed correctly instead of rendering red.
+  // State rather than a plain ref: reading ref.current directly during
+  // render is unsafe (it can be stale on the commit that first attaches
+  // it), so the DOM node is captured via a callback ref into state instead,
+  // which is safe to read during render and triggers the re-render the
+  // Modal/TemplateFieldEditor below need once it's actually attached.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
   const category = (categories.data ?? []).length
     ? flattenCategories(categories.data ?? []).find((c) => c.id === id)
     : undefined;
@@ -264,7 +275,7 @@ const CategoryDetail: React.FC<{
   const versionNumber = (versionIndex: number) => versions.length - versionIndex;
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div ref={setPageEl} className="space-y-8 max-w-4xl mx-auto">
       <div className="pb-6 border-b border-border flex items-start justify-between gap-4 flex-wrap">
         <div>
           <button
@@ -288,8 +299,8 @@ const CategoryDetail: React.FC<{
         </Button>
       </div>
 
-      {statusMessage && <p className="text-xs text-primary font-semibold">{statusMessage}</p>}
-      {prefillError && <p className="text-xs text-destructive font-semibold">{prefillError}</p>}
+      {statusMessage && <Alert variant="success" title={statusMessage} />}
+      {prefillError && <Alert variant="destructive" title={prefillError} />}
 
       <div className="space-y-3">
         <div>
@@ -357,6 +368,7 @@ const CategoryDetail: React.FC<{
         title="Create New Version"
         description="This creates and activates a new immutable version. The version it replaces is left exactly as it was, and existing Jobs stay pinned to it."
         maxWidth="2xl"
+        container={pageEl}
       >
         <div className="space-y-6 pt-2">
           <div className="space-y-3">
@@ -394,23 +406,27 @@ const CategoryDetail: React.FC<{
 
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-ink">Fields</h3>
-            <TemplateFieldEditor fields={editableFields} onChange={setEditableFields} />
+            <TemplateFieldEditor
+              fields={editableFields}
+              onChange={setEditableFields}
+              selectContainer={pageEl}
+            />
           </div>
 
-          {submitError && <p className="text-destructive text-xs font-medium">{submitError}</p>}
+          {submitError && <Alert variant="destructive" title={submitError} />}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button
+            <SpecularButton
+              {...ADMIN_SPECULAR_PROPS}
               type="button"
               onClick={handleCreate}
               disabled={submitting || !canSubmit}
-              loading={submitting}
             >
-              Create &amp; Activate
-            </Button>
+              {submitting ? 'Creating…' : 'Create & Activate'}
+            </SpecularButton>
           </div>
         </div>
       </Modal>
