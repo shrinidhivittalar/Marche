@@ -141,6 +141,26 @@ export interface ApiCalendarEntry {
   jobTitle: string;
 }
 
+export type PriceNegotiationStatus = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+
+// One round of "what if the price were X" on a proposal. Prices arrive as
+// decimal strings, same reasoning as ApiProposal.proposedPrice. Both
+// profiles are named on the row so a screen can render "who proposed this"
+// without a second lookup — see price-negotiations.repository.ts's own
+// NEGOTIATION_FIELDS, which this mirrors exactly.
+export interface ApiPriceNegotiation {
+  id: string;
+  proposalId: string;
+  amount: string;
+  status: PriceNegotiationStatus;
+  createdAt: string;
+  respondedAt: string | null;
+  proposedByProfileId: string;
+  respondedByProfileId: string | null;
+  proposedByProfile: { id: string; displayName: string };
+  respondedByProfile: { id: string; displayName: string } | null;
+}
+
 export interface ProposalBody {
   jobId: string;
   coverMessage: string;
@@ -208,6 +228,43 @@ export const proposalsApi = {
     apiFetch<void>(`/proposals/${proposalId}/attachments/${attachmentId}`, token, {
       method: 'DELETE',
     }),
+};
+
+// Negotiated commercial terms on one proposal — either party may propose,
+// and only the party who did NOT propose a round may accept/reject it.
+// Kept as its own export (not folded into proposalsApi) since it's a
+// distinct sub-resource under /proposals/:id/price-negotiations, matching
+// the backend's own separate controller.
+export const priceNegotiationsApi = {
+  list: (token: string, proposalId: string) =>
+    apiFetch<ApiPriceNegotiation[]>(`/proposals/${proposalId}/price-negotiations`, token),
+
+  propose: (token: string, proposalId: string, amount: number) =>
+    apiFetch<ApiPriceNegotiation>(`/proposals/${proposalId}/price-negotiations`, token, {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+
+  accept: (token: string, proposalId: string, negotiationId: string) =>
+    apiFetch<ApiPriceNegotiation>(
+      `/proposals/${proposalId}/price-negotiations/${negotiationId}/accept`,
+      token,
+      { method: 'POST' },
+    ),
+
+  reject: (token: string, proposalId: string, negotiationId: string) =>
+    apiFetch<ApiPriceNegotiation>(
+      `/proposals/${proposalId}/price-negotiations/${negotiationId}/reject`,
+      token,
+      { method: 'POST' },
+    ),
+
+  withdraw: (token: string, proposalId: string, negotiationId: string) =>
+    apiFetch<ApiPriceNegotiation>(
+      `/proposals/${proposalId}/price-negotiations/${negotiationId}/withdraw`,
+      token,
+      { method: 'POST' },
+    ),
 };
 
 export const connectionsApi = {

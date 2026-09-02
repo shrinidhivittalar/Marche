@@ -17,6 +17,7 @@ import { directContractsApi } from '../../lib/direct-contracts-api';
 import { mediaApi } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
+import { PriceNegotiationPanel } from '../../components/proposals/PriceNegotiationPanel';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen, formatDeadline } from '../../lib/formatJob';
 
@@ -275,6 +276,17 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
             : 'A submitted proposal cannot be edited — the client decides on exactly what they read.'}
         </p>
       </Card>
+
+      {/* Excluded for a direct offer — DirectContractsService already owns
+          its single agreed price with its own accept/decline; the backend
+          itself refuses price negotiation on an isDirect Job. */}
+      {!mine.job.isDirect && (
+        <PriceNegotiationPanel
+          proposalId={mine.id}
+          otherPartyProfileId={mine.job.clientProfile.id}
+          canPropose={open}
+        />
+      )}
 
       <Card className="p-8 space-y-4">
         <div className="flex items-center justify-between">
