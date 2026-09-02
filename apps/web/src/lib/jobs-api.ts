@@ -8,6 +8,7 @@
 // paths say "job"; anything a person reads says "requirement".
 import { apiFetch, toQuery } from './api-fetch';
 import type { Page } from './marketplace-api';
+import type { ServiceMode } from './category-templates-api';
 
 // The API returns the marketplace envelope; normalised to the same Page
 // shape every other screen already consumes.
@@ -59,6 +60,16 @@ export interface ApiJob {
    * distinction ever matters.
    */
   locationExact?: unknown;
+  serviceMode: ServiceMode | null;
+  /**
+   * The specific, immutable CategoryTemplate version this Job is locked to
+   * — set once at creation (or re-set on a category change) and never
+   * silently migrated to a newer version an admin activates later. Null
+   * means the category had no template configured when the lock was made.
+   */
+  categoryTemplateId: string | null;
+  /** This category's requirement answers, keyed by CategoryTemplateField.key. Null iff categoryTemplateId is null. */
+  categoryData: Record<string, unknown> | null;
   eventDate: string | null;
   /** Wall-clock "HH:MM" at the venue — display as given, never re-zone. */
   eventStartTime: string | null;
@@ -119,6 +130,9 @@ export interface JobBody {
   budgetMin?: number;
   budgetMax?: number;
   locationCoarse?: string;
+  serviceMode?: ServiceMode;
+  /** Validated against the locked (or about-to-be-locked) template in JobsService. */
+  categoryData?: Record<string, unknown>;
   eventDate?: string;
   /** 24-hour "HH:MM". Both need an eventDate to belong to. */
   eventStartTime?: string;
