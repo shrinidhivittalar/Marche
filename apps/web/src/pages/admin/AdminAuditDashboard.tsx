@@ -56,13 +56,13 @@ export const AdminAuditDashboard: React.FC = () => {
           </div>
 
           <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-ink-muted" />
             <Input
               type="text"
               placeholder="Search event type or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
+              className="w-full bg-surface border-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-ink-muted focus:outline-none"
             />
           </div>
         </div>
@@ -70,7 +70,7 @@ export const AdminAuditDashboard: React.FC = () => {
         <div className="overflow-x-auto border border-border rounded-2xl">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-bg border-b border-border text-ink-muted uppercase font-mono text-[10px]">
+              <tr className="bg-surface-subtle border-b border-border text-ink-muted uppercase font-mono text-[10px]">
                 <th className="p-3.5 pl-4 font-bold">Timestamp</th>
                 <th className="p-3.5 font-bold">Event</th>
                 <th className="p-3.5 font-bold">Email</th>
@@ -80,7 +80,7 @@ export const AdminAuditDashboard: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-border">
               {(logs.data?.items ?? []).map((log) => (
-                <tr key={log.id} className="hover:bg-bg transition-colors">
+                <tr key={log.id} className="hover:bg-surface-subtle transition-colors">
                   <td className="p-3.5 pl-4 font-mono text-ink-muted whitespace-nowrap">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>

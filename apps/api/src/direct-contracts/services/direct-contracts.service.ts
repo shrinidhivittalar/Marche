@@ -9,9 +9,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { CategoriesRepository } from '../../marketplace/repositories/categories.repository';
+import { CategoryTemplatesService } from '../../marketplace/services/category-templates.service';
 import { ProposalsRepository } from '../../proposals/repositories/proposals.repository';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import type { Prisma } from '@marche/db';
 import {
   assertClientRole,
   assertEmailVerified,
@@ -43,6 +45,7 @@ export class DirectContractsService {
     private readonly profilesRepository: ProfilesRepository,
     private readonly jobsRepository: JobsRepository,
     private readonly categoriesRepository: CategoriesRepository,
+    private readonly categoryTemplatesService: CategoryTemplatesService,
     private readonly proposalsRepository: ProposalsRepository,
     private readonly connectionsRepository: ConnectionsRepository,
     private readonly notificationsService: NotificationsService,
@@ -77,6 +80,20 @@ export class DirectContractsService {
       throw new BadRequestException('Category not found');
     }
 
+    // Same shared resolve-lock-validate JobsService.create uses — not a
+    // duplicated rule. See CategoryTemplatesService.assertJobRequirements'
+    // own comment for why this has to live in exactly one place: this Job
+    // is created directly (tx.job.create below), never through
+    // JobsService.create, so a check written only there would silently
+    // never run for a direct contract.
+    const template = await this.categoryTemplatesService.resolveActiveTemplate(dto.categoryId);
+    const categoryData = this.categoryTemplatesService.assertJobRequirements(
+      template,
+      dto.serviceMode,
+      dto.locationCoarse,
+      dto.categoryData,
+    );
+
     // The job and its proposal come into existence together or not at all —
     // a proposal with no job behind it, or vice versa, is meaningless. Left
     // as DRAFT: never published, never discoverable (job-visibility.ts
@@ -94,7 +111,10 @@ export class DirectContractsService {
           // agreed price, not a range to be proposed within.
           budgetMin: dto.price,
           budgetMax: dto.price,
-          location: dto.location,
+          locationCoarse: dto.locationCoarse,
+          serviceMode: dto.serviceMode,
+          categoryTemplateId: template?.id,
+          categoryData: (categoryData as Prisma.InputJsonValue | undefined) ?? undefined,
           eventDate: dto.eventDate ? new Date(dto.eventDate) : undefined,
           status: 'DRAFT',
           isDirect: true,

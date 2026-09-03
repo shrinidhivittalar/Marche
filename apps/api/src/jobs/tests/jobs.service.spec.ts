@@ -57,11 +57,21 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     countAttachments: jest.fn().mockResolvedValue(0),
     // Nobody hired by default: the requirement has no connection yet.
     findHiredProviderProfileId: jest.fn().mockResolvedValue(null),
+    findLocationExact: jest.fn().mockResolvedValue(null),
     countPostedByStatus: jest
       .fn()
       .mockResolvedValue({ DRAFT: 0, PUBLISHED: 0, FILLED: 0, CANCELLED: 0 }),
   };
   const categoriesService = { resolveFilterIds: jest.fn().mockResolvedValue(['cat_1']) };
+  // No active template by default — every existing test exercises the
+  // "category with nothing configured" path, which must stay unrestricted.
+  // See the dedicated 'service mode + location rules' describe block below
+  // for the enforcing path.
+  const categoryTemplatesService = {
+    resolveActiveTemplate: jest.fn().mockResolvedValue(null),
+    resolveLockedTemplate: jest.fn().mockResolvedValue(null),
+    assertJobRequirements: jest.fn().mockReturnValue(null),
+  };
   const mediaService = {
     assertAttachable: jest.fn().mockResolvedValue({ id: 'media_1' }),
     markPrivate: jest.fn().mockResolvedValue(undefined),
@@ -77,12 +87,14 @@ function build(jobOverrides: Record<string, unknown> = {}) {
     profiles as unknown as ProfilesRepository,
     categories as unknown as CategoriesRepository,
     categoriesService as unknown as CategoriesService,
+    categoryTemplatesService as never,
     mediaService as never,
     notificationsService as never,
   );
   return {
     service,
     jobs,
+    categoryTemplatesService,
     profiles,
     categories,
     categoriesService,
@@ -154,6 +166,94 @@ describe('JobsService', () => {
       const written = jobs.create.mock.calls[0][0];
       expect(written.clientProfileId).toBe('profile_1');
       expect(written.status).toBeUndefined();
+    });
+  });
+
+  describe('service mode + location rules', () => {
+    it('create resolves the category’s active template and validates against it before writing', async () => {
+      const { service, categoryTemplatesService } = build();
+
+      await service.create('user_1', {
+        ...dto,
+        serviceMode: 'ONSITE',
+        locationCoarse: 'Bangalore',
+      });
+
+      expect(categoryTemplatesService.resolveActiveTemplate).toHaveBeenCalledWith('cat_1');
+      expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+        null,
+        'ONSITE',
+        'Bangalore',
+        undefined,
+      );
+    });
+
+    it('propagates the shared validator’s rejection — a category with rules configured refuses an invalid serviceMode', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      categoryTemplatesService.assertJobRequirements.mockImplementation(() => {
+        throw new BadRequestException('serviceMode must be one of: ONSITE for this category');
+      });
+
+      await expect(
+        service.create('user_1', { ...dto, serviceMode: 'REMOTE' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(jobs.create).not.toHaveBeenCalled();
+    });
+
+    it('a category with no active template (or an empty allowedModes) accepts any serviceMode — compatibility preserved', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      // The default mock already resolves null (no-op); this test exists
+      // to document the behaviour explicitly, not just rely on the
+      // fixture default.
+      categoryTemplatesService.assertJobRequirements.mockReturnValue(null);
+
+      await expect(
+        service.create('user_1', { ...dto, serviceMode: 'HYBRID' }),
+      ).resolves.toBeDefined();
+      expect(jobs.create).toHaveBeenCalled();
+    });
+
+    it('optional location remains optional when nothing requires it', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', { ...dto, locationCoarse: undefined });
+
+      expect(jobs.create).toHaveBeenCalled();
+    });
+
+    it('writes serviceMode onto the created job', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', { ...dto, serviceMode: 'REMOTE' });
+
+      expect(jobs.create.mock.calls[0][0].serviceMode).toBe('REMOTE');
+    });
+
+    it('locks the new Job to the resolved template and stores the validated categoryData', async () => {
+      const { service, categoryTemplatesService, jobs } = build();
+      categoryTemplatesService.resolveActiveTemplate.mockResolvedValue({
+        id: 'template_1',
+        allowedModes: [],
+        locationRequired: false,
+        fields: [],
+      });
+      categoryTemplatesService.assertJobRequirements.mockReturnValue({ area: 200 });
+
+      await service.create('user_1', { ...dto, categoryData: { area: 200 } });
+
+      const written = jobs.create.mock.calls[0][0];
+      expect(written.categoryTemplateId).toBe('template_1');
+      expect(written.categoryData).toEqual({ area: 200 });
+    });
+
+    it('a category with nothing configured never locks the new Job to a template', async () => {
+      const { service, jobs } = build();
+
+      await service.create('user_1', dto);
+
+      const written = jobs.create.mock.calls[0][0];
+      expect(written.categoryTemplateId).toBeUndefined();
+      expect(written.categoryData).toBeUndefined();
     });
   });
 
@@ -296,6 +396,155 @@ describe('JobsService', () => {
       await service.update('user_1', 'job_1', { title: 'A corrected title' });
 
       expect(jobs.update).toHaveBeenCalled();
+    });
+
+    describe('service mode + location rules', () => {
+      it('a title-only edit re-reads the Job’s own locked template — never the category’s current active one — and carries existing serviceMode/location forward unchanged', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
+          serviceMode: 'ONSITE',
+          locationCoarse: 'Bangalore',
+        });
+
+        await service.update('user_1', 'job_1', { title: 'A corrected title' });
+
+        // Neither serviceMode nor locationCoarse was part of this request,
+        // but the *effective* state — the job's own current values — is
+        // still what gets validated, against the Job's own lock. This is
+        // the "be careful about partial updates" case: an admin creating a
+        // new template version elsewhere must never retroactively change
+        // what this already-locked Job is held to.
+        expect(categoryTemplatesService.resolveLockedTemplate).toHaveBeenCalledWith(
+          'cat_1',
+          'template_1',
+        );
+        expect(categoryTemplatesService.resolveActiveTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          'ONSITE',
+          'Bangalore',
+          undefined,
+        );
+      });
+
+      it('changing categoryId re-locks to the NEW category’s current active template, not the job’s existing lock', async () => {
+        const { service, categoryTemplatesService, categories } = build({
+          categoryId: 'cat_old',
+          categoryTemplateId: 'template_old',
+          serviceMode: 'ONSITE',
+        });
+        categories.findById.mockResolvedValue({ id: 'cat_new' });
+
+        await service.update('user_1', 'job_1', { categoryId: 'cat_new' });
+
+        expect(categoryTemplatesService.resolveActiveTemplate).toHaveBeenCalledWith('cat_new');
+        // The old lock is never re-read on a category change — the exact
+        // mistake "be careful about partial updates" warns against.
+        expect(categoryTemplatesService.resolveLockedTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          'ONSITE',
+          undefined,
+          undefined,
+        );
+      });
+
+      it('changing only serviceMode validates it against the job’s own locked template', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
+        });
+
+        await service.update('user_1', 'job_1', { serviceMode: 'REMOTE' });
+
+        expect(categoryTemplatesService.resolveLockedTemplate).toHaveBeenCalledWith(
+          'cat_1',
+          'template_1',
+        );
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          'REMOTE',
+          undefined,
+          undefined,
+        );
+      });
+
+      it('propagates the shared validator’s rejection on update, writing nothing', async () => {
+        const { service, categoryTemplatesService, jobs } = build();
+        categoryTemplatesService.assertJobRequirements.mockImplementation(() => {
+          throw new BadRequestException('locationCoarse is required for this category');
+        });
+
+        await expect(
+          service.update('user_1', 'job_1', { serviceMode: 'ONSITE' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(jobs.update).not.toHaveBeenCalled();
+      });
+
+      it('an existing Job with no template lock remains permanently unrestricted — never retroactively invalidated by a template created later', async () => {
+        const { service, categoryTemplatesService, jobs } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: null,
+          serviceMode: null,
+          locationCoarse: null,
+        });
+
+        await expect(
+          service.update('user_1', 'job_1', { title: 'Legacy job, untouched otherwise' }),
+        ).resolves.toBeDefined();
+        // No lock to re-read, category unchanged — the Job's governing
+        // template is null, exactly as it always was.
+        expect(categoryTemplatesService.resolveLockedTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.resolveActiveTemplate).not.toHaveBeenCalled();
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          null,
+          null,
+          undefined,
+        );
+        expect(jobs.update).toHaveBeenCalled();
+      });
+
+      it('categoryData is left untouched when an update does not mention it', async () => {
+        const { service, categoryTemplatesService } = build({
+          categoryId: 'cat_1',
+          categoryTemplateId: 'template_1',
+          categoryData: { area: 200 },
+        });
+
+        await service.update('user_1', 'job_1', { title: 'Only the title changes' });
+
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          undefined,
+          undefined,
+          { area: 200 },
+        );
+      });
+
+      it('a category change discards the old categoryData outright, requiring fresh answers for the new template', async () => {
+        const { service, categoryTemplatesService, categories } = build({
+          categoryId: 'cat_old',
+          categoryTemplateId: 'template_old',
+          categoryData: { rooms: 3 },
+        });
+        categories.findById.mockResolvedValue({ id: 'cat_new' });
+
+        await service.update('user_1', 'job_1', {
+          categoryId: 'cat_new',
+          categoryData: { eventDate: '2026-12-01' },
+        });
+
+        // The old answers never reach the validator — only what this
+        // request itself supplied for the new category.
+        expect(categoryTemplatesService.assertJobRequirements).toHaveBeenCalledWith(
+          null,
+          undefined,
+          undefined,
+          { eventDate: '2026-12-01' },
+        );
+      });
     });
   });
 
@@ -599,6 +848,31 @@ describe('JobsService', () => {
       const job = await service.findMineById('user_1', 'job_1');
 
       expect(job).toMatchObject({ proposalCount: 0 });
+    });
+  });
+
+  describe('location privacy', () => {
+    it('the owner reading their own job receives locationExact', async () => {
+      const { service, jobs } = build();
+      jobs.findLocationExact.mockResolvedValue({ address: '221B Baker Street' });
+
+      const job = await service.findMineById('user_1', 'job_1');
+
+      expect(jobs.findLocationExact).toHaveBeenCalledWith('job_1');
+      expect(job).toMatchObject({ locationExact: { address: '221B Baker Street' } });
+    });
+
+    // update()/publish()/cancel() write through JobsRepository.update, which
+    // now selects explicitly (see jobs.repository.spec.ts's own tests for
+    // the actual select-shape proof) rather than returning the full row.
+    // findMineById above is the one deliberate path that adds locationExact
+    // back in — an owner mutation response must never carry it by accident.
+    it("update()'s response never carries locationExact", async () => {
+      const { service } = build();
+
+      const result = await service.update('user_1', 'job_1', { title: 'Updated' });
+
+      expect(result).not.toHaveProperty('locationExact');
     });
   });
 

@@ -5,6 +5,7 @@ import { Button, Card } from '@marche/ui';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
+import { PriceNegotiationPanel } from '../../components/proposals/PriceNegotiationPanel';
 import { useApiResource } from '../../hooks/useApiResource';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -280,6 +281,12 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
           View {provider.displayName}’s profile
         </button>
       </Card>
+
+      <PriceNegotiationPanel
+        proposalId={offer.id}
+        otherPartyProfileId={provider.id}
+        canPropose={open}
+      />
 
       {files.length > 0 && (
         <Card className="p-8 space-y-4">

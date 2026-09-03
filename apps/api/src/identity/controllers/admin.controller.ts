@@ -6,6 +6,7 @@ import { RequirePlatformRole } from '../decorators/require-platform-role.decorat
 import { CurrentUser } from '../current-user.decorator';
 import { AdminService } from '../services/admin.service';
 import { UpdatePlatformRoleDto } from '../dto/update-platform-role.dto';
+import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
 import type { AuthenticatedUser } from '../strategies/jwt.strategy';
 
 // Super Admin only. module1-implementation-contract.md §5: this is the one
@@ -28,5 +29,19 @@ export class AdminController {
     @Body() dto: UpdatePlatformRoleDto,
   ) {
     return this.adminService.changePlatformRole(user.id, id, dto.platformRole);
+  }
+
+  // ADMIN, not SUPER_ADMIN — suspending a bad actor is a lower-stakes,
+  // more frequent action than changing platform authority, and shouldn't
+  // require the smaller Super Admin group to be the only ones who can act.
+  @Patch(':id/status')
+  @RequirePlatformRole('ADMIN')
+  @ApiOperation({ summary: 'Suspend or restore a user account (Admin only)' })
+  updateStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserStatusDto,
+  ) {
+    return this.adminService.setUserStatus(user.id, id, dto.status);
   }
 }

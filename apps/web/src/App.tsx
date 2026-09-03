@@ -67,6 +67,7 @@ import { MobileMenuPage } from './pages/MobileMenuPage';
 
 import { AdminAuditDashboard } from './pages/admin/AdminAuditDashboard';
 import { AdminDisputesPage } from './pages/admin/AdminDisputesPage';
+import { AdminCategoryTemplatesPage } from './pages/admin/AdminCategoryTemplatesPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { MessagesPage } from './pages/MessagesPage';
 
@@ -109,6 +110,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,
   '/admin/disputes': () => <AdminDisputesPage />,
+  '/admin/categories': () => <AdminCategoryTemplatesPage />,
   '/admin/profile': () => <EditProfilePage />,
   '/marketplace': () => <BrowseServicesPage />,
   '/messages': () => <MessagesPage />,
@@ -130,6 +132,7 @@ const PREFIX_ROUTES: { prefix: string; render: (id: string) => ReactNode }[] = [
   { prefix: '/profile/', render: (id) => <PublicProfilePage id={id} /> },
   { prefix: '/services/', render: (id) => <ServiceDetailPage id={id} /> },
   { prefix: '/contracts/', render: (id) => <ContractDetailPage id={id} /> },
+  { prefix: '/admin/categories/', render: (id) => <AdminCategoryTemplatesPage id={id} /> },
 ];
 
 function AppContent() {
@@ -296,16 +299,41 @@ function AppContent() {
         : CLIENT_ROOT_ROUTES;
   const showMobileBack = !rootRoutes.has(route);
 
+  const isAdminTheme = currentUser.role === 'admin';
+
   return (
     <div
       className="h-screen bg-bg text-ink flex font-sans overflow-hidden"
-      style={{
-        backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
-        backgroundSize: '22px 22px',
-      }}
+      style={
+        // The dot-pattern is part of the client/provider brand texture —
+        // the admin operations console is deliberately flat and calm
+        // instead (see tokens.css's [data-theme='admin'] block), so a
+        // plain bg-bg fill (warm cream, once the token override below
+        // applies) covers the gaps around the floating Sidebar and <main>.
+        isAdminTheme
+          ? undefined
+          : {
+              backgroundImage: 'radial-gradient(rgba(17, 24, 39, 0.12) 1px, transparent 1px)',
+              backgroundSize: '22px 22px',
+            }
+      }
+      // Admin gets its own token overrides (see tokens.css's
+      // [data-theme='admin'] block) — a premium operations-console
+      // palette (mostly white/warm-neutral, blue reserved for structure
+      // and emphasis). Set on this outer wrapper (not just <main>) so
+      // bg-bg here — the surface behind the floating Sidebar and <main>
+      // cards — resolves consistently instead of the client/provider
+      // cream. Every existing component (Button, Card, Badge, ...) already
+      // reads these same CSS variables, so this recolors admin pages with
+      // zero changes to their own markup; the Sidebar itself is the one
+      // exception, styled directly in Sidebar.tsx since its colors were
+      // never token-driven to begin with.
+      data-theme={isAdminTheme ? 'admin' : undefined}
     >
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-6 lg:p-10 relative">
+      <main
+        className={`flex-1 overflow-y-auto p-6 lg:p-10 relative ${isAdminTheme ? 'bg-bg' : ''}`}
+      >
         {showMobileBack && (
           <button
             type="button"

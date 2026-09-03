@@ -8,6 +8,7 @@
 // paths say "job"; anything a person reads says "requirement".
 import { apiFetch, toQuery } from './api-fetch';
 import type { Page } from './marketplace-api';
+import type { ServiceMode } from './category-templates-api';
 
 // The API returns the marketplace envelope; normalised to the same Page
 // shape every other screen already consumes.
@@ -46,7 +47,29 @@ export interface ApiJob {
   // formatted for display rather than parsed into a float that loses paise.
   budgetMin: string | null;
   budgetMax: string | null;
-  location: string | null;
+  /** Coarse (city/area) — always present when a location was given. */
+  locationCoarse: string | null;
+  /**
+   * The sensitive counterpart. Only ever present as a key on reads the
+   * backend has already authorized (the owner's GET /jobs/me/:id; a
+   * proposal/connection read once the caller is the hired provider or the
+   * job owner) — `null` there means genuinely not set, not "not allowed to
+   * see it". On every other read (public search, public detail, an
+   * unhired provider's own proposal view) the key is absent entirely —
+   * check `'locationExact' in job`, not just falsiness, if that
+   * distinction ever matters.
+   */
+  locationExact?: unknown;
+  serviceMode: ServiceMode | null;
+  /**
+   * The specific, immutable CategoryTemplate version this Job is locked to
+   * — set once at creation (or re-set on a category change) and never
+   * silently migrated to a newer version an admin activates later. Null
+   * means the category had no template configured when the lock was made.
+   */
+  categoryTemplateId: string | null;
+  /** This category's requirement answers, keyed by CategoryTemplateField.key. Null iff categoryTemplateId is null. */
+  categoryData: Record<string, unknown> | null;
   eventDate: string | null;
   /** Wall-clock "HH:MM" at the venue — display as given, never re-zone. */
   eventStartTime: string | null;
@@ -106,7 +129,10 @@ export interface JobBody {
   categoryId: string;
   budgetMin?: number;
   budgetMax?: number;
-  location?: string;
+  locationCoarse?: string;
+  serviceMode?: ServiceMode;
+  /** Validated against the locked (or about-to-be-locked) template in JobsService. */
+  categoryData?: Record<string, unknown>;
   eventDate?: string;
   /** 24-hour "HH:MM". Both need an eventDate to belong to. */
   eventStartTime?: string;

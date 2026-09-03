@@ -69,7 +69,7 @@ export const MyWorkPage: React.FC = () => {
 
   // Total earnings won/held
   const totalEarnings = myContracts.reduce(
-    (acc, curr) => acc + Number(curr.proposal.proposedPrice),
+    (acc, curr) => acc + Number(curr.proposal.agreedPrice ?? curr.proposal.proposedPrice),
     0,
   );
 
@@ -241,10 +241,10 @@ export const MyWorkPage: React.FC = () => {
                         <CalendarDays className="w-3.5 h-3.5 shrink-0" />
                         {formatEventWhen(proposal.job) ?? 'No date set'}
                       </span>
-                      {proposal.job.location && (
+                      {proposal.job.locationCoarse && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-3.5 h-3.5 shrink-0" />
-                          {proposal.job.location}
+                          {proposal.job.locationCoarse}
                         </span>
                       )}
                     </div>
@@ -308,7 +308,10 @@ export const MyWorkPage: React.FC = () => {
                         Contract Value
                       </span>
                       <span className="text-xl font-bold text-primary">
-                        ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
+                        ₹
+                        {Number(
+                          ctr.proposal.agreedPrice ?? ctr.proposal.proposedPrice,
+                        ).toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>

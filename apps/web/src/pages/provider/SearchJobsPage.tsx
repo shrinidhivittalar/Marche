@@ -416,10 +416,10 @@ function JobCard({
             Verified client
           </span>
         )}
-        {job.location && (
+        {job.locationCoarse && (
           <span className="flex items-center gap-1 min-w-0">
             <MapPin className="w-3 h-3 shrink-0" />
-            <span className="truncate">{job.location}</span>
+            <span className="truncate">{job.locationCoarse}</span>
           </span>
         )}
         {when && (

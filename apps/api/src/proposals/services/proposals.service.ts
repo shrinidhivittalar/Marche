@@ -331,9 +331,30 @@ export class ProposalsService {
   async findById(userId: string, proposalId: string) {
     const { proposal, profile } = await this.getProposalAsParty(userId, proposalId);
 
-    return proposal.providerProfileId === profile.id
-      ? this.proposalsRepository.findByIdForProvider(proposal.id)
-      : this.proposalsRepository.findByIdForClient(proposal.id);
+    if (proposal.providerProfileId !== profile.id) {
+      // The client branch. getProposalAsParty already proved this caller
+      // owns the Job this proposal targets, but findByIdForClient does not
+      // embed the job at all — the client already has it via GET /jobs/me/:id,
+      // which is where its own locationExact is read. Nothing to merge here.
+      return this.proposalsRepository.findByIdForClient(proposal.id);
+    }
+
+    const own = await this.proposalsRepository.findByIdForProvider(proposal.id);
+    if (!own) return own;
+
+    // The provider branch. Only entitled to locationExact once actually
+    // hired for this job — the Connection row is the authoritative "hired"
+    // fact (see module4.md §8 / jobs.repository.ts), not this proposal's
+    // own status column.
+    const hiredProviderProfileId = await this.jobsRepository.findHiredProviderProfileId(
+      proposal.jobId,
+    );
+    const locationExact =
+      hiredProviderProfileId === profile.id
+        ? await this.jobsRepository.findLocationExact(proposal.jobId)
+        : null;
+
+    return { ...own, job: { ...own.job, locationExact } };
   }
 
   async listForJob(userId: string, jobId: string, pagination: PaginationQueryDto) {

@@ -8,6 +8,7 @@ import {
   Send,
   FileText,
   ShieldCheck,
+  Layers,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, Card } from '@marche/ui';
@@ -15,6 +16,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { jobsApi } from '../../lib/jobs-api';
 import { reviewsApi } from '../../lib/reviews-api';
+import { CategoryRequirementsDisplay } from '../../components/jobs/CategoryRequirementsDisplay';
 import { formatJobBudget, formatEventWhen, formatDeadline } from '../../lib/formatJob';
 
 const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
@@ -153,6 +155,12 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
               </div>
             )}
 
+            <CategoryRequirementsDisplay
+              categorySlug={requirement.category.slug}
+              categoryTemplateId={requirement.categoryTemplateId}
+              categoryData={requirement.categoryData}
+            />
+
             <div>
               <h3 className="text-xs font-mono uppercase font-bold text-primary mb-3">
                 Reference Documents
@@ -213,12 +221,12 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
                 </div>
               )}
 
-              {requirement.location && (
+              {requirement.locationCoarse && (
                 <div className="flex items-center gap-3">
                   <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
                   <div>
                     <span className="block text-[10px] text-ink-muted">Venue / City</span>
-                    <span className="font-semibold text-ink">{requirement.location}</span>
+                    <span className="font-semibold text-ink">{requirement.locationCoarse}</span>
                   </div>
                 </div>
               )}
@@ -229,6 +237,16 @@ export const JobDetailProviderView: React.FC<JobDetailProviderViewProps> = ({ id
                   <div>
                     <span className="block text-[10px] text-ink-muted">Proposal Deadline</span>
                     <span className="font-semibold text-amber-700">{deadline}</span>
+                  </div>
+                </div>
+              )}
+
+              {requirement.serviceMode && (
+                <div className="flex items-center gap-3">
+                  <Layers className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <div>
+                    <span className="block text-[10px] text-ink-muted">Service Mode</span>
+                    <span className="font-semibold text-ink">{requirement.serviceMode}</span>
                   </div>
                 </div>
               )}

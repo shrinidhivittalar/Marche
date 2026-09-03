@@ -17,6 +17,7 @@ import { directContractsApi } from '../../lib/direct-contracts-api';
 import { mediaApi } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
+import { PriceNegotiationPanel } from '../../components/proposals/PriceNegotiationPanel';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen, formatDeadline } from '../../lib/formatJob';
 
@@ -221,7 +222,14 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
           <div className="flex items-start gap-2.5">
             <MapPin className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-ink">{mine.job.location ?? 'Not stated'}</p>
+              <p className="font-bold text-ink">
+                {/* The API includes locationExact only once this provider is
+                    the hired one for this job — shown in preference to the
+                    coarse label when present. */}
+                {(typeof mine.job.locationExact === 'string' ? mine.job.locationExact : null) ??
+                  mine.job.locationCoarse ??
+                  'Not stated'}
+              </p>
               <p className="text-[11px] text-ink-muted">Location</p>
             </div>
           </div>
@@ -268,6 +276,17 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
             : 'A submitted proposal cannot be edited — the client decides on exactly what they read.'}
         </p>
       </Card>
+
+      {/* Excluded for a direct offer — DirectContractsService already owns
+          its single agreed price with its own accept/decline; the backend
+          itself refuses price negotiation on an isDirect Job. */}
+      {!mine.job.isDirect && (
+        <PriceNegotiationPanel
+          proposalId={mine.id}
+          otherPartyProfileId={mine.job.clientProfile.id}
+          canPropose={open}
+        />
+      )}
 
       <Card className="p-8 space-y-4">
         <div className="flex items-center justify-between">

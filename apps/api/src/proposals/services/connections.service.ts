@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
+import { JobsRepository } from '../../jobs/repositories/jobs.repository';
 import { assertProviderRole, getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { paginate } from '../../marketplace/pagination';
 import { ConnectionsRepository } from '../repositories/connections.repository';
@@ -44,6 +45,7 @@ export class ConnectionsService {
     private readonly connectionsRepository: ConnectionsRepository,
     private readonly proposalsRepository: ProposalsRepository,
     private readonly profilesRepository: ProfilesRepository,
+    private readonly jobsRepository: JobsRepository,
   ) {}
 
   async listMine(userId: string, pagination: PaginationQueryDto) {
@@ -78,10 +80,19 @@ export class ConnectionsService {
       throw new ForbiddenException('You do not have access to this connection');
     }
 
-    // Returned whole. The two ownership ids read for the check above are
-    // already on the row as `clientProfile.id` and `providerProfile.id`, so
-    // stripping them would hide nothing and cost a rebuild of the object.
-    return connection;
+    // Both roles a Connection can be read by are always entitled to the
+    // exact location: the client is the Job's owner, the provider exists on
+    // this row only because they were hired for it (a Connection is created
+    // exclusively inside ProposalsService.accept/DirectContractsService.accept).
+    // Fetched separately rather than added to CONNECTION_FIELDS, same reason
+    // as every other call site in this slice.
+    const locationExact = await this.jobsRepository.findLocationExact(connection.job.id);
+
+    // Otherwise returned whole. The two ownership ids read for the check
+    // above are already on the row as `clientProfile.id` and
+    // `providerProfile.id`, so stripping them would hide nothing and cost a
+    // rebuild of the object.
+    return { ...connection, job: { ...connection.job, locationExact } };
   }
 
   /**

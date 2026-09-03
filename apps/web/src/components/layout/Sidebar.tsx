@@ -20,6 +20,8 @@ import {
   TrendingUp,
   Search,
   Gavel,
+  Tags,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   Popover,
@@ -124,10 +126,21 @@ export const Sidebar: React.FC = () => {
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
+  // The Admin is a platform manager, not a marketplace participant — this
+  // list is deliberately limited to admin pages that actually exist today
+  // (Categories/Disputes/Audit) rather than the full aspirational set
+  // (Dashboard, Users, Payments, Rules), none of which have a real page or
+  // route yet. "Job Management" still reuses /provider/dashboard, same as
+  // "Jobs" did before — there is no separate admin job-management page.
   const adminNav = [
-    { label: 'Payments & Audit', path: '/admin/audit', icon: CreditCard },
+    { label: 'Categories', path: '/admin/categories', icon: Tags },
+    { label: 'Job Management', path: '/provider/dashboard', icon: Briefcase },
     { label: 'Disputes', path: '/admin/disputes', icon: Gavel },
-    { label: 'Jobs', path: '/provider/dashboard', icon: Briefcase },
+    // Was "Payments & Audit" — the page itself only ever showed a
+    // login/logout security audit trail, never payment data, so "Payments"
+    // would have mislabeled it. No separate Payments page exists to give
+    // that label to instead.
+    { label: 'Audit Logs', path: '/admin/audit', icon: ShieldAlert },
     { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
   ];
 
@@ -138,6 +151,36 @@ export const Sidebar: React.FC = () => {
   const isAdmin = currentUser.role === 'admin';
 
   const navItems = isAdmin ? adminNav : surface === 'PROVIDER' ? vendorNav : clientNav;
+
+  // The sidebar itself is shared chrome across all three roles, so its
+  // styling is hardcoded rather than token-driven (client/provider never
+  // opt into the admin theme — see tokens.css's [data-theme='admin']).
+  // Admin gets a dark blue-950 card — same structure as the client/provider
+  // sidebar, recolored to the admin blue scale instead of red. The "M" logo
+  // mark stays red in both cases — it's the brand wordmark, not a theme
+  // color.
+  const sidebarBg = isAdmin ? 'bg-[#0f172a]' : 'bg-[#1a1512]';
+  const sidebarBorder = '';
+  // Admin reads the themed --shadow-float token (tokens.css defines a
+  // dedicated 'none' for admin dark mode, where the page behind the
+  // Sidebar is the identical navy and a shadow has nothing left to
+  // separate it from). Client/provider keep their own unrelated hardcoded
+  // shadow — --shadow-float's non-admin values serve a different, unused
+  // purpose and aren't a match for this sidebar's existing look.
+  const sidebarShadow = isAdmin
+    ? 'var(--shadow-float)'
+    : '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)';
+  const activeFill = isAdmin ? 'bg-blue-600' : 'bg-red-700';
+  const activeText = 'text-white';
+  const activeIcon = 'text-white';
+  const idleIcon = isAdmin ? 'text-slate-400' : 'text-zinc-400';
+  const idleText = isAdmin ? 'text-slate-400' : 'text-zinc-400';
+  const idleHover = 'hover:text-white hover:bg-white/10';
+  const emphasisFill = isAdmin ? 'bg-blue-600' : 'bg-red-600';
+  const dividerBorder = 'border-white/10';
+  const wordmarkText = 'text-white';
+  const hoverBgOnly = 'hover:bg-white/10';
+  const avatarRing = isAdmin ? 'ring-blue-500/20' : 'ring-white/20';
 
   const homePath = isAdmin
     ? '/admin/audit'
@@ -157,20 +200,16 @@ export const Sidebar: React.FC = () => {
   const identityItemClass = (variant: 'default' | 'danger' = 'default') =>
     `w-full flex items-center rounded-lg text-xs font-medium transition-colors cursor-pointer ${
       collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
-    } ${
-      variant === 'danger'
-        ? 'text-red-400 hover:bg-red-500/10'
-        : 'text-zinc-400 hover:text-white hover:bg-white/10'
-    }`;
+    } ${variant === 'danger' ? 'text-red-400 hover:bg-red-500/10' : `${idleText} ${idleHover}`}`;
 
   return (
     <aside
       className={`${
         collapsed ? 'w-[68px]' : 'w-60'
-      } bg-[#1a1512] rounded-3xl m-3 p-3 hidden md:flex md:flex-col justify-between shrink-0 transition-[width] duration-200`}
+      } ${sidebarBg} ${sidebarBorder} rounded-3xl m-3 p-3 hidden md:flex md:flex-col justify-between shrink-0 transition-[width] duration-200`}
       style={{
         height: 'calc(100vh - 1.5rem)',
-        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)',
+        boxShadow: sidebarShadow,
       }}
     >
       <div className="space-y-4">
@@ -190,7 +229,7 @@ export const Sidebar: React.FC = () => {
             </div>
             {!collapsed && (
               <span
-                className="text-lg tracking-tight text-white uppercase"
+                className={`text-lg tracking-tight ${wordmarkText} uppercase`}
                 style={{ fontFamily: 'Anton, sans-serif' }}
               >
                 Marché
@@ -199,12 +238,12 @@ export const Sidebar: React.FC = () => {
           </button>
 
           <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-1'}`}>
-            <ThemeToggle className="!size-auto p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10" />
+            <ThemeToggle className={`!size-auto p-2 rounded-lg ${idleText} ${idleHover}`} />
 
             <button
               onClick={toggleCollapsed}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="flex items-center p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              className={`flex items-center p-2 rounded-lg ${idleText} ${idleHover} transition-colors cursor-pointer`}
             >
               {collapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -226,23 +265,22 @@ export const Sidebar: React.FC = () => {
               // because a client finance route is open.
               (item.path === '/client/payments' && route.startsWith('/client/finances/')) ||
               (item.path === '/client/freelancers/hired' &&
-                route.startsWith('/client/freelancers/'));
+                route.startsWith('/client/freelancers/')) ||
+              (item.path === '/admin/categories' && route.startsWith('/admin/categories/'));
             const navButtonClass = `w-full flex items-center rounded-xl text-xs font-medium transition-all cursor-pointer ${
               collapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'
-            } ${
-              isActive
-                ? 'bg-red-700 text-white font-bold'
-                : 'text-zinc-400 hover:text-white hover:bg-white/10'
-            }`;
+            } ${isActive ? `${activeFill} ${activeText} font-bold` : `${idleText} ${idleHover}`}`;
             const navButtonContent = (
               <>
                 <div className={`flex items-center relative ${collapsed ? '' : 'gap-3'}`}>
                   <Icon
-                    className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`}
+                    className={`w-[18px] h-[18px] shrink-0 ${isActive ? activeIcon : idleIcon}`}
                   />
                   {!collapsed && <span>{item.label}</span>}
                   {collapsed && item.badge && item.badge > 0 ? (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-600 ring-2 ring-[#1a1512]" />
+                    <span
+                      className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${emphasisFill} ring-2 ${isAdmin ? 'ring-[#0f172a]' : 'ring-[#1a1512]'}`}
+                    />
                   ) : null}
                 </div>
                 {!collapsed && item.badge && item.badge > 0 ? (
@@ -254,7 +292,7 @@ export const Sidebar: React.FC = () => {
                           ? 'messages-unread-badge'
                           : undefined
                     }
-                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-700 text-white"
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${emphasisFill} text-white`}
                   >
                     {item.badge}
                   </span>
@@ -456,7 +494,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* User Identity Chip (inline accordion, not a popover) — bottom of sidebar */}
-      <div className="pt-3 border-t border-white/10">
+      <div className={`pt-3 border-t ${dividerBorder}`}>
         {identityOpen && (
           <div className="mb-1 space-y-0.5">
             {/* Mode switcher. Only a user who genuinely holds both
@@ -468,7 +506,7 @@ export const Sidebar: React.FC = () => {
                 of a switch. It is not authorization — the API re-checks
                 capabilities on every request regardless of mode. */}
             {availableModes.length > 1 && (
-              <div className="pb-1 mb-1 border-b border-white/10 space-y-0.5">
+              <div className={`pb-1 mb-1 border-b ${dividerBorder} space-y-0.5`}>
                 {availableModes.map((mode) => {
                   const isCurrent = mode === surface;
                   return (
@@ -528,19 +566,19 @@ export const Sidebar: React.FC = () => {
           onClick={() => setIdentityOpen((prev) => !prev)}
           title={collapsed ? currentUser.name : undefined}
           className={`w-full flex items-center rounded-xl transition-colors cursor-pointer ${
-            collapsed ? 'justify-center p-2' : 'justify-between px-2.5 py-2 hover:bg-white/10'
+            collapsed ? 'justify-center p-2' : `justify-between px-2.5 py-2 ${hoverBgOnly}`
           }`}
         >
           <div className={`flex items-center min-w-0 ${collapsed ? '' : 'gap-2.5'}`}>
             <img
               src={currentUser.avatar}
               alt={currentUser.name}
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20 shrink-0"
+              className={`w-8 h-8 rounded-full object-cover ring-1 ${avatarRing} shrink-0`}
             />
             {!collapsed && (
               <div className="min-w-0 text-left">
-                <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
-                <p className="text-[10px] text-zinc-400 truncate">
+                <p className={`text-xs font-bold ${wordmarkText} truncate`}>{currentUser.name}</p>
+                <p className={`text-[10px] ${idleText} truncate`}>
                   {currentUser.companyOrTitle || currentUser.role}
                 </p>
               </div>
@@ -548,7 +586,7 @@ export const Sidebar: React.FC = () => {
           </div>
           {!collapsed && (
             <ChevronDown
-              className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform ${
+              className={`w-3.5 h-3.5 ${idleIcon} shrink-0 transition-transform ${
                 identityOpen ? 'rotate-180' : ''
               }`}
             />

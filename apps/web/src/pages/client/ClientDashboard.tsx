@@ -292,7 +292,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                       <div>
                         <span className="block text-[10px] text-ink-muted">Booking Amount</span>
                         <span className="text-sm font-extrabold text-ink">
-                          ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
+                          ₹
+                          {Number(
+                            ctr.proposal.agreedPrice ?? ctr.proposal.proposedPrice,
+                          ).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <Button

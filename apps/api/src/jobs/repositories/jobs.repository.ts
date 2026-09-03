@@ -48,7 +48,19 @@ const JOB_FIELDS = {
   description: true,
   budgetMin: true,
   budgetMax: true,
-  location: true,
+  // Coarse only, deliberately — this constant backs every shared read path
+  // (public, owner, and everything derived from it), and locationExact must
+  // never be reachable through it. See findLocationExact below for the only
+  // sanctioned way to read the exact value.
+  locationCoarse: true,
+  // Public — the same visibility tier as locationCoarse, never locationExact.
+  serviceMode: true,
+  // Which template version's rules this Job is locked to, and its answers
+  // to that version's fields — both public, the same tier as
+  // deliverables: requirement detail a provider needs to decide whether to
+  // bid, not sensitive like locationExact.
+  categoryTemplateId: true,
+  categoryData: true,
   eventDate: true,
   eventStartTime: true,
   eventEndTime: true,
@@ -159,14 +171,27 @@ export class JobsRepository {
     return this.prisma.client.job.create({ data });
   }
 
-  update(id: string, data: Prisma.JobUpdateInput): Promise<Job> {
-    return this.prisma.client.job.update({ where: { id }, data });
+  // Explicit select, matching findByIdForOwner — an unselected `update`
+  // returns the complete row, locationExact included, to whatever calls it.
+  // Every caller today is already owner-gated (JobsService.getOwnJob), so
+  // this was never reachable by an unauthorized party in practice — but it
+  // is exactly the "select everything" shape the rest of this file
+  // deliberately avoids, and a future caller that isn't owner-gated would
+  // leak silently with no select boundary to catch it. Fixed here rather
+  // than left as a latent risk.
+  update(id: string, data: Prisma.JobUpdateInput) {
+    return this.prisma.client.job.update({
+      where: { id },
+      data,
+      select: { ...OWNER_JOB_FIELDS, updatedAt: true },
+    });
   }
 
-  softDelete(id: string): Promise<Job> {
+  softDelete(id: string) {
     return this.prisma.client.job.update({
       where: { id },
       data: { deletedAt: new Date() },
+      select: { ...OWNER_JOB_FIELDS, updatedAt: true },
     });
   }
 
@@ -246,6 +271,25 @@ export class JobsRepository {
       .then((connection) => connection?.providerProfileId ?? null);
   }
 
+  /**
+   * The one and only place `locationExact` is ever selected.
+   *
+   * Deliberately its own tiny query rather than a field added to
+   * JOB_FIELDS/OWNER_JOB_FIELDS: those constants back every shared read
+   * path, and a private field living there would need every future caller
+   * to remember to strip it rather than every caller that needs it
+   * remembering to ask. Callers are exactly three (Jobs' own owner read,
+   * Proposals' hired-provider read, Connections' both-parties read), and
+   * each already independently proves the caller is the owner or the hired
+   * provider before calling this — see jobs.service.ts, proposals.service.ts
+   * and connections.service.ts.
+   */
+  findLocationExact(jobId: string): Promise<Prisma.JsonValue | null> {
+    return this.prisma.client.job
+      .findUnique({ where: { id: jobId }, select: { locationExact: true } })
+      .then((job) => job?.locationExact ?? null);
+  }
+
   countAttachments(jobId: string) {
     return this.prisma.client.jobAttachment.count({ where: { jobId } });
   }
@@ -281,7 +325,10 @@ export class JobsRepository {
     }
 
     if (filters.location) {
-      where.location = { contains: filters.location, mode: 'insensitive' };
+      // Filters against locationCoarse only — the column rename, not a new
+      // capability. Searching an exact address a provider was never shown
+      // would be a filter that answers a question nobody could have asked.
+      where.locationCoarse = { contains: filters.location, mode: 'insensitive' };
     }
 
     // Read from the provider's side: minBudget is "pays at least this", so

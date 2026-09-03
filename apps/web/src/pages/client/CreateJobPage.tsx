@@ -25,6 +25,17 @@ import { ApiError } from '../../lib/api';
 import { marketplaceApi } from '../../lib/marketplace-api';
 import { mediaApi } from '../../lib/media-api';
 import { jobsApi, type JobBody } from '../../lib/jobs-api';
+import {
+  categoryTemplatesApi,
+  type PublicCategoryTemplate,
+  type ServiceMode,
+} from '../../lib/category-templates-api';
+import {
+  CategoryRequirementsFields,
+  defaultCategoryData,
+  validateCategoryData,
+  type CategoryDataValues,
+} from './CategoryRequirementsFields';
 
 // Post a requirement, on the real Jobs API.
 //
@@ -193,6 +204,17 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Category-template-driven state. `originalCategoryId` is the category
+  // the loaded draft actually belongs to (null in create mode, where every
+  // category pick counts as "changed") — comparing the live `categoryId`
+  // against it, not against "did the dropdown fire an onChange this
+  // session", is what lets picking a different category and then picking
+  // the original one back restore the job's own locked template rather
+  // than whatever is active for that category right now.
+  const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
+  const [categoryData, setCategoryData] = useState<CategoryDataValues>({});
+  const [serviceMode, setServiceMode] = useState<ServiceMode | ''>('');
+
   // Seeding a resumed draft. Keyed off the loaded id so it runs once per
   // draft rather than on every render, and never overwrites typing.
   const [seededFrom, setSeededFrom] = useState<string | null>(null);
@@ -201,8 +223,11 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     setSeededFrom(loaded.id);
     setTitle(loaded.title);
     setCategoryId(loaded.category.id);
+    setOriginalCategoryId(loaded.category.id);
+    setCategoryData(loaded.categoryData ?? {});
+    setServiceMode(loaded.serviceMode ?? '');
     setDescription(loaded.description);
-    setLocation(loaded.location ?? '');
+    setLocation(loaded.locationCoarse ?? '');
     setEventDate(loaded.eventDate ? loaded.eventDate.slice(0, 10) : '');
     // No stored timingMode: the presence of times is what it meant.
     setTimingMode(loaded.eventStartTime ? 'fixed' : 'flexible');
@@ -237,6 +262,84 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   }
 
   const selectedCategory = (categories.data ?? []).find((c) => c.id === categoryId);
+
+  // True in create mode as soon as any category is picked (there is no
+  // "original" to compare against there), and in edit mode only once the
+  // selector actually points somewhere other than the job's own category.
+  const isCategoryChangedFromOriginal = categoryId !== originalCategoryId;
+
+  // CREATE, or EDIT with the category changed: the category's *current*
+  // active template — the same one JobsService will re-resolve at submit.
+  // EDIT with the category unchanged: the job's own *locked* version, by
+  // id — never the category's current active template, since an admin may
+  // have published a newer one since this job was created. No lock and no
+  // change means no template at all, exactly as it was when the job was
+  // made — see CategoryTemplatesService.resolveLockedTemplate's own
+  // reasoning for why these are not interchangeable.
+  const lockedTemplateId = draft.data?.categoryTemplateId ?? null;
+  // Tagged with the category it was actually fetched for. useApiResource
+  // only replaces `data` once a fetch resolves — it does not clear it the
+  // instant deps change — so right after picking a new category, `data`
+  // can still be the previous category's template for one render, before
+  // the effect that starts the new fetch has even run. Deriving
+  // `activeTemplate` below by comparing this tag against the live
+  // `categoryId` (not just trusting `templateResource.data`) is what keeps
+  // that one render from ever pairing the old category's field labels with
+  // the just-cleared `categoryData` — it falls through to the "no
+  // requirements" empty state instead until the real fetch settles.
+  const templateResource = useApiResource<{
+    categoryId: string;
+    template: PublicCategoryTemplate | null;
+  } | null>(
+    () => {
+      if (!selectedCategory) return Promise.resolve(null);
+      const forCategoryId = selectedCategory.id;
+      if (!isCategoryChangedFromOriginal) {
+        if (!lockedTemplateId)
+          return Promise.resolve({ categoryId: forCategoryId, template: null });
+        return categoryTemplatesApi
+          .getVersionPublic(selectedCategory.slug, lockedTemplateId)
+          .then((res) => ({ categoryId: forCategoryId, template: res.template }));
+      }
+      return categoryTemplatesApi
+        .getActive(selectedCategory.slug)
+        .then((res) => ({ categoryId: forCategoryId, template: res.template }));
+    },
+    [selectedCategory?.slug, isCategoryChangedFromOriginal, lockedTemplateId],
+    { enabled: Boolean(selectedCategory) },
+  );
+  const activeTemplate =
+    templateResource.data && templateResource.data.categoryId === categoryId
+      ? templateResource.data.template
+      : null;
+
+  // Fills in defaults (BOOLEAN → false, MULTI_SELECT → []) the first time a
+  // given template resolves, without disturbing anything already typed —
+  // the same once-per-id render-time-guarded pattern the draft/attachment
+  // seeding above already uses, rather than a useEffect.
+  const [defaultsAppliedFor, setDefaultsAppliedFor] = useState<string | null>(null);
+  if (activeTemplate && defaultsAppliedFor !== activeTemplate.id) {
+    setDefaultsAppliedFor(activeTemplate.id);
+    setCategoryData((prev) => ({ ...defaultCategoryData(activeTemplate.fields), ...prev }));
+  }
+
+  // Changing category discards the previous category's answers and
+  // service mode outright — they were never validated against the new
+  // category's template and may not even correspond to real fields on it.
+  // Landing back on the job's own original category restores exactly what
+  // was loaded for it, not an empty form, since that is what the job is
+  // actually still locked to.
+  const handleSelectCategory = (nextCategoryId: string) => {
+    if (nextCategoryId === categoryId) return;
+    setCategoryId(nextCategoryId);
+    if (nextCategoryId === originalCategoryId && draft.data) {
+      setCategoryData(draft.data.categoryData ?? {});
+      setServiceMode(draft.data.serviceMode ?? '');
+    } else {
+      setCategoryData({});
+      setServiceMode('');
+    }
+  };
 
   const handleFilesSelected = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
@@ -301,19 +404,32 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   const isStepValid = (s: WizardStep): boolean => {
     switch (s) {
       case 1:
-        return !!categoryId;
+        if (!categoryId) return false;
+        // Blocks on a template fetch that hasn't resolved yet (or failed)
+        // rather than letting Next through — proceeding on an unknown
+        // template would either submit incomplete categoryData or, if
+        // nothing was rendered at all yet, silently skip requirements the
+        // backend is about to enforce anyway.
+        if (templateResource.loading || templateResource.error) return false;
+        if (!activeTemplate) return true;
+        return Object.values(validateCategoryData(activeTemplate.fields, categoryData)).every(
+          (e) => e === null,
+        );
       case 2:
         return title.trim().length >= MIN_TITLE;
       case 3:
         return description.trim().length >= MIN_DESCRIPTION;
       case 4:
-        // Only the timing relationship is enforced. A date, a deadline and
-        // a venue are all optional on the API, and inventing extra required
-        // fields here would refuse requirements the server would accept.
+        // Only the timing relationship, plus a template's own
+        // locationRequired, are enforced. A date, a deadline and a venue
+        // are otherwise all optional on the API, and inventing extra
+        // required fields here would refuse requirements the server would
+        // accept.
         return (
-          timingMode !== 'fixed' ||
-          !eventDate ||
-          (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime)
+          (timingMode !== 'fixed' ||
+            !eventDate ||
+            (!!eventStartTime && !!eventEndTime && eventEndTime > eventStartTime)) &&
+          (!activeTemplate?.locationRequired || location.trim().length > 0)
         );
       case 5:
         // A maximum of zero means "no upper bound", not "zero rupees" — the
@@ -362,7 +478,14 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
         : budgetMax > 0
           ? budgetMax
           : undefined,
-    location: location.trim() || undefined,
+    locationCoarse: location.trim() || undefined,
+    serviceMode: serviceMode || undefined,
+    // Always the full current answer set rather than a computed diff —
+    // simpler, and JobsService already treats an update's categoryData as
+    // a full replacement, not a merge. Absent (not an empty object) when no
+    // template governs this category, matching categoryData's own
+    // null-iff-no-template invariant.
+    categoryData: activeTemplate ? categoryData : undefined,
     eventDate: eventDate ? new Date(eventDate).toISOString() : undefined,
     // Times only exist in fixed mode, and only alongside a date — which is
     // what the API enforces too.
@@ -564,7 +687,7 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                   type="button"
                   key={cat.id}
                   data-testid={`category-${cat.slug}`}
-                  onClick={() => setCategoryId(cat.id)}
+                  onClick={() => handleSelectCategory(cat.id)}
                   className={`p-3.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
                     categoryId === cat.id
                       ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
@@ -576,6 +699,46 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               ))}
             </div>
           </div>
+
+          {categoryId && (
+            <div
+              className="mt-8 pt-6 border-t border-border"
+              data-testid="category-requirements-section"
+            >
+              {templateResource.loading ? (
+                <p className="text-xs text-ink-muted" data-testid="template-loading">
+                  Loading this category's requirements…
+                </p>
+              ) : templateResource.error ? (
+                <p className="text-xs text-destructive" data-testid="template-error">
+                  Requirements could not be loaded. {templateResource.error}
+                </p>
+              ) : activeTemplate ? (
+                <div className="space-y-4" data-testid="category-requirements-fields">
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">
+                      {selectedCategory?.name} Requirements
+                    </h3>
+                    <p className="text-[11px] text-ink-muted mt-0.5">
+                      Answer these so the right talent can quote accurately.
+                    </p>
+                  </div>
+                  <CategoryRequirementsFields
+                    fields={activeTemplate.fields}
+                    values={categoryData}
+                    onChange={(key, value) =>
+                      setCategoryData((prev) => ({ ...prev, [key]: value }))
+                    }
+                    showErrors={attemptedNext}
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-ink-muted" data-testid="category-requirements-empty">
+                  No extra requirements are configured for this category yet.
+                </p>
+              )}
+            </div>
+          )}
         </Card>
       )}
 
@@ -853,17 +1016,50 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-ink mb-2">
+              How will this be delivered?
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(activeTemplate && activeTemplate.allowedModes.length > 0
+                ? activeTemplate.allowedModes
+                : (['ONSITE', 'REMOTE', 'HYBRID'] as ServiceMode[])
+              ).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  data-testid={`service-mode-${mode}`}
+                  onClick={() => setServiceMode(mode)}
+                  className={`px-3.5 py-2 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                    serviceMode === mode
+                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                      : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
               <MapPin className="w-3.5 h-3.5 text-ink-muted" />
               Venue / Location Address
+              {activeTemplate?.locationRequired && <span className="text-destructive">*</span>}
             </label>
             <Input
               type="text"
               placeholder="e.g. The Oberoi, Nariman Point, Mumbai"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
+              aria-invalid={attemptedNext && activeTemplate?.locationRequired && !location.trim()}
               data-testid="job-location-input"
             />
+            {attemptedNext && activeTemplate?.locationRequired && !location.trim() && (
+              <p className="text-[11px] text-destructive mt-1 font-medium">
+                This category requires a location.
+              </p>
+            )}
           </div>
 
           <div className="space-y-3">

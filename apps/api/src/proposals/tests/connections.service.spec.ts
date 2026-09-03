@@ -16,14 +16,24 @@ function build() {
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_client', user: { role: 'CLIENT' } }),
   };
+  const jobsRepository = {
+    findLocationExact: jest.fn().mockResolvedValue(null),
+  };
 
   const service = new ConnectionsService(
     connectionsRepository as never,
     proposalsRepository as never,
     profilesRepository as never,
+    jobsRepository as never,
   );
 
-  return { service, connectionsRepository, proposalsRepository, profilesRepository };
+  return {
+    service,
+    connectionsRepository,
+    proposalsRepository,
+    profilesRepository,
+    jobsRepository,
+  };
 }
 
 const PAST_EVENT = new Date(Date.now() - 24 * 60 * 60 * 1000); // yesterday
@@ -36,7 +46,7 @@ function activeConnection(overrides: Partial<Record<string, unknown>> = {}) {
     completedAt: null,
     clientProfileId: 'profile_client',
     providerProfileId: 'profile_provider',
-    job: { eventDate: PAST_EVENT },
+    job: { id: 'job_1', eventDate: PAST_EVENT, locationCoarse: 'Bangalore' },
     ...overrides,
   };
 }
@@ -51,6 +61,45 @@ describe('ConnectionsService', () => {
       await service.findById('user_1', 'connection_1');
 
       expect(connectionsRepository.sweepAutoComplete).toHaveBeenCalledTimes(2);
+    });
+
+    describe('location privacy', () => {
+      it('the client party receives locationExact', async () => {
+        const { service, connectionsRepository, jobsRepository } = build();
+        connectionsRepository.findById.mockResolvedValue(activeConnection());
+        jobsRepository.findLocationExact.mockResolvedValue({ address: '221B Baker Street' });
+
+        const result = await service.findById('user_1', 'connection_1');
+
+        expect(jobsRepository.findLocationExact).toHaveBeenCalledWith('job_1');
+        expect(result.job).toEqual(
+          expect.objectContaining({ locationExact: { address: '221B Baker Street' } }),
+        );
+      });
+
+      it('the hired provider party also receives locationExact — being on the row is the proof', async () => {
+        const { service, connectionsRepository, profilesRepository, jobsRepository } = build();
+        profilesRepository.findByUserId.mockResolvedValue({ id: 'profile_provider' });
+        connectionsRepository.findById.mockResolvedValue(activeConnection());
+        jobsRepository.findLocationExact.mockResolvedValue({ address: '221B Baker Street' });
+
+        const result = await service.findById('user_2', 'connection_1');
+
+        expect(result.job).toEqual(
+          expect.objectContaining({ locationExact: { address: '221B Baker Street' } }),
+        );
+      });
+
+      it('a stranger to the connection never reaches the locationExact lookup', async () => {
+        const { service, connectionsRepository, profilesRepository, jobsRepository } = build();
+        profilesRepository.findByUserId.mockResolvedValue({ id: 'profile_stranger' });
+        connectionsRepository.findById.mockResolvedValue(activeConnection());
+
+        await expect(service.findById('user_9', 'connection_1')).rejects.toBeInstanceOf(
+          ForbiddenException,
+        );
+        expect(jobsRepository.findLocationExact).not.toHaveBeenCalled();
+      });
     });
   });
 

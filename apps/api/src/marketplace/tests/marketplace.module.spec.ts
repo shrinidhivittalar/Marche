@@ -6,6 +6,8 @@ import { CategoriesService } from '../services/categories.service';
 import { ServicesService } from '../services/services.service';
 import { ServicesRepository } from '../repositories/services.repository';
 import { CategoriesRepository } from '../repositories/categories.repository';
+import { CategoryTemplatesService } from '../services/category-templates.service';
+import { CategoryTemplatesRepository } from '../repositories/category-templates.repository';
 
 // Resolves the real module graph. Unit tests construct services with mocked
 // collaborators and would keep passing through a broken wiring change — a
@@ -29,5 +31,7 @@ describe('MarketplaceModule wiring', () => {
     expect(moduleRef.get(ServicesService)).toBeInstanceOf(ServicesService);
     expect(moduleRef.get(ServicesRepository)).toBeInstanceOf(ServicesRepository);
     expect(moduleRef.get(CategoriesRepository)).toBeInstanceOf(CategoriesRepository);
+    expect(moduleRef.get(CategoryTemplatesService)).toBeInstanceOf(CategoryTemplatesService);
+    expect(moduleRef.get(CategoryTemplatesRepository)).toBeInstanceOf(CategoryTemplatesRepository);
   });
 });

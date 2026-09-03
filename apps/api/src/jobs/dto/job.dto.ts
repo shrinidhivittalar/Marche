@@ -3,7 +3,9 @@ import {
   ArrayMaxSize,
   IsArray,
   IsDateString,
+  IsEnum,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -17,6 +19,7 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from 'class-validator';
+import { ServiceMode } from '@marche/db';
 
 // Rejected at validation rather than in the service, so an inverted range
 // is reported as the mistake it is instead of silently matching nothing.
@@ -137,11 +140,37 @@ export class CreateJobDto {
   @Validate(BudgetRangeOrdered)
   budgetMax?: number;
 
+  // Renamed from `location` — see the schema's own comment. This is the
+  // coarse, publicly-visible label (city/area). There is no exact-address
+  // input on this DTO in this slice; locationExact is populated, if at all,
+  // through a separate mechanism not built yet.
   @ApiPropertyOptional({ maxLength: 120 })
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  location?: string;
+  locationCoarse?: string;
+
+  // Validated against the template this Job is (or is about to be) locked
+  // to in JobsService — see CategoryTemplatesService.assertJobRequirements.
+  // A category with no active template configured, or a template with an
+  // empty allowedModes, accepts any value here unrestricted; the enum
+  // check below is only the structural "is this a real ServiceMode"
+  // boundary.
+  @ApiPropertyOptional({ enum: ServiceMode })
+  @IsOptional()
+  @IsEnum(ServiceMode)
+  serviceMode?: ServiceMode;
+
+  // This category's requirement answers, keyed by
+  // CategoryTemplateField.key — validated in full against the locked
+  // template's fields in JobsService (required fields present, each value
+  // the right shape for its field's type). Structural shape only here: a
+  // plain object. A category with no active template accepts none of
+  // this at all — see assertJobRequirements' own comment.
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  categoryData?: Record<string, unknown>;
 
   // Not validated as future-dated. A client legitimately posts about an
   // event already under way, and a hard "must be in the future" check

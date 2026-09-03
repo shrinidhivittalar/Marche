@@ -137,7 +137,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
 
   const c = connection.data;
   const otherParty = isClient ? c.providerProfile : c.clientProfile;
-  const amount = Number(c.proposal.proposedPrice);
+  const amount = Number(c.proposal.agreedPrice ?? c.proposal.proposedPrice);
   const eventHasPassed =
     Boolean(c.job.eventDate) &&
     new Date(c.job.eventDate as string).getTime() <= new Date().getTime();
@@ -757,7 +757,17 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                     {c.job.eventDate && (
                       <p className="text-ink-muted">{formatDate(c.job.eventDate)}</p>
                     )}
-                    {c.job.location && <p className="text-ink-muted">{c.job.location}</p>}
+                    {(() => {
+                      // The client is always the job owner here, so the API
+                      // already includes locationExact when it has one — show
+                      // it in preference to the coarse label, without the
+                      // frontend deciding whether that's allowed.
+                      const shown =
+                        typeof c.job.locationExact === 'string' && c.job.locationExact
+                          ? c.job.locationExact
+                          : c.job.locationCoarse;
+                      return shown ? <p className="text-ink-muted">{shown}</p> : null;
+                    })()}
                   </td>
                   <td className="py-3 text-right font-mono align-top">
                     ₹{amount.toLocaleString('en-IN')}

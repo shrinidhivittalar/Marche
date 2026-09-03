@@ -36,4 +36,9 @@ export const AUTH_EVENTS = {
 // directions; the metadata's previousRole/newRole says which.
 export const ADMIN_EVENTS = {
   PLATFORM_ROLE_CHANGED: 'admin.platform_role.changed',
+  // Minimum-viable moderation: an admin suspending or restoring an
+  // account. One event type covers both directions, same as
+  // PLATFORM_ROLE_CHANGED — the metadata's previousStatus/newStatus says
+  // which.
+  USER_STATUS_CHANGED: 'admin.user_status.changed',
 } as const;

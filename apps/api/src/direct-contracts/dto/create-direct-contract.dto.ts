@@ -2,8 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
+  IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -12,6 +14,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { ServiceMode } from '@marche/db';
 
 // Same field-level-authorization-boundary role as CreateJobDto/
 // CreateProposalDto: everything a client may set for a direct hire is here
@@ -60,10 +63,26 @@ export class CreateDirectContractDto {
   @IsDateString()
   eventDate?: string;
 
+  // Renamed to match Job.locationCoarse — the same field, on the same rename.
   @ApiPropertyOptional({ maxLength: 200 })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(200)
-  location?: string;
+  locationCoarse?: string;
+
+  // Same rules as an ordinary Job's serviceMode — validated against the
+  // template this offer locks to by the same shared
+  // CategoryTemplatesService.assertJobRequirements call JobsService uses.
+  @ApiPropertyOptional({ enum: ServiceMode })
+  @IsOptional()
+  @IsEnum(ServiceMode)
+  serviceMode?: ServiceMode;
+
+  // Same rules as an ordinary Job's categoryData — see
+  // CreateJobDto.categoryData's own comment.
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  categoryData?: Record<string, unknown>;
 }

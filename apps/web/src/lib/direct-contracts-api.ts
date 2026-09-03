@@ -14,7 +14,7 @@ export interface CreateDirectContractBody {
   price: number;
   deliveryDays: number;
   eventDate?: string;
-  location?: string;
+  locationCoarse?: string;
 }
 
 export const directContractsApi = {

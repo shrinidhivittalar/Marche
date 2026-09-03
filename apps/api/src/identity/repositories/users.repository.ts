@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { Capability, PlatformRole, Prisma, User, UserCapability, UserRole } from '@marche/db';
+import type {
+  Capability,
+  PlatformRole,
+  Prisma,
+  User,
+  UserCapability,
+  UserRole,
+  UserStatus,
+} from '@marche/db';
 
 // findById's return shape, with capabilities attached — see the comment on
 // findById below for why. Everything that already only reads the plain
@@ -128,6 +136,22 @@ export class UsersRepository {
       .updateMany({
         where: { id: userId, platformRole: expectedCurrentRole },
         data: { platformRole: newRole },
+      })
+      .then((result) => result.count);
+  }
+
+  // Same conditional-update shape as updatePlatformRoleIfCurrent, and for
+  // the same reason: AdminService.setUserStatus treats a 0 count as a
+  // concurrent-change conflict to retry, not a success.
+  updateStatusIfCurrent(
+    userId: string,
+    expectedCurrentStatus: UserStatus,
+    newStatus: UserStatus,
+  ): Promise<number> {
+    return this.prisma.client.user
+      .updateMany({
+        where: { id: userId, status: expectedCurrentStatus },
+        data: { status: newStatus },
       })
       .then((result) => result.count);
   }

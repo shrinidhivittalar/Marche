@@ -19,6 +19,9 @@ export { Skeleton } from './components/Skeleton';
 export { Badge } from './components/Badge';
 export type { BadgeProps } from './components/Badge';
 
+export { Alert } from './components/Alert';
+export type { AlertProps } from './components/Alert';
+
 export {
   Dialog,
   DialogTrigger,

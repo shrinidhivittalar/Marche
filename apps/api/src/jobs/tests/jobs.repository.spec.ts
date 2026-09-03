@@ -18,7 +18,7 @@ type WhereLike = {
   budgetMin?: { lte?: number };
   budgetMax?: { gte?: number };
   eventDate?: { gte?: Date; lte?: Date };
-  location?: { contains: string; mode: string };
+  locationCoarse?: { contains: string; mode: string };
   title?: { contains: string; mode: string };
   clientProfile?: {
     deletedAt?: Date | null;
@@ -36,6 +36,7 @@ function build() {
   const job = {
     findMany: jest.fn().mockResolvedValue([]),
     findFirst: jest.fn().mockResolvedValue(null),
+    findUnique: jest.fn().mockResolvedValue(null),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn(),
     update: jest.fn(),
@@ -108,6 +109,98 @@ describe('JobsRepository', () => {
 
       const where = job.count.mock.calls[0][0].where as WhereLike;
       expect(visibilityClauseOf(where).status).toBe('PUBLISHED');
+    });
+  });
+
+  describe('location privacy', () => {
+    // The structural guarantee the whole feature rests on: locationExact
+    // must never be reachable through the shared select shape every public
+    // and owner read is built from — only through findLocationExact, which
+    // every real call site gates on an authorization check first (see
+    // jobs.service.ts, proposals.service.ts, connections.service.ts).
+    it('does not select locationExact when reading one requirement publicly', async () => {
+      const { repository, job } = build();
+
+      await repository.findPublicById('job_1');
+
+      const select = job.findFirst.mock.calls[0][0].select as Record<string, unknown>;
+      expect(select).not.toHaveProperty('locationExact');
+      expect(select).toHaveProperty('locationCoarse', true);
+    });
+
+    it('does not select locationExact when searching', async () => {
+      const { repository, job } = build();
+
+      await repository.search(filters(), 'newest', 0, 20);
+
+      const select = job.findMany.mock.calls[0][0].select as Record<string, unknown>;
+      expect(select).not.toHaveProperty('locationExact');
+    });
+
+    it('does not select locationExact on the owner read', async () => {
+      const { repository, job } = build();
+
+      await repository.findByIdForOwner('job_1');
+
+      const select = job.findFirst.mock.calls[0][0].select as Record<string, unknown>;
+      expect(select).not.toHaveProperty('locationExact');
+    });
+
+    it('filters search by locationCoarse, not the old location column name', async () => {
+      const { repository, job } = build();
+
+      await repository.search(filters({ location: 'Bangalore' }), 'newest', 0, 20);
+
+      const where = job.findMany.mock.calls[0][0].where as WhereLike;
+      expect(filterClauseOf(where).locationCoarse).toEqual({
+        contains: 'Bangalore',
+        mode: 'insensitive',
+      });
+    });
+
+    it('findLocationExact selects nothing but the one column, by id', async () => {
+      const { repository, job } = build();
+      job.findUnique.mockResolvedValue({ locationExact: { address: '221B Baker Street' } });
+
+      const result = await repository.findLocationExact('job_1');
+
+      expect(job.findUnique).toHaveBeenCalledWith({
+        where: { id: 'job_1' },
+        select: { locationExact: true },
+      });
+      expect(result).toEqual({ address: '221B Baker Street' });
+    });
+
+    it('findLocationExact returns null for a job with none set, not undefined', async () => {
+      const { repository, job } = build();
+      job.findUnique.mockResolvedValue({ locationExact: null });
+
+      expect(await repository.findLocationExact('job_1')).toBeNull();
+    });
+
+    // update() and softDelete() previously had no select at all, returning
+    // the complete row — locationExact included — to whatever called them.
+    // Every real caller is owner-gated (JobsService.getOwnJob), so this was
+    // never reachable by an unauthorized party, but it was still exactly
+    // the "select everything" pattern the rest of this file avoids. Fixed
+    // to select explicitly, same shape as findByIdForOwner.
+    it('update() does not select locationExact', async () => {
+      const { repository, job } = build();
+
+      await repository.update('job_1', { title: 'Updated title' });
+
+      const select = job.update.mock.calls[0][0].select as Record<string, unknown>;
+      expect(select).not.toHaveProperty('locationExact');
+      expect(select).toHaveProperty('locationCoarse', true);
+    });
+
+    it('softDelete() does not select locationExact', async () => {
+      const { repository, job } = build();
+
+      await repository.softDelete('job_1');
+
+      const select = job.update.mock.calls[0][0].select as Record<string, unknown>;
+      expect(select).not.toHaveProperty('locationExact');
     });
   });
 
