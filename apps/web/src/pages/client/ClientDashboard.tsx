@@ -22,6 +22,7 @@ import {
   isApiProfileComplete,
 } from '../../lib/profileCompleteness';
 import { useApiResource } from '../../hooks/useApiResource';
+import { fetchAllPages } from '../../lib/api-fetch';
 import { profilesApi } from '../../lib/marketplace-api';
 import { jobsApi, type JobStatus } from '../../lib/jobs-api';
 import { connectionsApi } from '../../lib/proposals-api';
@@ -29,23 +30,13 @@ import { formatJobBudget } from '../../lib/formatJob';
 
 // Wording for the statuses the API actually has. The mock model had Paused,
 // Closed and Completed as well; none of them exists on a real requirement.
-const REQUIREMENT_STATUS: Record<JobStatus, { label: string; className: string }> = {
-  DRAFT: {
-    label: 'Draft',
-    className: 'bg-surface-subtle text-ink-muted border-border',
-  },
+// Only PUBLISHED is reachable here: the sole consumer below (the Active Jobs
+// list) is already pre-filtered to PUBLISHED requirements, so DRAFT/FILLED/
+// CANCELLED entries would be dead code.
+const REQUIREMENT_STATUS: Partial<Record<JobStatus, { label: string; className: string }>> = {
   PUBLISHED: {
     label: 'In Progress',
     className: 'bg-surface-subtle text-ink-muted border-border',
-  },
-  FILLED: {
-    label: 'Filled',
-    className: 'bg-red-50 text-red-700 border-red-200',
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    className:
-      'bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-rose-400 border-red-200 dark:border-red-500/20',
   },
 };
 
@@ -98,15 +89,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // The client's real requirements, for the overview and the KPI row. The
   // mock list this replaced was filtered by a mock client id, so it matched
   // nothing once the requirements themselves became real.
+  //
+  // Walks every page rather than trusting page 1 alone — the KPIs and
+  // contracts list below are totals, and a client with more than one page's
+  // worth of jobs/connections would otherwise be silently undercounted.
   const myRequirements = useApiResource(
-    () => jobsApi.mine(accessToken as string, 1, 50),
+    () => fetchAllPages((page) => jobsApi.mine(accessToken as string, page, 50)),
     [accessToken],
     { enabled: Boolean(accessToken) },
   );
 
   // "Active" means live to providers. A draft is not, and a filled or
   // cancelled one has left discovery.
-  const activeJobsCount = (myRequirements.data?.items ?? []).filter(
+  const activeJobsCount = (myRequirements.data ?? []).filter(
     (r) => r.status === 'PUBLISHED',
   ).length;
 
@@ -115,11 +110,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // fixture data, since `hireVendor` (the action that would have populated
   // it) is unreachable from any real navigation.
   const myConnections = useApiResource(
-    () => connectionsApi.mine(accessToken as string, 1, 50),
+    () => fetchAllPages((page) => connectionsApi.mine(accessToken as string, page, 50)),
     [accessToken],
     { enabled: Boolean(accessToken) },
   );
-  const connectionItems = myConnections.data?.items ?? [];
+  const connectionItems = myConnections.data ?? [];
 
   const inProgressContracts = connectionItems.filter((c) => c.status === 'ACTIVE');
   const completedContracts = connectionItems.filter((c) => c.status === 'COMPLETED');
@@ -203,7 +198,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                   placeholder="Search by contract, freelancer, or agency name"
                   value={contractSearch}
                   onChange={(e) => setContractSearch(e.target.value)}
-                  className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition-all"
+                  className="w-full bg-surface border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-ink placeholder-ink-muted focus:outline-none transition-all"
                 />
               </div>
 
@@ -384,8 +379,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // Counted from the client's real requirements. The proposal count comes
   // back on each one — counted per request rather than stored, so it cannot
   // drift out of date the way a cached column would.
-  const requirements = myRequirements.data?.items ?? [];
-  const requirementTotal = myRequirements.data?.total ?? requirements.length;
+  const requirements = myRequirements.data ?? [];
+  // fetchAllPages already walked every page, so the count in hand is the
+  // real total — no separate `total` field to fall back on.
+  const requirementTotal = requirements.length;
   // The "Active Jobs" panel's own label — only requirements actually live to
   // providers. Filled/cancelled/draft ones belong under "View all", not here;
   // showing them under an "Active Jobs" heading was the bug the previous pass
@@ -646,7 +643,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           {activeRequirements.length > 0 && (
             <div className="space-y-3">
               {activeRequirements.slice(0, 5).map((req, idx) => {
-                const status = REQUIREMENT_STATUS[req.status];
+                // Safe: activeRequirements is already filtered to PUBLISHED,
+                // the only key REQUIREMENT_STATUS carries.
+                const status = REQUIREMENT_STATUS[req.status]!;
                 return (
                   <button
                     key={req.id}
