@@ -128,11 +128,12 @@ export const Sidebar: React.FC = () => {
 
   // The Admin is a platform manager, not a marketplace participant — this
   // list is deliberately limited to admin pages that actually exist today
-  // (Categories/Disputes/Audit) rather than the full aspirational set
-  // (Dashboard, Users, Payments, Rules), none of which have a real page or
-  // route yet. "Job Management" still reuses /provider/dashboard, same as
-  // "Jobs" did before — there is no separate admin job-management page.
+  // (Users/Categories/Disputes/Audit) rather than the full aspirational set
+  // (Dashboard, Payments, Rules), none of which have a real page or route
+  // yet. "Job Management" still reuses /provider/dashboard, same as "Jobs"
+  // did before — there is no separate admin job-management page.
   const adminNav = [
+    { label: 'Users', path: '/admin/users', icon: Users },
     { label: 'Categories', path: '/admin/categories', icon: Tags },
     { label: 'Job Management', path: '/provider/dashboard', icon: Briefcase },
     { label: 'Disputes', path: '/admin/disputes', icon: Gavel },

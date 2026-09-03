@@ -68,6 +68,7 @@ import { MobileMenuPage } from './pages/MobileMenuPage';
 import { AdminAuditDashboard } from './pages/admin/AdminAuditDashboard';
 import { AdminDisputesPage } from './pages/admin/AdminDisputesPage';
 import { AdminCategoryTemplatesPage } from './pages/admin/AdminCategoryTemplatesPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { MessagesPage } from './pages/MessagesPage';
 
@@ -109,6 +110,7 @@ const EXACT_ROUTES: Record<string, () => ReactNode> = {
   '/provider/contracts': () => <ContractsPage />,
   '/provider/stats': () => <StatsPage />,
   '/admin/audit': () => <AdminAuditDashboard />,
+  '/admin/users': () => <AdminUsersPage />,
   '/admin/disputes': () => <AdminDisputesPage />,
   '/admin/categories': () => <AdminCategoryTemplatesPage />,
   '/admin/profile': () => <EditProfilePage />,
