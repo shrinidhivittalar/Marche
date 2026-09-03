@@ -128,15 +128,31 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
     const hitsKey = `throttle:${throttlerName}:${key}`;
     const blockKey = `throttle-block:${throttlerName}:${key}`;
 
-    const [totalHits, timeToExpireMs, isBlocked, timeToBlockExpireMs] = (await this.client!.eval(
-      INCREMENT_SCRIPT,
-      2,
-      hitsKey,
-      blockKey,
-      ttl,
-      limit,
-      blockDuration,
-    )) as [number, number, number, number];
+    let totalHits: number, timeToExpireMs: number, isBlocked: number, timeToBlockExpireMs: number;
+    try {
+      [totalHits, timeToExpireMs, isBlocked, timeToBlockExpireMs] = (await this.client!.eval(
+        INCREMENT_SCRIPT,
+        2,
+        hitsKey,
+        blockKey,
+        ttl,
+        limit,
+        blockDuration,
+      )) as [number, number, number, number];
+    } catch (error) {
+      // A Redis outage *after* a successful boot connection reaches here,
+      // not the constructor's error listener — without this catch, every
+      // throttled request (this runs behind the global APP_GUARD) would
+      // 500 for as long as the outage lasts, turning a transient Redis
+      // blip into a site-wide failure. Falls back to the same in-memory
+      // path used when REDIS_URL was never set, so degradation is
+      // graceful either way — the memory store's own per-process caveat
+      // applies here too for the duration of the outage.
+      this.logger.error(
+        `Redis eval failed for throttler '${throttlerName}', falling back to in-memory: ${(error as Error).message}`,
+      );
+      return this.incrementMemory(key, ttl, limit, blockDuration, throttlerName);
+    }
 
     return {
       totalHits,

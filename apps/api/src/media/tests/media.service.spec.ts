@@ -33,6 +33,7 @@ function build() {
     update: jest.fn().mockImplementation((id, data) => Promise.resolve({ ...media(), ...data })),
     softDelete: jest.fn().mockResolvedValue(media({ status: 'DELETED' })),
     findStalePending: jest.fn().mockResolvedValue([]),
+    markStaleFailed: jest.fn().mockResolvedValue(1),
   };
   const storage = {
     createUploadUrl: jest.fn().mockResolvedValue('https://storage.example/signed'),
@@ -268,6 +269,7 @@ describe('MediaService', () => {
     it('sweeps stale PENDING rows from storage as well as the database', async () => {
       const { service, repo, storage } = build();
       repo.findStalePending.mockResolvedValue([media({ id: 'old_1', objectKey: 'users/u/old' })]);
+      repo.markStaleFailed.mockResolvedValue(1);
 
       await service.requestUpload(OWNER, {
         fileName: 'a.jpg',
@@ -277,8 +279,36 @@ describe('MediaService', () => {
       // Fire-and-forget, so let the microtask queue drain.
       await new Promise((r) => setTimeout(r, 0));
 
+      expect(repo.markStaleFailed).toHaveBeenCalledWith('old_1');
       expect(storage.delete).toHaveBeenCalledWith('users/u/old');
-      expect(repo.update).toHaveBeenCalledWith('old_1', { status: 'FAILED' });
+    });
+
+    // The race the sweep exists to survive: findStalePending's age check is
+    // a snapshot, and completeUpload() can flip a row off PENDING between
+    // that read and the sweep's own write. If the sweep deleted from storage
+    // whenever a row merely *looked* stale, it would destroy a file whose
+    // upload had genuinely just completed. Because markStaleFailed's
+    // updateMany is guarded by `status: PENDING`, a row completeUpload()
+    // already won matches zero rows here, and the sweep must leave the real,
+    // already-uploaded object alone.
+    it('does not delete the object when completeUpload wins the race for a row', async () => {
+      const { service, repo, storage } = build();
+      repo.findStalePending.mockResolvedValue([
+        media({ id: 'old_1', objectKey: 'users/u/old', status: 'PENDING' }),
+      ]);
+      // completeUpload() already moved this row off PENDING by the time the
+      // sweep gets to it, so the conditional update matches zero rows.
+      repo.markStaleFailed.mockResolvedValue(0);
+
+      await service.requestUpload(OWNER, {
+        fileName: 'a.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 100,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(repo.markStaleFailed).toHaveBeenCalledWith('old_1');
+      expect(storage.delete).not.toHaveBeenCalledWith('users/u/old');
     });
 
     // Housekeeping must never turn a user's upload request into an error.

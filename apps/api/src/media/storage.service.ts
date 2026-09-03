@@ -24,8 +24,9 @@ export class StorageService {
   private cachedClient: S3Client | null = null;
 
   /**
-   * Whether storage is configured at all. Lets callers and health checks
-   * distinguish "uploads are switched off here" from "uploads are broken".
+   * Whether storage is configured at all. Used internally (see below) to
+   * distinguish "uploads are switched off here" from "uploads are broken" —
+   * not currently called by any external caller or health check.
    */
   static isConfigured(): boolean {
     return Boolean(
