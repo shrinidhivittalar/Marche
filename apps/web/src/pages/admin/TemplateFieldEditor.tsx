@@ -142,6 +142,23 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
 }) => {
   const errors = validateFields(fields);
 
+  // Stable, content-independent identities for React `key`s only — never
+  // sent to the backend, never read from `fields` itself. Index-based keys
+  // broke here because `moveField`/`removeField` and the option add/remove
+  // handlers below all splice/reorder `fields` (and `field.options`) by
+  // index, which is exactly the case where a key derived from that same
+  // index misattributes DOM/focus state across rows. Lazily seeded from
+  // the array this component was mounted with (the parent always mounts a
+  // fresh editor per template — see Modal/Dialog — so this never needs to
+  // reconcile against an externally-swapped `fields` array), then kept in
+  // lockstep with every mutation below.
+  const [fieldIds, setFieldIds] = React.useState<string[]>(() =>
+    fields.map(() => crypto.randomUUID()),
+  );
+  const [optionIds, setOptionIds] = React.useState<string[][]>(() =>
+    fields.map((f) => f.options.map(() => crypto.randomUUID())),
+  );
+
   const updateField = (index: number, update: Partial<EditableField>) => {
     onChange(fields.map((f, i) => (i === index ? { ...f, ...update } : f)));
   };
@@ -164,6 +181,8 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
   };
 
   const removeField = (index: number) => {
+    setFieldIds((ids) => ids.filter((_, i) => i !== index));
+    setOptionIds((ids) => ids.filter((_, i) => i !== index));
     onChange(fields.filter((_, i) => i !== index));
   };
 
@@ -174,10 +193,23 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
     const temp = next[index]!;
     next[index] = next[target]!;
     next[target] = temp;
+
+    const swap = <T,>(arr: T[]): T[] => {
+      const copy = [...arr];
+      const tempItem = copy[index]!;
+      copy[index] = copy[target]!;
+      copy[target] = tempItem;
+      return copy;
+    };
+    setFieldIds(swap);
+    setOptionIds(swap);
+
     onChange(next);
   };
 
   const addField = () => {
+    setFieldIds((ids) => [...ids, crypto.randomUUID()]);
+    setOptionIds((ids) => [...ids, []]);
     onChange([...fields, emptyField()]);
   };
 
@@ -186,7 +218,7 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
       {fields.map((field, index) => {
         const error = errors[index];
         return (
-          <Card key={index} className="p-4 space-y-3">
+          <Card key={fieldIds[index]} className="p-4 space-y-3">
             <div className="flex items-start gap-2">
               <div className="flex flex-col gap-1 pt-1">
                 <button
@@ -272,7 +304,7 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
               <div className="space-y-2 pl-6">
                 <Label className="text-[11px]">Options</Label>
                 {field.options.map((option, optionIndex) => (
-                  <div key={optionIndex} className="flex items-center gap-2">
+                  <div key={optionIds[index]![optionIndex]} className="flex items-center gap-2">
                     <Input
                       value={option}
                       onChange={(e) => {
@@ -284,11 +316,18 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setOptionIds((ids) =>
+                          ids.map((fieldOptionIds, i) =>
+                            i === index
+                              ? fieldOptionIds.filter((_, oi) => oi !== optionIndex)
+                              : fieldOptionIds,
+                          ),
+                        );
                         updateField(index, {
                           options: field.options.filter((_, i) => i !== optionIndex),
-                        })
-                      }
+                        });
+                      }}
                       className="text-ink-muted hover:text-destructive cursor-pointer"
                       aria-label="Remove option"
                     >
@@ -301,7 +340,14 @@ export const TemplateFieldEditor: React.FC<TemplateFieldEditorProps> = ({
                   size="sm"
                   variant="outline"
                   icon={Plus}
-                  onClick={() => updateField(index, { options: [...field.options, ''] })}
+                  onClick={() => {
+                    setOptionIds((ids) =>
+                      ids.map((fieldOptionIds, i) =>
+                        i === index ? [...fieldOptionIds, crypto.randomUUID()] : fieldOptionIds,
+                      ),
+                    );
+                    updateField(index, { options: [...field.options, ''] });
+                  }}
                 >
                   Add option
                 </Button>
