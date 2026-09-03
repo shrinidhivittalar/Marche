@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UsersRepository } from '../repositories/users.repository';
+import { UsersRepository, type AdminUserListItem } from '../repositories/users.repository';
 import { AuditService } from '../../audit/audit.service';
 import { ADMIN_EVENTS } from '../audit-events';
+import { paginate, type Paginated } from '../../marketplace/pagination';
+import type { UserListQueryDto } from '../dto/user-list-query.dto';
 import type { PlatformRole, UserStatus } from '@marche/db';
 
 export interface PlatformRoleChangeResult {
@@ -150,5 +152,22 @@ export class AdminService {
     });
 
     return { changed: true, status: requestedStatus };
+  }
+
+  // The "identify a problematic user" half of FEATURE_GAP_ANALYSIS.md's
+  // #1 gap — suspend/restore existed with nothing to find a target
+  // through except a raw DB query. No service-level role assertion here,
+  // consistent with changePlatformRole/setUserStatus above, which also
+  // rely solely on PlatformRoleGuard rather than a redundant check.
+  async listUsers(query: UserListQueryDto): Promise<Paginated<AdminUserListItem>> {
+    const { page, limit, status, platformRole, search } = query;
+    const filters = { status, platformRole, search };
+
+    const [data, total] = await Promise.all([
+      this.usersRepository.listAll(filters, (page - 1) * limit, limit),
+      this.usersRepository.countAll(filters),
+    ]);
+
+    return paginate(data, total, page, limit);
   }
 }

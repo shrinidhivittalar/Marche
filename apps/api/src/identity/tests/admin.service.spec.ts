@@ -262,3 +262,65 @@ describe('AdminService.setUserStatus', () => {
     expect(auditService.record).not.toHaveBeenCalled();
   });
 });
+
+describe('AdminService.listUsers', () => {
+  let usersRepository: jest.Mocked<UsersRepository>;
+  let auditService: jest.Mocked<AuditService>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    usersRepository = {
+      listAll: jest.fn(),
+      countAll: jest.fn(),
+    } as unknown as jest.Mocked<UsersRepository>;
+    auditService = { record: jest.fn() } as unknown as jest.Mocked<AuditService>;
+    service = new AdminService(usersRepository, auditService);
+  });
+
+  it('passes page/limit/filters through and paginates the result', async () => {
+    const rows = [{ id: 'user_1' }, { id: 'user_2' }];
+    usersRepository.listAll.mockResolvedValue(rows as never);
+    usersRepository.countAll.mockResolvedValue(2);
+
+    const result = await service.listUsers({
+      page: 1,
+      limit: 20,
+      status: 'SUSPENDED',
+      platformRole: undefined,
+      search: 'jane',
+    });
+
+    expect(usersRepository.listAll).toHaveBeenCalledWith(
+      { status: 'SUSPENDED', platformRole: undefined, search: 'jane' },
+      0,
+      20,
+    );
+    expect(usersRepository.countAll).toHaveBeenCalledWith({
+      status: 'SUSPENDED',
+      platformRole: undefined,
+      search: 'jane',
+    });
+    expect(result.data).toBe(rows);
+    expect(result.pagination).toEqual({
+      page: 1,
+      limit: 20,
+      total: 2,
+      totalPages: 1,
+      hasNext: false,
+      hasPrevious: false,
+    });
+  });
+
+  it('computes the correct skip for page 2', async () => {
+    usersRepository.listAll.mockResolvedValue([]);
+    usersRepository.countAll.mockResolvedValue(0);
+
+    await service.listUsers({ page: 2, limit: 10 });
+
+    expect(usersRepository.listAll).toHaveBeenCalledWith(
+      { status: undefined, platformRole: undefined, search: undefined },
+      10,
+      10,
+    );
+  });
+});

@@ -27,12 +27,27 @@ const AUTHED_USER = {
 
 describe('admin HTTP', () => {
   let app: INestApplication;
-  let adminService: { changePlatformRole: jest.Mock; setUserStatus: jest.Mock };
+  let adminService: {
+    changePlatformRole: jest.Mock;
+    setUserStatus: jest.Mock;
+    listUsers: jest.Mock;
+  };
 
   beforeAll(async () => {
     adminService = {
       changePlatformRole: jest.fn().mockResolvedValue({ changed: true, platformRole: 'ADMIN' }),
       setUserStatus: jest.fn().mockResolvedValue({ changed: true, status: 'SUSPENDED' }),
+      listUsers: jest.fn().mockResolvedValue({
+        data: [],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        },
+      }),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -69,6 +84,7 @@ describe('admin HTTP', () => {
   beforeEach(() => {
     adminService.changePlatformRole.mockClear();
     adminService.setUserStatus.mockClear();
+    adminService.listUsers.mockClear();
   });
 
   const patch = (id: string) =>
@@ -188,5 +204,59 @@ describe('admin HTTP', () => {
       .send({ status: 'SUSPENDED', userId: 'someone-else' });
 
     expect(res.status).toBe(400);
+  });
+
+  // Same gate as :id/status — this is the "identify a problematic user"
+  // half of the same gap, not a higher-stakes action.
+  describe('GET /admin/users', () => {
+    it('rejects a plain USER with 403 before the request reaches the service', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/admin/users')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'USER');
+
+      expect(res.status).toBe(403);
+      expect(adminService.listUsers).not.toHaveBeenCalled();
+    });
+
+    it('allows an ADMIN through with default pagination', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/admin/users')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'ADMIN');
+
+      expect(res.status).toBe(200);
+      expect(adminService.listUsers).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, limit: 20 }),
+      );
+    });
+
+    it('passes query filters through', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/admin/users?page=2&limit=10&status=SUSPENDED&search=jane')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'ADMIN');
+
+      expect(res.status).toBe(200);
+      expect(adminService.listUsers).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 2, limit: 10, status: 'SUSPENDED', search: 'jane' }),
+      );
+    });
+
+    it('rejects an invalid status filter', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/admin/users?status=NOT_A_STATUS')
+        .set('authorization', 'Bearer token')
+        .set('x-test-platform-role', 'ADMIN');
+
+      expect(res.status).toBe(400);
+      expect(adminService.listUsers).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unauthenticated request with 401', async () => {
+      const res = await request(app.getHttpServer()).get('/admin/users');
+
+      expect(res.status).toBe(401);
+    });
   });
 });
