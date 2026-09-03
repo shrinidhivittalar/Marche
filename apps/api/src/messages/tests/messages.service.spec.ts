@@ -20,12 +20,17 @@ function build() {
   const profilesRepository = {
     findByUserId: jest.fn().mockResolvedValue({ id: 'profile_1' }),
   };
+  const messagesGateway = {
+    emitNewMessage: jest.fn(),
+    emitMessagesRead: jest.fn(),
+  };
 
   const service = new MessagesService(
     messagesRepository as never,
     connectionsService as never,
     connectionsRepository as never,
     profilesRepository as never,
+    messagesGateway as never,
   );
 
   return {
@@ -34,6 +39,7 @@ function build() {
     connectionsService,
     connectionsRepository,
     profilesRepository,
+    messagesGateway,
   };
 }
 
@@ -49,13 +55,26 @@ describe('MessagesService', () => {
     });
 
     it('propagates ConnectionsService.findById rejecting a non-party — no message is written', async () => {
-      const { service, messagesRepository, connectionsService } = build();
+      const { service, messagesRepository, connectionsService, messagesGateway } = build();
       connectionsService.findById.mockRejectedValue(new ForbiddenException());
 
       await expect(service.send('user_2', 'connection_1', 'hello')).rejects.toBeInstanceOf(
         ForbiddenException,
       );
       expect(messagesRepository.create).not.toHaveBeenCalled();
+      expect(messagesGateway.emitNewMessage).not.toHaveBeenCalled();
+    });
+
+    it('pushes the created message to the connection room', async () => {
+      const { service, messagesRepository, messagesGateway } = build();
+      messagesRepository.create.mockResolvedValue({ id: 'message_1', body: 'hello' });
+
+      await service.send('user_1', 'connection_1', 'hello');
+
+      expect(messagesGateway.emitNewMessage).toHaveBeenCalledWith('connection_1', {
+        id: 'message_1',
+        body: 'hello',
+      });
     });
   });
 
@@ -66,6 +85,14 @@ describe('MessagesService', () => {
       await service.markRead('user_1', 'connection_1');
 
       expect(messagesRepository.markConnectionRead).toHaveBeenCalledWith('connection_1', 'user_1');
+    });
+
+    it('pushes a read receipt to the connection room', async () => {
+      const { service, messagesGateway } = build();
+
+      await service.markRead('user_1', 'connection_1');
+
+      expect(messagesGateway.emitMessagesRead).toHaveBeenCalledWith('connection_1', 'user_1');
     });
   });
 

@@ -4,6 +4,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../services/messages.service';
 import { MessagesRepository } from '../repositories/messages.repository';
+import { MessagesGateway } from '../gateways/messages.gateway';
 
 // Resolves the real module graph, including the transitive imports pulled in
 // through ProposalsModule (ConnectionsService/ConnectionsRepository) — the
@@ -21,5 +22,6 @@ describe('MessagesModule wiring', () => {
 
     expect(moduleRef.get(MessagesService)).toBeInstanceOf(MessagesService);
     expect(moduleRef.get(MessagesRepository)).toBeInstanceOf(MessagesRepository);
+    expect(moduleRef.get(MessagesGateway)).toBeInstanceOf(MessagesGateway);
   });
 });

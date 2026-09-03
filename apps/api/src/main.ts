@@ -22,6 +22,7 @@ import { Logger } from 'nestjs-pino';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './messages/gateways/redis-io.adapter';
 
 async function bootstrap() {
   // rawBody: true keeps req.body parsed as JSON everywhere (nothing else
@@ -80,6 +81,16 @@ async function bootstrap() {
     origin: parseCorsOrigins(process.env.CORS_ORIGINS),
     credentials: true,
   });
+
+  // Fans MessagesGateway's events out across every instance via Redis —
+  // required in production (REDIS_URL is already mandatory there for the
+  // throttler, see env.validation.ts) and skipped in dev/test, where
+  // socket.io's default single-instance in-memory adapter is sufficient.
+  if (process.env.REDIS_URL) {
+    const redisIoAdapter = new RedisIoAdapter(app);
+    redisIoAdapter.connectToRedis(process.env.REDIS_URL);
+    app.useWebSocketAdapter(redisIoAdapter);
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     const swaggerConfig = new DocumentBuilder()
