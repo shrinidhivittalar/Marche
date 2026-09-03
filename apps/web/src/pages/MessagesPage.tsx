@@ -195,8 +195,15 @@ export const MessagesPage: React.FC = () => {
     setInputText('');
     try {
       await messagesApi.send(token, activeConv.id, text);
-      await thread.refetch();
-      void previews.refetch();
+      // The socket is already joined to this conversation's room and
+      // receives our own sent message back via message:new (see the effect
+      // above), which triggers a refetch on its own — refetching here too
+      // would double every send's network round trips for no benefit. Only
+      // do it manually as a fallback if the socket isn't connected yet.
+      if (!socket) {
+        await thread.refetch();
+        void previews.refetch();
+      }
     } catch {
       showToast("Couldn't send that message. Try again.");
       setInputText(text);

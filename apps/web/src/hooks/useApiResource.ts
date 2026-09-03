@@ -39,6 +39,10 @@ export function useApiResource<T>(
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
+  // Mirrors `data`, read synchronously inside `load` — state updates aren't
+  // visible until the next render, so a background poll firing mid-render
+  // needs a way to know "is something already on screen" that isn't stale.
+  const dataRef = useRef<T | null>(null);
 
   // Callers define the fetcher inline, so its identity changes every
   // render. Holding it in a ref lets refetch stay stable while always
@@ -57,11 +61,20 @@ export function useApiResource<T>(
 
   const load = useCallback(async () => {
     const current = ++generation.current;
-    setLoading(true);
+    // Only shows the loading state when nothing is displayed yet for the
+    // current resource. usePolling calls this every 4s app-wide (connection
+    // status, payments, message previews, notifications) — without this
+    // guard, every poll tick flips `loading` true then false again, and any
+    // page that renders a skeleton while loading (most do) flickers the
+    // entire screen back to that skeleton on every single tick. Navigating
+    // to a genuinely different resource still shows loading as normal — the
+    // effect below resets dataRef whenever `deps` changes, before this runs.
+    if (dataRef.current === null) setLoading(true);
     setError(null);
     try {
       const result = await fetcherRef.current();
       if (generation.current !== current) return;
+      dataRef.current = result;
       setData(result);
     } catch (err) {
       if (generation.current !== current) return;
@@ -84,7 +97,15 @@ export function useApiResource<T>(
     // been sent. Every data-fetching library does this; the rule's concern
     // is state synchronisation loops, which this is not — `load` runs once
     // per dependency change and the generation counter drops stale results.
-    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+    //
+    // dataRef/data reset here, not inside `load` — this effect only re-runs
+    // when `deps` actually changes (a genuinely different resource), while
+    // `load` also gets called directly by a same-resource background poll
+    // (usePolling), which must NOT reset anything or every poll would be
+    // back to showing loading again, undoing the point of the guard above.
+    dataRef.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setData(null);
     void load();
     // `deps` is the real signal; the fetcher is read through a ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,7 +118,12 @@ export function useApiResource<T>(
   // the caller never saw would be a guess, and the fetch in flight is about
   // to supply the real thing anyway.
   const mutate = useCallback((update: (current: T) => T) => {
-    setData((current) => (current === null ? null : update(current)));
+    setData((current) => {
+      if (current === null) return null;
+      const next = update(current);
+      dataRef.current = next;
+      return next;
+    });
   }, []);
 
   return { data, loading: enabled && loading, error, refetch: load, mutate };
