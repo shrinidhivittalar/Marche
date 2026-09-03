@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, MapPin, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { CheckCircle2, Heart, MapPin, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button, Card } from '@marche/ui';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { useApp } from '../../../context/AppContext';
@@ -16,14 +16,31 @@ export const SavedTalentPage: React.FC = () => {
   });
   const savedTalent = saved.data?.items ?? [];
 
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const handleRemove = async (providerId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    await savedProvidersApi.unsave(token, providerId);
-    void saved.refetch();
+    try {
+      await savedProvidersApi.unsave(token, providerId);
+      void saved.refetch();
+    } catch {
+      showToast('Could not remove this provider — please try again.');
+    }
   };
 
   return (
     <FreelancersLayout activeItem="Saved talent">
+      {toastMessage && (
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
+          <CheckCircle2 className="w-4 h-4 text-primary-hover" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-ink tracking-tight">Saved talent</h1>

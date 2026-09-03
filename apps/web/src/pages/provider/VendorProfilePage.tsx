@@ -41,7 +41,10 @@ type JobsTab = 'completed' | 'in_progress';
 const BIO_TRUNCATE_LENGTH = 220;
 const PORTFOLIO_PAGE_SIZE = 3;
 
-const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ className?: string }>> = {
+const REPUTATION_BADGE_ICONS: Record<
+  ReputationBadgeKey,
+  React.ComponentType<{ className?: string }>
+> = {
   top_rated_plus: Gem,
   top_rated: Award,
   rising_talent: TrendingUp,
@@ -49,7 +52,11 @@ const REPUTATION_BADGE_ICONS: Record<ReputationBadgeKey, React.ComponentType<{ c
   verified_pro: ShieldCheck,
 };
 function formatDate(iso: string, style: 'long' | 'short' = 'long'): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: style, day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: style,
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function formatMonthYear(iso: string): string {
@@ -59,7 +66,12 @@ function formatMonthYear(iso: string): string {
 function getLocalTime(timezone: string): string {
   try {
     return new Date()
-      .toLocaleTimeString('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true })
+      .toLocaleTimeString('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
       .toLowerCase();
   } catch {
     return '';
@@ -67,7 +79,8 @@ function getLocalTime(timezone: string): string {
 }
 
 export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
-  const { goBack, savedTalentIds, toggleSavedTalent, getReviewsForVendor, talentProfiles } = useApp();
+  const { goBack, savedTalentIds, toggleSavedTalent, getReviewsForVendor, talentProfiles } =
+    useApp();
   const [bioExpanded, setBioExpanded] = useState(false);
   const [jobsTab, setJobsTab] = useState<JobsTab>('completed');
   const [portfolioPage, setPortfolioPage] = useState(0);
@@ -112,12 +125,19 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
 
   let portfolioItems = INITIAL_PORTFOLIO_ITEMS.filter((p) => p.vendorId === talent.id);
   if (portfolioItems.length === 0) {
-    portfolioItems = [{ id: 'portfolio_fallback', vendorId: talent.id, image: talent.portfolioImage, caption: talent.headline }];
+    portfolioItems = [
+      {
+        id: 'portfolio_fallback',
+        vendorId: talent.id,
+        image: talent.portfolioImage,
+        caption: talent.headline,
+      },
+    ];
   }
   const portfolioPageCount = Math.ceil(portfolioItems.length / PORTFOLIO_PAGE_SIZE);
   const visiblePortfolioItems = portfolioItems.slice(
     portfolioPage * PORTFOLIO_PAGE_SIZE,
-    portfolioPage * PORTFOLIO_PAGE_SIZE + PORTFOLIO_PAGE_SIZE
+    portfolioPage * PORTFOLIO_PAGE_SIZE + PORTFOLIO_PAGE_SIZE,
   );
 
   const projectCatalog = INITIAL_PROJECT_CATALOG.filter((p) => p.vendorId === talent.id);
@@ -130,7 +150,10 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
   const jobSuccess = getJobSuccessScore(reviewStats.rating);
   const isSaved = savedTalentIds.includes(talent.id);
   const bioIsLong = talent.bio.length > BIO_TRUNCATE_LENGTH;
-  const displayedBio = bioIsLong && !bioExpanded ? `${talent.bio.slice(0, BIO_TRUNCATE_LENGTH).trimEnd()}…` : talent.bio;
+  const displayedBio =
+    bioIsLong && !bioExpanded
+      ? `${talent.bio.slice(0, BIO_TRUNCATE_LENGTH).trimEnd()}…`
+      : talent.bio;
   const activeJobs = jobsTab === 'completed' ? completedJobs : inProgressJobs;
 
   return (
@@ -171,7 +194,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               </div>
               <p className="text-xs text-ink-muted mt-1 flex items-center gap-1 min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span className="truncate">{talent.location} – {getLocalTime(talent.timezone)} local time</span>
+                <span className="truncate">
+                  {talent.location} – {getLocalTime(talent.timezone)} local time
+                </span>
               </p>
               {talent.availableNow && (
                 <p className="text-xs text-ink-muted mt-1.5 flex items-center gap-1.5">
@@ -187,7 +212,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               </div>
               <div className="flex items-center gap-1.5 mt-1.5 text-xs font-semibold text-amber-600">
                 <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                <span>{formatRating(reviewStats.rating)} ({reviewStats.reviewCount})</span>
+                <span>
+                  {formatRating(reviewStats.rating)} ({reviewStats.reviewCount})
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 {reputationBadges.map((badge) => {
@@ -209,7 +236,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => showToast("That menu isn't wired up yet — Marché is still a frontend preview.")}
+              onClick={() =>
+                showToast("That menu isn't wired up yet — Marché is still a frontend preview.")
+              }
               title="More actions"
               className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
             >
@@ -218,7 +247,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
             <Button
               size="sm"
               className="rounded-full px-5"
-              onClick={() => showToast("Hiring isn't wired up yet — Marché is still a frontend preview.")}
+              onClick={() =>
+                showToast("Hiring isn't wired up yet — Marché is still a frontend preview.")
+              }
             >
               Hire
             </Button>
@@ -239,7 +270,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
 
         <div className="flex justify-end">
           <button
-            onClick={() => showToast("Sharing isn't wired up yet — Marché is still a frontend preview.")}
+            onClick={() =>
+              showToast("Sharing isn't wired up yet — Marché is still a frontend preview.")
+            }
             className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5 cursor-pointer"
           >
             Share
@@ -272,7 +305,8 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
             <h4 className="text-xs font-bold text-ink mb-1">Rating</h4>
             <p className="text-xs text-ink-muted flex items-center gap-1.5">
               <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-              {formatRating(reviewStats.rating)} from {reviewStats.reviewCount} review{reviewStats.reviewCount === 1 ? '' : 's'}
+              {formatRating(reviewStats.rating)} from {reviewStats.reviewCount} review
+              {reviewStats.reviewCount === 1 ? '' : 's'}
             </p>
           </div>
 
@@ -282,7 +316,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
             {talent.openToContractToHire && (
               <p className="text-xs text-primary font-semibold mt-1.5 flex items-center gap-1.5">
                 Open to contract to hire
-                <span className="text-[9px] font-bold uppercase text-white bg-primary px-1.5 py-0.5 rounded">New</span>
+                <span className="text-[9px] font-bold uppercase text-white bg-primary px-1.5 py-0.5 rounded">
+                  New
+                </span>
               </p>
             )}
           </div>
@@ -311,7 +347,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           <Card padding="lg" className="space-y-3">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <h2 className="text-base font-bold text-ink max-w-xl">{talent.headline}</h2>
-              <span className="text-lg font-extrabold text-ink shrink-0">₹{talent.hourlyRate}/hr</span>
+              <span className="text-lg font-extrabold text-ink shrink-0">
+                ₹{talent.hourlyRate}/hr
+              </span>
             </div>
             <p className="text-xs text-ink leading-relaxed">
               {displayedBio}{' '}
@@ -329,7 +367,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
             <Card padding="lg" className="space-y-4">
               <div>
                 <h3 className="text-base font-bold text-ink">Client reviews</h3>
-                <p className="text-xs text-ink-muted mt-0.5">Reviews submitted after completed Marché bookings.</p>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  Reviews submitted after completed Marché bookings.
+                </p>
               </div>
               <div className="divide-y divide-border">
                 {liveReviews.map((review) => (
@@ -381,7 +421,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                   <button
                     onClick={() => setJobsTab('completed')}
                     className={`pb-2.5 text-xs font-semibold border-b-2 cursor-pointer ${
-                      jobsTab === 'completed' ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink'
+                      jobsTab === 'completed'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-ink-muted hover:text-ink'
                     }`}
                   >
                     Completed jobs ({completedJobs.length})
@@ -389,7 +431,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                   <button
                     onClick={() => setJobsTab('in_progress')}
                     className={`pb-2.5 text-xs font-semibold border-b-2 cursor-pointer ${
-                      jobsTab === 'in_progress' ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink'
+                      jobsTab === 'in_progress'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-ink-muted hover:text-ink'
                     }`}
                   >
                     In progress ({inProgressJobs.length})
@@ -398,7 +442,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
 
                 {activeJobs.length === 0 ? (
                   <p className="text-xs text-ink-muted pt-4">
-                    {jobsTab === 'completed' ? 'No completed jobs yet.' : 'No jobs currently in progress.'}
+                    {jobsTab === 'completed'
+                      ? 'No completed jobs yet.'
+                      : 'No jobs currently in progress.'}
                   </p>
                 ) : (
                   <div className="divide-y divide-border">
@@ -414,13 +460,19 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                             <span>|</span>
                             <span>
                               {formatDate(job.startDate, 'short')}
-                              {job.endDate && job.endDate !== job.startDate ? ` - ${formatDate(job.endDate, 'short')}` : ''}
+                              {job.endDate && job.endDate !== job.startDate
+                                ? ` - ${formatDate(job.endDate, 'short')}`
+                                : ''}
                             </span>
                           </div>
                         ) : (
-                          <p className="text-xs text-ink-muted">Started {formatDate(job.startDate, 'short')}</p>
+                          <p className="text-xs text-ink-muted">
+                            Started {formatDate(job.startDate, 'short')}
+                          </p>
                         )}
-                        {job.review && <p className="text-xs text-ink italic">&quot;{job.review}&quot;</p>}
+                        {job.review && (
+                          <p className="text-xs text-ink italic">&quot;{job.review}&quot;</p>
+                        )}
                         {job.tags && job.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {job.tags.map((tag) => (
@@ -434,7 +486,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                           </div>
                         )}
                         <div className="flex items-center justify-between text-xs pt-1">
-                          <span className="font-semibold text-ink">₹{job.amount.toLocaleString('en-IN')}</span>
+                          <span className="font-semibold text-ink">
+                            ₹{job.amount.toLocaleString('en-IN')}
+                          </span>
                           <span className="text-ink-muted">{job.priceType}</span>
                         </div>
                       </div>
@@ -474,7 +528,9 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                     key={i}
                     onClick={() => setPortfolioPage(i)}
                     className={`w-6 h-6 rounded-full text-[11px] font-semibold cursor-pointer ${
-                      i === portfolioPage ? 'bg-primary text-primary-foreground' : 'text-ink-muted hover:bg-surface-subtle'
+                      i === portfolioPage
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-ink-muted hover:bg-surface-subtle'
                     }`}
                   >
                     {i + 1}
@@ -512,7 +568,8 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               <div>
                 <h3 className="text-base font-bold text-ink">Project catalog</h3>
                 <p className="text-xs text-ink-muted mt-0.5">
-                  Get started working with {talent.name.split(' ')[0]} quickly with these predefined projects.
+                  Get started working with {talent.name.split(' ')[0]} quickly with these predefined
+                  projects.
                 </p>
               </div>
               <div className="divide-y divide-border">
@@ -538,7 +595,11 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                         variant="outline"
                         size="sm"
                         className="rounded-full"
-                        onClick={() => showToast("Viewing project packages isn't wired up yet — Marché is still a frontend preview.")}
+                        onClick={() =>
+                          showToast(
+                            "Viewing project packages isn't wired up yet — Marché is still a frontend preview.",
+                          )
+                        }
                       >
                         View project
                       </Button>
@@ -568,7 +629,8 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
                   </span>
                   <div className="text-xs">
                     <p className="font-semibold text-ink">
-                      {t.authorName} <span className="font-normal text-ink-muted">| {t.authorTitle}</span>
+                      {t.authorName}{' '}
+                      <span className="font-normal text-ink-muted">| {t.authorTitle}</span>
                     </p>
                     <p className="text-ink-muted flex items-center gap-1.5 mt-0.5">
                       {t.company} • {formatDate(t.date, 'short')}
@@ -596,7 +658,8 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
               <div key={e.id} className="py-3">
                 <p className="text-xs font-semibold text-ink">{e.title}</p>
                 <p className="text-[11px] text-ink-muted mt-0.5">
-                  {e.company} • {formatMonthYear(e.startDate)} – {e.endDate ? formatMonthYear(e.endDate) : 'Present'}
+                  {e.company} • {formatMonthYear(e.startDate)} –{' '}
+                  {e.endDate ? formatMonthYear(e.endDate) : 'Present'}
                 </p>
               </div>
             ))}
@@ -610,7 +673,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           <h3 className="text-base font-bold text-ink">Education</h3>
           <div className="divide-y divide-border">
             {talent.education.map((edu, idx) => (
-              <div key={idx} className="py-3">
+              <div key={`${edu.school}-${idx}`} className="py-3">
                 <p className="text-xs font-semibold text-ink">{edu.school}</p>
                 {edu.degree && <p className="text-[11px] text-ink-muted mt-0.5">{edu.degree}</p>}
               </div>

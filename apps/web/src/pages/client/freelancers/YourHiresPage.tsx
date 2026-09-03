@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Search, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, MapPin, Search, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@marche/ui';
 import { useApp } from '../../../context/AppContext';
 import { FreelancersLayout } from './FreelancersLayout';
@@ -8,6 +8,13 @@ import { connectionsApi } from '../../../lib/proposals-api';
 
 export const YourHiresPage: React.FC = () => {
   const { navigate, accessToken } = useApp();
+
+  // Toast feedback — same pattern as ClientDashboard's showToast.
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // The client's real connections, grouped by provider — the mock
   // `contracts`/`talentProfiles` this replaced only ever held demo fixture
@@ -23,12 +30,27 @@ export const YourHiresPage: React.FC = () => {
 
   return (
     <FreelancersLayout activeItem="Your hires">
+      {toastMessage && (
+        <div className="fixed bottom-20 right-6 md:bottom-6 z-50 bg-inverse text-inverse-fg px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200 text-xs font-medium">
+          <CheckCircle2 className="w-4 h-4 text-primary-hover" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-ink tracking-tight">Your hires</h1>
           <p className="text-xs text-ink-muted mt-1">Look up people you've worked with</p>
         </div>
-        <button className="px-3.5 py-1.5 rounded-full border border-border text-xs font-semibold text-ink-muted whitespace-nowrap">
+        <button
+          type="button"
+          onClick={() =>
+            showToast(
+              "Sharing a hire list isn't wired up yet — Marché is still a frontend preview.",
+            )
+          }
+          className="px-3.5 py-1.5 rounded-full border border-border text-xs font-semibold text-ink-muted whitespace-nowrap cursor-pointer"
+        >
           Share list
         </button>
       </div>

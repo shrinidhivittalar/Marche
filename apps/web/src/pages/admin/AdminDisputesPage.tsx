@@ -37,6 +37,11 @@ export const AdminDisputesPage: React.FC = () => {
     { enabled: Boolean(token) },
   );
 
+  // Same reasoning as AdminCategoryTemplatesPage's own pageEl — without a
+  // container ref, this Modal portals to document.body by default, outside
+  // the [data-theme="admin"] scope, and renders unthemed.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -70,7 +75,7 @@ export const AdminDisputesPage: React.FC = () => {
   const items = disputes.data?.items ?? [];
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
+    <div ref={setPageEl} className="space-y-8 max-w-5xl mx-auto">
       <div className="pb-6 border-b border-border">
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink tracking-tight">Disputes</h1>
         <p className="text-xs text-ink-muted mt-1">
@@ -162,6 +167,7 @@ export const AdminDisputesPage: React.FC = () => {
         onClose={() => setResolvingId(null)}
         title="Resolve Dispute"
         description="This is final — there is no reopening a resolved dispute."
+        container={pageEl}
       >
         <div className="space-y-4 pt-2 text-xs">
           <Textarea

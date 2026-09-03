@@ -209,9 +209,9 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ id }) => {
               Expected Deliverables
             </h3>
             <div className="space-y-2">
-              {requirement.deliverables.map((deliverable) => (
+              {requirement.deliverables.map((deliverable, idx) => (
                 <div
-                  key={deliverable}
+                  key={`${deliverable}-${idx}`}
                   className="p-3 bg-surface border border-border rounded-xl text-xs text-ink flex items-center gap-2.5"
                 >
                   <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
