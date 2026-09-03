@@ -121,6 +121,25 @@ describe('PriceNegotiationsRepository', () => {
 
       expect(await repository.hasPending('proposal_1')).toBe(false);
     });
+
+    // ProposalsService.accept re-checks this inside its transaction, against
+    // `tx`, for read consistency with the writes landing in that same
+    // transaction — same reasoning as claimAgreedPrice taking a transaction
+    // client. Proves the optional client is actually used, not defaulted to
+    // the ordinary one when supplied.
+    it('reads through a supplied transaction client instead of the ordinary one', async () => {
+      const { repository, proposalPriceNegotiation } = build();
+      const txCount = jest.fn().mockResolvedValue(1);
+      const tx = { proposalPriceNegotiation: { count: txCount } } as never;
+
+      const pending = await repository.hasPending('proposal_1', tx);
+
+      expect(txCount).toHaveBeenCalledWith({
+        where: { proposalId: 'proposal_1', status: 'PROPOSED' },
+      });
+      expect(proposalPriceNegotiation.count).not.toHaveBeenCalled();
+      expect(pending).toBe(true);
+    });
   });
 
   describe('create', () => {

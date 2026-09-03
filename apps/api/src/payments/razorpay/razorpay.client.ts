@@ -63,6 +63,28 @@ export class RazorpayClient {
     }
   }
 
+  /**
+   * The `receipt` an order was created with — for us, always the
+   * connectionId (see createOrder's caller, PaymentsService.createOrder).
+   * Used only as a reconciliation fallback: retry() repoints
+   * Payment.razorpayOrderId at a fresh order, so a webhook that arrives
+   * for the now-superseded old order_id no longer matches any row via
+   * findByOrderId. The order itself still exists on Razorpay's side
+   * regardless of what our own DB forgot, so fetching it back is how we
+   * recover which connection it belonged to. Returns null rather than
+   * throwing on failure — the webhook handler's existing log-and-drop
+   * behavior is an acceptable fallback for the fallback.
+   */
+  async fetchOrderReceipt(orderId: string): Promise<string | null> {
+    try {
+      const order = await this.client.orders.fetch(orderId);
+      return typeof order.receipt === 'string' ? order.receipt : null;
+    } catch (error) {
+      this.logger.error(`Razorpay order lookup failed for ${orderId}: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
   /** The Checkout.js success-callback signature — order_id + payment_id, signed with the key secret. */
   verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
     return validatePaymentVerification(

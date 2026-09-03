@@ -36,6 +36,7 @@ function build() {
     createOrder: jest.fn().mockResolvedValue({ id: 'order_1', amount: 950000, currency: 'INR' }),
     verifyPaymentSignature: jest.fn().mockReturnValue(true),
     verifyWebhookSignature: jest.fn().mockReturnValue(true),
+    fetchOrderReceipt: jest.fn().mockResolvedValue(null),
   };
   const connectionsRepository = {
     findById: jest.fn().mockResolvedValue({
@@ -112,6 +113,16 @@ describe('PaymentsService', () => {
       await expect(service.createOrder('user_client', 'connection_1')).rejects.toBeInstanceOf(
         ConflictException,
       );
+    });
+
+    it('turns a concurrent create-create race into a clean conflict, not a raw 500', async () => {
+      const { service, paymentsRepository } = build();
+      paymentsRepository.create.mockRejectedValue({ code: 'P2002' });
+
+      await expect(service.createOrder('user_client', 'connection_1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(paymentsRepository.retry).not.toHaveBeenCalled();
     });
 
     it('resumes an abandoned checkout by retrying the same row, not creating a second one', async () => {
@@ -270,12 +281,54 @@ describe('PaymentsService', () => {
     });
 
     it('is a no-op for an order this app never created', async () => {
-      const { service, paymentsRepository } = build();
+      const { service, paymentsRepository, razorpay } = build();
       paymentsRepository.findByOrderId.mockResolvedValue(null);
+      razorpay.fetchOrderReceipt.mockResolvedValue(null);
 
       await service.handleWebhookEvent('payment.captured', 'order_unknown', 'pay_1');
 
       expect(paymentsRepository.markPaid).not.toHaveBeenCalled();
+    });
+
+    it('recovers a payment via the order receipt when the order_id was superseded by a retry', async () => {
+      // Regression coverage for the "Could be better" audit finding:
+      // retry() repoints Payment.razorpayOrderId at a fresh order, so a
+      // webhook for the now-stale order_id no longer matches via
+      // findByOrderId even though the charge is real. Every order this
+      // app creates is given receipt: connectionId, so fetching the
+      // stale order back and re-resolving by connectionId recovers it.
+      const { service, paymentsRepository, razorpay, notificationsService } = build();
+      paymentsRepository.findByOrderId.mockResolvedValue(null);
+      razorpay.fetchOrderReceipt.mockResolvedValue('connection_1');
+      paymentsRepository.findByConnectionId.mockResolvedValue({
+        id: 'payment_1',
+        connectionId: 'connection_1',
+        status: 'CREATED',
+        amount: '9500.00',
+      });
+
+      await service.handleWebhookEvent('payment.captured', 'order_stale', 'pay_1');
+
+      expect(razorpay.fetchOrderReceipt).toHaveBeenCalledWith('order_stale');
+      expect(paymentsRepository.markPaid).toHaveBeenCalledWith('payment_1', 'pay_1', '');
+      expect(notificationsService.paymentReceived).toHaveBeenCalledWith(
+        'user_provider',
+        expect.objectContaining({ connectionId: 'connection_1', amount: '9500.00' }),
+      );
+    });
+
+    it('does not attempt recovery when the row was already found directly', async () => {
+      const { service, paymentsRepository, razorpay } = build();
+      paymentsRepository.findByOrderId.mockResolvedValue({
+        id: 'payment_1',
+        connectionId: 'connection_1',
+        status: 'CREATED',
+        amount: '9500.00',
+      });
+
+      await service.handleWebhookEvent('payment.captured', 'order_1', 'pay_1');
+
+      expect(razorpay.fetchOrderReceipt).not.toHaveBeenCalled();
     });
 
     it('is a no-op for a row already marked paid', async () => {

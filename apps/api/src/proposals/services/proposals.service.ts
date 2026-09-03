@@ -220,6 +220,19 @@ export class ProposalsService {
 
     const connection = await this.prisma.client.$transaction(
       async (tx) => {
+        // The check above handles the ordinary sequential case and gives a
+        // better message. This handles the real one: the other party can
+        // propose a price change in the window between that check and this
+        // transaction's writes landing, which would otherwise leave the
+        // round permanently PROPOSED on a proposal that's already ACCEPTED,
+        // with nothing left to resolve it. Read against `tx` for consistency
+        // with the writes below, not the ordinary client.
+        if (await this.priceNegotiationsRepository.hasPending(proposal.id, tx)) {
+          throw new ConflictException(
+            'This proposal has a pending price change. Resolve it before accepting.',
+          );
+        }
+
         // Throws 409 if the requirement is no longer claimable. The rule about
         // which statuses may become FILLED lives in JobsService, which owns
         // the Job lifecycle.
