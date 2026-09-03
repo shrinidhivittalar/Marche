@@ -652,7 +652,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                     type="button"
                     data-testid="overview-requirement"
                     onClick={() => navigate(`/client/jobs/${req.id}`)}
-                    className="w-full text-left p-5 rounded-xl border border-border bg-surface hover:border-red-300 transition-all flex items-center gap-4"
+                    className="w-full text-left p-5 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all flex items-center gap-4"
                   >
                     <span
                       className="text-2xl text-primary tabular-nums shrink-0 w-8"

@@ -134,6 +134,12 @@ export class RazorpayClient {
   // compare with plain `===`, which is a (largely theoretical, over a
   // rate-limited HTTP endpoint) timing oracle.
   private hmacHexEquals(payload: string, signature: string, secret: string): boolean {
+    // Buffer.from(_, 'hex') silently stops at the first non-hex character
+    // instead of throwing, so a malformed signature must be rejected by
+    // format before it ever reaches the byte-length/timingSafeEqual check.
+    if (!/^[0-9a-fA-F]+$/.test(signature)) {
+      return false;
+    }
     const expectedHex = createHmac('sha256', secret).update(payload).digest('hex');
     const expected = Buffer.from(expectedHex, 'hex');
     const actual = Buffer.from(signature, 'hex');
