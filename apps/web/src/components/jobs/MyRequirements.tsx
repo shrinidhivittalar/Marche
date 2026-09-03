@@ -117,7 +117,7 @@ export const MyRequirements: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             data-testid="requirements-search"
-            className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500"
+            className="w-full bg-search-pill border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500"
           />
         </div>
       </div>

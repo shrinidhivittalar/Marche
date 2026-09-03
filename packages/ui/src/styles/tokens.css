@@ -38,6 +38,12 @@
   --color-inverse: #15171a;
   --color-inverse-fg: #ffffff;
 
+  /* ---- Color: search pill (warm near-black used on the search bar/tab-bar
+     "pill" elements — visually close to but distinct from --color-inverse,
+     which is a cooler dark; kept as its own token instead of reusing
+     inverse so this doesn't shift if inverse ever changes) ---- */
+  --color-search-pill: #1a1512;
+
   /* ---- Color: accent (marigold gold — used sparingly: ratings, "Work" role) ---- */
   --color-accent: #f59e0b;
   --color-accent-hover: #d97f06;

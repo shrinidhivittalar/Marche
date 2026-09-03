@@ -164,7 +164,7 @@ export const SearchJobsPage: React.FC = () => {
           value={searchQuery}
           onChange={(e) => changeFilter(() => setSearchQuery(e.target.value))}
           data-testid="job-search-input"
-          className="w-full bg-[#1a1512] border-none rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
+          className="w-full bg-search-pill border-none rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
         />
       </div>
 
