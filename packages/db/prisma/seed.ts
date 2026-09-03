@@ -351,10 +351,16 @@ async function seedDemoCategoryTemplates() {
 
   let created = 0;
   for (const demo of DEMO_CATEGORIES) {
+    // Create-only, unlike seedCategories' upsert: these are standalone
+    // categories an admin can independently own, not a fixed taxonomy this
+    // seed is the source of truth for. If the slug already exists —
+    // seeded by an earlier run, or created independently by a real admin
+    // — its name/displayOrder must never be forced back to the seed's
+    // values on a later deploy.
     const category = await prisma.category.upsert({
       where: { slug: demo.slug },
       create: { name: demo.name, slug: demo.slug, displayOrder: demo.displayOrder },
-      update: { name: demo.name, displayOrder: demo.displayOrder },
+      update: {},
     });
 
     // Never overrides an existing configuration — if an admin has already
