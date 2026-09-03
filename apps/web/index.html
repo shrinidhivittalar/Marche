@@ -5,6 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#F8F8F6" />
+    <!-- Pins referrer behavior explicitly rather than relying on the
+         browser default (SECURITY_AUDIT.md finding #3) — reset/verify
+         links carry a raw token in the query string, and this page loads
+         Google Fonts on every load, including the reset page itself. -->
+    <meta name="referrer" content="strict-origin" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
