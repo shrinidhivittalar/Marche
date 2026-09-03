@@ -155,7 +155,10 @@ export const ContractsPage: React.FC = () => {
                       Contract Value
                     </span>
                     <span className="text-xl font-bold text-primary">
-                      ₹{Number(ctr.proposal.proposedPrice).toLocaleString('en-IN')}
+                      ₹
+                      {Number(
+                        ctr.proposal.agreedPrice ?? ctr.proposal.proposedPrice,
+                      ).toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>
