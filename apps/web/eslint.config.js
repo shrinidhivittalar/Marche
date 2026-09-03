@@ -1,7 +1,9 @@
 import react from '@marche/config/eslint/react';
 
 export default [
-  { ignores: ['dist', 'test-results', 'playwright-report'] },
+  // public/ is served as-is (static assets, not app source) — theme-init.js
+  // is a plain browser script with no build step, not TypeScript/React.
+  { ignores: ['dist', 'test-results', 'playwright-report', 'public'] },
   ...react,
   {
     // Playwright specs are Node test files, not React. The React Hooks
