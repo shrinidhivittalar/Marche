@@ -369,6 +369,122 @@ export function EducationCard({
   );
 }
 
+export function CertificationCard({
+  profile,
+  disabled,
+  onAdd,
+  onRemove,
+}: {
+  profile: ApiProfile;
+  disabled: boolean;
+  onAdd: (body: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [issuingOrganization, setIssuingOrganization] = useState('');
+  const [issueDate, setIssueDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+
+  return (
+    <Card className="p-8 space-y-4" data-testid="certification-card">
+      <h2 className="text-lg font-semibold text-ink">Certifications</h2>
+      <div className="space-y-2" data-testid="certification-list">
+        {(profile.certifications ?? []).length === 0 && (
+          <p className="text-sm text-ink-muted" data-testid="certification-empty">
+            No certifications added yet.
+          </p>
+        )}
+        {(profile.certifications ?? []).map((cert) => (
+          <div
+            key={cert.id}
+            data-testid="certification-item"
+            className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
+          >
+            <span className="text-sm text-ink">
+              {cert.name} — {cert.issuingOrganization}
+              {cert.expiryDate && (
+                <span className="block text-xs text-ink-muted">
+                  Expires {new Date(cert.expiryDate).getFullYear()}
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${cert.name}`}
+              data-testid={`remove-certification-${cert.id}`}
+              disabled={disabled}
+              onClick={() => onRemove(cert.id)}
+              className="text-ink-muted hover:text-danger"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          placeholder="Certification name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-testid="certification-name"
+          aria-label="Certification name"
+        />
+        <Input
+          placeholder="Issuing organization"
+          value={issuingOrganization}
+          onChange={(e) => setIssuingOrganization(e.target.value)}
+          data-testid="certification-issuer"
+          aria-label="Issuing organization"
+        />
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="certification-issue-date" className="text-xs text-ink-muted">
+            Issue date (optional)
+          </label>
+          <DatePicker
+            value={issueDate}
+            onChange={setIssueDate}
+            max={expiryDate || undefined}
+            captionLayout="dropdown"
+            data-testid="certification-issue-date"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="certification-expiry-date" className="text-xs text-ink-muted">
+            Expiry date (optional)
+          </label>
+          <DatePicker
+            value={expiryDate}
+            onChange={setExpiryDate}
+            min={issueDate || undefined}
+            captionLayout="dropdown"
+            data-testid="certification-expiry-date"
+          />
+        </div>
+      </div>
+      <Button
+        disabled={disabled || !name.trim() || !issuingOrganization.trim()}
+        data-testid="add-certification"
+        onClick={() => {
+          onAdd({
+            name: name.trim(),
+            issuingOrganization: issuingOrganization.trim(),
+            issueDate: issueDate ? new Date(issueDate).toISOString() : undefined,
+            expiryDate: expiryDate ? new Date(expiryDate).toISOString() : undefined,
+          });
+          setName('');
+          setIssuingOrganization('');
+          setIssueDate('');
+          setExpiryDate('');
+        }}
+      >
+        Add certification
+      </Button>
+    </Card>
+  );
+}
+
 export function LanguagesCard({
   profile,
   disabled,

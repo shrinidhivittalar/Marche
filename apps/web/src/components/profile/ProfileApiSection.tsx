@@ -14,7 +14,13 @@ import {
   type AvailabilityStatus,
   type Visibility,
 } from '../../lib/marketplace-api';
-import { SkillsCard, ExperienceCard, EducationCard, LanguagesCard } from './ProfileCards';
+import {
+  SkillsCard,
+  ExperienceCard,
+  EducationCard,
+  CertificationCard,
+  LanguagesCard,
+} from './ProfileCards';
 
 // Same env var AuthPages.tsx reads — must be the same Google OAuth Client
 // ID as the backend's GOOGLE_CLIENT_ID (apps/web/.env.example).
@@ -197,6 +203,17 @@ export const ProfileApiSection: React.FC = () => {
             onAdd={(body) => run(() => profilesApi.addEducation(token, body), 'Education added.')}
             onRemove={(id) =>
               run(() => profilesApi.removeEducation(token, id), 'Education removed.')
+            }
+          />
+
+          <CertificationCard
+            profile={p}
+            disabled={saving}
+            onAdd={(body) =>
+              run(() => profilesApi.addCertification(token, body), 'Certification added.')
+            }
+            onRemove={(id) =>
+              run(() => profilesApi.removeCertification(token, id), 'Certification removed.')
             }
           />
 
