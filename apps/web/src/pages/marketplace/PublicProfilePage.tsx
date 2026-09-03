@@ -19,6 +19,13 @@ import { marketplaceApi, profilesApi, type ApiProfile } from '../../lib/marketpl
 import { reviewsApi } from '../../lib/reviews-api';
 import { savedProvidersApi } from '../../lib/saved-providers-api';
 import { directContractsApi } from '../../lib/direct-contracts-api';
+import { categoryTemplatesApi, type ServiceMode } from '../../lib/category-templates-api';
+import {
+  CategoryRequirementsFields,
+  defaultCategoryData,
+  validateCategoryData,
+  type CategoryDataValues,
+} from '../client/CategoryRequirementsFields';
 import { ApiError } from '../../lib/api';
 
 // The page a client lands on after finding someone in the marketplace, and
@@ -95,8 +102,16 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   const categories = useApiResource(() => marketplaceApi.categories(), [], {
     enabled: canHireDirectly,
   });
+  // "Leaf" means "has no children" — that includes both an ordinary child
+  // under a parent (Photography & Video > Event Photography) AND a
+  // standalone top-level category with no children of its own (Photography,
+  // Painting, Electrical Work — this session's demo categories). The
+  // previous version only handled the first case, so those three never
+  // appeared in this dropdown at all.
   const leafCategories = (categories.data ?? []).flatMap((parent) =>
-    (parent.children ?? []).map((child) => ({ ...child, parentName: parent.name })),
+    parent.children && parent.children.length > 0
+      ? parent.children.map((child) => ({ ...child, parentName: parent.name as string | null }))
+      : [{ ...parent, parentName: null as string | null }],
   );
 
   const [hireModalOpen, setHireModalOpen] = useState(false);
@@ -105,6 +120,10 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   const [hireDescription, setHireDescription] = useState('');
   const [hirePrice, setHirePrice] = useState('');
   const [hireDeliveryDays, setHireDeliveryDays] = useState('');
+  const [hireServiceMode, setHireServiceMode] = useState<ServiceMode | ''>('');
+  const [hireLocation, setHireLocation] = useState('');
+  const [hireCategoryData, setHireCategoryData] = useState<CategoryDataValues>({});
+  const [hireShowFieldErrors, setHireShowFieldErrors] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
   const [hiring, setHiring] = useState(false);
   // The offer is pending until the provider accepts it (see
@@ -112,8 +131,35 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
   // so this replaces the form with a confirmation instead of navigating.
   const [hireSent, setHireSent] = useState(false);
 
+  const selectedHireCategory = leafCategories.find((c) => c.id === hireCategoryId);
+
+  // Same shape as CreateJobPage's own templateResource — an active
+  // template's requirement fields must be answered before this category can
+  // be sent to /direct-contracts, the same way JobsService already requires
+  // for an ordinary job posting (CategoryTemplatesService.assertJobRequirements
+  // runs against both). Public/unauthenticated read, same as the job wizard's.
+  const hireTemplate = useApiResource(
+    () =>
+      selectedHireCategory
+        ? categoryTemplatesApi.getActive(selectedHireCategory.slug).then((res) => res.template)
+        : Promise.resolve(null),
+    [selectedHireCategory?.slug],
+    { enabled: Boolean(selectedHireCategory) },
+  );
+  const activeHireTemplate = hireTemplate.data;
+
+  // Fills in defaults (BOOLEAN → false, MULTI_SELECT → []) the first time a
+  // given template resolves — same once-per-id render-time-guarded pattern
+  // CreateJobPage uses, rather than a useEffect.
+  const [hireDefaultsAppliedFor, setHireDefaultsAppliedFor] = useState<string | null>(null);
+  if (activeHireTemplate && hireDefaultsAppliedFor !== activeHireTemplate.id) {
+    setHireDefaultsAppliedFor(activeHireTemplate.id);
+    setHireCategoryData((prev) => ({ ...defaultCategoryData(activeHireTemplate.fields), ...prev }));
+  }
+
   const handleCreateDirectContract = async () => {
     setHireError(null);
+    setHireShowFieldErrors(true);
     if (!hireCategoryId) {
       setHireError('Choose a category.');
       return;
@@ -136,6 +182,17 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
       setHireError('Enter a valid number of delivery days.');
       return;
     }
+    if (activeHireTemplate?.locationRequired && !hireLocation.trim()) {
+      setHireError('This category requires a location.');
+      return;
+    }
+    if (
+      activeHireTemplate &&
+      Object.values(validateCategoryData(activeHireTemplate.fields, hireCategoryData)).some(Boolean)
+    ) {
+      setHireError('Fill in the required fields for this category.');
+      return;
+    }
 
     setHiring(true);
     try {
@@ -146,6 +203,9 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
         description: hireDescription.trim(),
         price,
         deliveryDays,
+        locationCoarse: hireLocation.trim() || undefined,
+        serviceMode: hireServiceMode || undefined,
+        categoryData: activeHireTemplate ? hireCategoryData : undefined,
       });
       setHireSent(true);
     } catch (err) {
@@ -280,14 +340,29 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
           <div className="space-y-4 pt-2">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Select value={hireCategoryId} onValueChange={setHireCategoryId}>
+                <Select
+                  value={hireCategoryId}
+                  onValueChange={(value) => {
+                    setHireCategoryId(value);
+                    // Different category, different (or no) template — a
+                    // stale answer from the previous one would either
+                    // belong to a field this category doesn't have (the
+                    // backend rejects unknown categoryData keys outright)
+                    // or silently answer a question this category never
+                    // asked.
+                    setHireServiceMode('');
+                    setHireLocation('');
+                    setHireCategoryData({});
+                    setHireDefaultsAppliedFor(null);
+                  }}
+                >
                   <SelectTrigger data-testid="direct-hire-category" aria-label="Category">
                     <SelectValue placeholder="Choose a category…" />
                   </SelectTrigger>
                   <SelectContent>
                     {leafCategories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.parentName} › {c.name}
+                        {c.parentName ? `${c.parentName} › ${c.name}` : c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -327,6 +402,61 @@ export const PublicProfilePage: React.FC<{ id: string }> = ({ id }) => {
                 aria-label="Delivery days"
               />
             </div>
+
+            {activeHireTemplate && activeHireTemplate.allowedModes.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-2">
+                  How will this be delivered?
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {activeHireTemplate.allowedModes.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      data-testid={`direct-hire-service-mode-${mode}`}
+                      onClick={() => setHireServiceMode(mode)}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                        hireServiceMode === mode
+                          ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                          : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(activeHireTemplate?.locationRequired ?? false) && (
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-1">
+                  <MapPin className="w-3.5 h-3.5 text-ink-muted" />
+                  Location
+                  <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. The Oberoi, Nariman Point, Mumbai"
+                  value={hireLocation}
+                  onChange={(e) => setHireLocation(e.target.value)}
+                  aria-invalid={hireShowFieldErrors && !hireLocation.trim()}
+                  data-testid="direct-hire-location"
+                />
+              </div>
+            )}
+
+            {activeHireTemplate && activeHireTemplate.fields.length > 0 && (
+              <CategoryRequirementsFields
+                fields={activeHireTemplate.fields}
+                values={hireCategoryData}
+                onChange={(key, value) =>
+                  setHireCategoryData((prev) => ({ ...prev, [key]: value }))
+                }
+                showErrors={hireShowFieldErrors}
+              />
+            )}
+
             {hireError && (
               <p className="text-xs font-semibold text-destructive" data-testid="direct-hire-error">
                 {hireError}
