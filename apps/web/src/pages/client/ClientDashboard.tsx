@@ -431,7 +431,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         <TopSearchBar />
         <button
           onClick={() => navigate('/client/jobs/new')}
-          className="flex items-center gap-2 px-4 py-2.5 bg-red-700 text-white hover:bg-red-800 rounded-xl text-xs font-bold uppercase tracking-wide transition-all shadow-sm hover:shadow-md cursor-pointer shrink-0"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary-hover rounded-xl text-xs font-bold uppercase tracking-wide transition-all shadow-sm hover:shadow-md cursor-pointer shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Post a Job</span>
@@ -447,7 +447,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           >
             Welcome back,
             <br />
-            <span className="text-red-700">{currentUser.name.split(' ')[0]}.</span>
+            <span className="text-primary">{currentUser.name.split(' ')[0]}.</span>
           </h1>
           <p className="text-xs font-medium text-ink-muted pt-1">{getInsightText()}</p>
         </div>
@@ -461,7 +461,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           >
             <div className="flex items-center justify-between">
               <span
-                className="text-4xl text-red-800 transition-colors tabular-nums"
+                className="text-4xl text-primary transition-colors tabular-nums"
                 style={{ fontFamily: 'Anton, sans-serif' }}
               >
                 {String(activeJobsCount).padStart(2, '0')}
@@ -485,7 +485,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           >
             <div className="flex items-center justify-between">
               <span
-                className="text-4xl text-red-800 transition-colors tabular-nums"
+                className="text-4xl text-primary transition-colors tabular-nums"
                 style={{ fontFamily: 'Anton, sans-serif' }}
               >
                 {String(pendingProposalsSum).padStart(2, '0')}
@@ -509,7 +509,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           >
             <div className="flex items-center justify-between">
               <span
-                className="text-4xl text-red-800 transition-colors tabular-nums"
+                className="text-4xl text-primary transition-colors tabular-nums"
                 style={{ fontFamily: 'Anton, sans-serif' }}
               >
                 {String(inProgressContracts.length).padStart(2, '0')}
@@ -531,7 +531,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           >
             <div className="flex items-center justify-between">
               <span
-                className="text-4xl text-red-800 transition-colors tabular-nums"
+                className="text-4xl text-primary transition-colors tabular-nums"
                 style={{ fontFamily: 'Anton, sans-serif' }}
               >
                 {String(completedContracts.length).padStart(2, '0')}
@@ -569,7 +569,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               </span>
               <User className="w-4 h-4 text-ink-muted" />
             </div>
-            <p className="text-xs font-bold text-red-700 underline underline-offset-2">
+            <p className="text-xs font-bold text-primary underline underline-offset-2">
               Complete your profile
             </p>
             <p className="text-[11px] text-ink-muted leading-relaxed">
@@ -593,7 +593,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
             <h2 className="text-xs font-bold uppercase tracking-widest text-ink">Active Jobs</h2>
             <button
               onClick={() => navigate('/client/jobs')}
-              className="text-xs font-semibold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
             >
               <span>View all ({requirementTotal})</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -616,7 +616,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               <button
                 type="button"
                 onClick={() => navigate('/client/jobs/new')}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold uppercase tracking-wide transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-xs font-bold uppercase tracking-wide transition-all cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Post a job
@@ -633,7 +633,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                 <button
                   type="button"
                   onClick={() => navigate('/client/jobs')}
-                  className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                  className="text-xs font-semibold text-primary hover:underline cursor-pointer"
                 >
                   View all {requirementTotal} job{requirementTotal !== 1 ? 's' : ''}
                 </button>
@@ -655,7 +655,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                     className="w-full text-left p-5 rounded-xl border border-border bg-surface hover:border-red-300 transition-all flex items-center gap-4"
                   >
                     <span
-                      className="text-2xl text-red-700 tabular-nums shrink-0 w-8"
+                      className="text-2xl text-primary tabular-nums shrink-0 w-8"
                       style={{ fontFamily: 'Anton, sans-serif' }}
                     >
                       {String(idx + 1).padStart(2, '0')}
@@ -706,7 +706,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
             </h2>
             <button
               onClick={() => navigate('/client/jobs')}
-              className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+              className="text-xs font-semibold text-primary hover:underline cursor-pointer"
             >
               View all
             </button>
@@ -723,7 +723,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               ...awaitingReview.map((r) => ({
                 key: r.id,
                 icon: Users,
-                iconClass: 'bg-red-800 text-white',
+                iconClass: 'bg-primary text-primary-foreground',
                 title: `${r.proposalCount} new proposal${r.proposalCount !== 1 ? 's' : ''} received`,
                 subtitle: r.title,
                 cta: 'Review now',
@@ -765,7 +765,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                     <div className="space-y-1.5 min-w-0">
                       <p className="text-sm font-bold text-ink">{item.title}</p>
                       <p className="text-xs text-ink-muted line-clamp-2">{item.subtitle}</p>
-                      <span className="text-xs font-semibold text-red-700 hover:underline">
+                      <span className="text-xs font-semibold text-primary hover:underline">
                         {item.cta} →
                       </span>
                     </div>

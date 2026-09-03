@@ -16,7 +16,12 @@ export function notificationCategory(type: ApiNotification['type']): Notificatio
     case 'PROPOSAL_ACCEPTED':
     case 'PROPOSAL_REJECTED':
       return 'proposal';
+    // DISPUTE_RAISED reuses 'connection' rather than a new category — a
+    // dispute is scoped to an existing connection the same way
+    // CONNECTION_ESTABLISHED is, and both route to that connection's
+    // contract page below.
     case 'CONNECTION_ESTABLISHED':
+    case 'DISPUTE_RAISED':
       return 'connection';
     case 'JOB_CANCELLED':
     case 'JOB_MATCHED':
@@ -82,6 +87,11 @@ export function notificationRoute(
 
     // Recipient is always the provider who got paid.
     case 'PAYMENT_RECEIVED':
+      return data?.connectionId ? `/contracts/${data.connectionId}` : null;
+
+    // Recipient is whoever didn't raise it — the dispute itself renders on
+    // that connection's contract page, same destination as PAYMENT_RECEIVED.
+    case 'DISPUTE_RAISED':
       return data?.connectionId ? `/contracts/${data.connectionId}` : null;
 
     default:
