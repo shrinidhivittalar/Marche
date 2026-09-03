@@ -19,12 +19,12 @@ import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { usePolling } from '../../hooks/usePolling';
+import { useRazorpayCheckout } from '../../hooks/useRazorpayCheckout';
 import { connectionsApi } from '../../lib/proposals-api';
 import { reviewsApi } from '../../lib/reviews-api';
 import { disputesApi } from '../../lib/disputes-api';
 import { paymentsApi } from '../../lib/payments-api';
 import { workDiaryApi } from '../../lib/work-diary-api';
-import { loadRazorpayCheckout } from '../../lib/loadRazorpayCheckout';
 import { ApiError } from '../../lib/api';
 
 interface ContractDetailPageProps {
@@ -87,9 +87,21 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   // the authoritative confirmation and can land independent of this tab.
   usePolling(paymentStatus.refetch, Boolean(token) && !paid);
 
+  const razorpayCheckout = useRazorpayCheckout({
+    token,
+    connectionId: id,
+    description: `Booking: ${connection.data?.job.title ?? ''}`,
+    prefillName: currentUser.name,
+    onVerified: () => paymentStatus.refetch(),
+    formatError: (err, phase) =>
+      err instanceof ApiError
+        ? err.message
+        : phase === 'start'
+          ? 'Unable to start payment.'
+          : 'Unable to verify payment.',
+  });
+
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -142,47 +154,6 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     Boolean(c.job.eventDate) &&
     new Date(c.job.eventDate as string).getTime() <= new Date().getTime();
   const canConfirmComplete = isClient && c.status === 'ACTIVE' && eventHasPassed;
-
-  const handlePay = async () => {
-    setPaying(true);
-    setPaymentError(null);
-    try {
-      await loadRazorpayCheckout();
-      const order = await paymentsApi.createOrder(token, id);
-
-      if (!window.Razorpay) {
-        throw new Error('Payment checkout failed to load.');
-      }
-      new window.Razorpay({
-        key: order.razorpayKeyId,
-        amount: order.amountPaise,
-        currency: order.currency,
-        order_id: order.razorpayOrderId,
-        name: 'Marché',
-        description: `Booking: ${c.job.title}`,
-        prefill: { name: currentUser.name },
-        theme: { color: '#166534' },
-        handler: async (response) => {
-          try {
-            await paymentsApi.verify(token, id, {
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            await paymentStatus.refetch();
-          } catch (err) {
-            setPaymentError(err instanceof ApiError ? err.message : 'Unable to verify payment.');
-          } finally {
-            setPaying(false);
-          }
-        },
-        modal: { ondismiss: () => setPaying(false) },
-      }).open();
-    } catch (err) {
-      setPaymentError(err instanceof ApiError ? err.message : 'Unable to start payment.');
-      setPaying(false);
-    }
-  };
 
   const handleConfirmComplete = async () => {
     setConfirming(true);
@@ -335,11 +306,18 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             <p className="text-xs text-ink-muted">
               ₹{amount.toLocaleString('en-IN')} owed for this booking.
             </p>
-            {paymentError && (
-              <p className="text-xs font-semibold text-destructive">{paymentError}</p>
+            {razorpayCheckout.error && (
+              <p className="text-xs font-semibold text-destructive">{razorpayCheckout.error}</p>
             )}
-            <Button icon={CreditCard} onClick={handlePay} disabled={paying} data-testid="pay-now">
-              {paying ? 'Opening checkout…' : `Pay ₹${amount.toLocaleString('en-IN')} now`}
+            <Button
+              icon={CreditCard}
+              onClick={razorpayCheckout.pay}
+              disabled={razorpayCheckout.paying}
+              data-testid="pay-now"
+            >
+              {razorpayCheckout.paying
+                ? 'Opening checkout…'
+                : `Pay ₹${amount.toLocaleString('en-IN')} now`}
             </Button>
           </>
         ) : (
