@@ -47,8 +47,15 @@ export class PriceNegotiationsRepository {
     });
   }
 
-  hasPending(proposalId: string): Promise<boolean> {
-    return this.prisma.client.proposalPriceNegotiation
+  // Optional `client` so the same check can be re-run inside a transaction
+  // (see ProposalsService.accept, which re-checks against `tx` for read
+  // consistency with the writes landing in that same transaction) as well as
+  // stand alone for the ordinary pre-transaction fast path.
+  hasPending(
+    proposalId: string,
+    client: Prisma.TransactionClient = this.prisma.client,
+  ): Promise<boolean> {
+    return client.proposalPriceNegotiation
       .count({ where: { proposalId, status: 'PROPOSED' } })
       .then((count) => count > 0);
   }

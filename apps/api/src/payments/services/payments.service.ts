@@ -24,6 +24,18 @@ export interface CreatedOrder {
   razorpayKeyId: string;
 }
 
+// Postgres' unique-violation code, surfaced by Prisma.
+const UNIQUE_VIOLATION = 'P2002';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
+}
+
 // Client pays the full agreed amount at hire time (module5-completion.md's
 // neighbour decision, same "at hire" trigger — see schema.prisma's comment
 // on Payment). One Payment row per connection; a retried/abandoned checkout
@@ -90,11 +102,24 @@ export class PaymentsService {
     if (existing) {
       await this.paymentsRepository.retry(existing.id, order.id);
     } else {
-      await this.paymentsRepository.create({
-        connectionId,
-        amount: amount.toFixed(2),
-        razorpayOrderId: order.id,
-      });
+      try {
+        await this.paymentsRepository.create({
+          connectionId,
+          amount: amount.toFixed(2),
+          razorpayOrderId: order.id,
+        });
+      } catch (error) {
+        // The check above handles the ordinary sequential case. This handles
+        // the real one: two simultaneous createOrder calls for the same
+        // connection both pass that check before either writes, and only
+        // the database can decide between them.
+        if (isUniqueViolation(error)) {
+          throw new ConflictException(
+            'A payment order is already being processed for this connection',
+          );
+        }
+        throw error;
+      }
     }
 
     return {
@@ -155,12 +180,28 @@ export class PaymentsService {
   /**
    * Razorpay's async webhook. Signature already verified by the controller
    * (needs the raw body, which only it has); this just applies the event.
-   * Unknown orders and already-PAID rows are both silently no-ops — a
-   * webhook can arrive more than once, and one for an order this app never
-   * created isn't this endpoint's problem.
+   * Already-PAID rows are a silent no-op — a webhook can arrive more than
+   * once.
+   *
+   * Unknown orders get one recovery attempt before being treated as
+   * genuinely not ours: retry() (PaymentsRepository) repoints
+   * Payment.razorpayOrderId at a fresh order on every retried checkout,
+   * so a webhook for the now-superseded old order_id no longer matches
+   * anything via findByOrderId — even though the charge itself is real
+   * (e.g. a customer completing payment against a still-open earlier
+   * checkout tab). The order still exists on Razorpay's side regardless
+   * of what our own DB forgot, and every order this app ever creates is
+   * given `receipt: connectionId` (see createOrder), so fetching the
+   * stale order back tells us which connection it was for.
    */
   async handleWebhookEvent(event: string, orderId: string, paymentId: string): Promise<void> {
-    const payment = await this.paymentsRepository.findByOrderId(orderId);
+    let payment = await this.paymentsRepository.findByOrderId(orderId);
+    if (!payment) {
+      const connectionId = await this.razorpay.fetchOrderReceipt(orderId);
+      payment = connectionId
+        ? await this.paymentsRepository.findByConnectionId(connectionId)
+        : null;
+    }
     if (!payment) {
       this.logger.warn(`Webhook for unknown Razorpay order ${orderId}`);
       return;

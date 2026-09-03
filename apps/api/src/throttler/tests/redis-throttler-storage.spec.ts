@@ -1,5 +1,17 @@
 import { RedisThrottlerStorage } from '../redis-throttler-storage';
 
+// Only the "eval failure falls back to memory" describe block below needs
+// this — a fully-controlled fake client instead of a real ioredis instance
+// that would otherwise try (and fail) to connect to a fake host in the
+// background, leaking an open handle past the test.
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => ({
+    eval: jest.fn(),
+    on: jest.fn(),
+    disconnect: jest.fn(),
+  }));
+});
+
 // Covers only the in-memory fallback path (constructed with an undefined
 // REDIS_URL) — the Redis-backed path talks to a real server via ioredis
 // and isn't something a unit test should stand up.
@@ -62,5 +74,29 @@ describe('RedisThrottlerStorage — in-memory fallback', () => {
 
     expect(clearSpy).toHaveBeenCalled();
     clearSpy.mockRestore();
+  });
+});
+
+// Covers the Redis-backed path failing mid-flight (not the constructor's
+// connection error listener, which only handles a failed connection
+// attempt) — a fake client is swapped in for the private `client` field
+// so this stays a unit test rather than talking to a real server.
+describe('RedisThrottlerStorage — Redis eval failure falls back to memory', () => {
+  it('degrades to the in-memory path instead of throwing when client.eval rejects', async () => {
+    const storage = new RedisThrottlerStorage('redis://fake-host:6379');
+    const client = (storage as unknown as { client: { eval: jest.Mock } }).client;
+    client.eval.mockRejectedValue(new Error('connection lost'));
+
+    const result = await storage.increment('1.2.3.4', 1_000, 5, 2_000, 'default');
+
+    expect(client.eval).toHaveBeenCalled();
+    expect(result).toEqual({
+      totalHits: 1,
+      timeToExpire: 1,
+      isBlocked: false,
+      timeToBlockExpire: 0,
+    });
+
+    await storage.onModuleDestroy();
   });
 });

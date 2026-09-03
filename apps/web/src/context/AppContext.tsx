@@ -623,6 +623,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_disputes`, JSON.stringify(disputes));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_work_diary`, JSON.stringify(workDiaryEntries));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_client_settings`, JSON.stringify(clientSettings));
+    localStorage.setItem(
+      `${LOCAL_STORAGE_KEY}_job_alert_settings`,
+      JSON.stringify(jobAlertSettingsByVendor),
+    );
   }, [
     currentUser,
     jobs,

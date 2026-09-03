@@ -1073,7 +1073,12 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
                 placeholder="Add a required deliverable item..."
                 value={newDeliverableInput}
                 onChange={(e) => setNewDeliverableInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddDeliverable())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddDeliverable();
+                  }
+                }}
                 className="flex-1"
               />
               <Button type="button" variant="outline" size="sm" onClick={handleAddDeliverable}>

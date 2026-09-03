@@ -377,6 +377,26 @@ describe('ProposalsService', () => {
       expect(connections.create).not.toHaveBeenCalled();
     });
 
+    it('re-checks for a pending round inside the transaction, catching one proposed in the race window', async () => {
+      // The pre-transaction check (previous test) passes clean — false on
+      // its first call — but a round is proposed by the other party before
+      // the transaction's writes land, so the second call, made against tx,
+      // sees it. Proves the re-check reads through the transaction client
+      // and aborts before the connection is created, not just logs the
+      // race.
+      const { service, priceNegotiations, jobsService, proposals, connections } = asClient();
+      priceNegotiations.hasPending.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      await expect(service.accept('user_2', 'proposal_1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(priceNegotiations.hasPending).toHaveBeenCalledTimes(2);
+      expect(priceNegotiations.hasPending.mock.calls[1]).toEqual(['proposal_1', TX]);
+      expect(jobsService.claimFilled).not.toHaveBeenCalled();
+      expect(proposals.transitionFromSubmitted).not.toHaveBeenCalled();
+      expect(connections.create).not.toHaveBeenCalled();
+    });
+
     it('rejects self-acceptance defensively — canonical User.id, not Profile.id (Module 01 Slice 2)', async () => {
       // The proposal's providerProfileId is swapped to the accepting
       // client's own profile — findUserIdById resolves that back to

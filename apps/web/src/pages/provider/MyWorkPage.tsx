@@ -17,6 +17,8 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
 import { proposalsApi, connectionsApi } from '../../lib/proposals-api';
+import { fetchAllPages } from '../../lib/api-fetch';
+import { paymentsApi } from '../../lib/payments-api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 import { formatEventWhen } from '../../lib/formatJob';
 
@@ -67,11 +69,16 @@ export const MyWorkPage: React.FC = () => {
   );
   const myContracts = myConnections.data?.items ?? [];
 
-  // Total earnings won/held
-  const totalEarnings = myContracts.reduce(
-    (acc, curr) => acc + Number(curr.proposal.agreedPrice ?? curr.proposal.proposedPrice),
-    0,
+  // Total revenue won — like FinancesPage, only PAID payments count, not
+  // every connection's proposal price regardless of whether it was paid.
+  const myPayments = useApiResource(
+    () => fetchAllPages((page) => paymentsApi.mine(accessToken as string, page, 100)),
+    [accessToken],
+    { enabled: Boolean(accessToken) },
   );
+  const totalEarnings = (myPayments.data ?? [])
+    .filter((p) => p.status === 'PAID')
+    .reduce((sum, p) => sum + Number(p.amount), 0);
 
   // Availability calendar — real data as of the availability-calendar module:
   // pending dates from submitted proposals, confirmed dates from active
@@ -151,8 +158,7 @@ export const MyWorkPage: React.FC = () => {
             <span className="text-xs font-medium">Client Rating</span>
             <CheckCircle2 className="w-4 h-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-ink">{currentUser.rating || 4.98}</p>
-          <p className="text-[11px] text-ink-muted mt-1">100% on-time delivery</p>
+          <p className="text-2xl font-bold text-ink">{currentUser.rating || 4.95}</p>
         </Card>
       </div>
 

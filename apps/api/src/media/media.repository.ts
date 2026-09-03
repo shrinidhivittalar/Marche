@@ -36,4 +36,27 @@ export class MediaRepository {
       take,
     });
   }
+
+  /**
+   * Claims one stale-by-age row for the sweep, but only if it is still
+   * PENDING — the same `updateMany`-with-status-guard pattern as
+   * ProposalsRepository.transitionFromSubmitted. The age check that picked
+   * this row can be stale by the time the sweep acts: the owner may have
+   * called completeUpload() in between. The status test travels inside the
+   * UPDATE, so that race is serialised by Postgres on the row — the sweep
+   * either flips a row nobody has touched, or matches zero rows because
+   * completeUpload() already moved it off PENDING.
+   *
+   * Returns the number of rows moved: 1 if the sweep won and should also
+   * delete the object from storage, 0 if the upload completed first and
+   * storage must be left alone.
+   */
+  markStaleFailed(id: string): Promise<number> {
+    return this.prisma.client.media
+      .updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'FAILED' },
+      })
+      .then((result) => result.count);
+  }
 }

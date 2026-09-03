@@ -217,6 +217,18 @@ export class MediaService {
    * deletes anything that did land in storage). Does not remove the rows —
    * they stay as a FAILED record rather than disappearing.
    *
+   * findStalePending's age check is a snapshot, not a lock: between that
+   * read and this loop, the row's real owner may have called
+   * completeUpload() and moved it off PENDING. Deleting the object from
+   * storage first (as a plain age-only sweep would) can therefore destroy a
+   * file that just finished uploading. So each row is first *claimed* with
+   * markStaleFailed — an updateMany guarded by `status: PENDING`, the same
+   * conditional-write pattern ProposalsRepository.transitionFromSubmitted
+   * uses to settle a status race in the database rather than in this
+   * process. Only a row the sweep actually won (count === 1) has its object
+   * deleted; a row completeUpload() won first matches zero rows here and is
+   * left untouched.
+   *
    * Fire-and-forget on purpose: this is housekeeping, and a failure here
    * must never turn a user's upload request into an error. Bounded per run
    * so a large backlog is cleared over several requests rather than one
@@ -227,16 +239,21 @@ export class MediaService {
       const cutoff = new Date(Date.now() - mediaConfig.orphanAgeMinutes * 60_000);
       const stale = await this.mediaRepository.findStalePending(cutoff, 20);
 
+      let swept = 0;
       for (const media of stale) {
-        // Deleted from storage too: a presigned URL may have completed after
-        // the row went stale, which would otherwise leave a paid-for object
-        // nothing references.
+        const claimed = await this.mediaRepository.markStaleFailed(media.id);
+        if (claimed === 0) {
+          // completeUpload() won the race for this row between the read
+          // above and now — it is no longer PENDING, so the object it
+          // points at is real and must not be deleted.
+          continue;
+        }
         await this.storage.delete(media.objectKey);
-        await this.mediaRepository.update(media.id, { status: 'FAILED' });
+        swept += 1;
       }
 
-      if (stale.length > 0) {
-        this.logger.log(`Swept ${stale.length} abandoned upload(s)`);
+      if (swept > 0) {
+        this.logger.log(`Swept ${swept} abandoned upload(s)`);
       }
     } catch (err) {
       this.logger.warn(

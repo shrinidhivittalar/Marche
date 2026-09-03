@@ -8,6 +8,7 @@ import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBa
 import { PriceNegotiationPanel } from '../../components/proposals/PriceNegotiationPanel';
 import { useApiResource } from '../../hooks/useApiResource';
 import { usePolling } from '../../hooks/usePolling';
+import { useRazorpayCheckout } from '../../hooks/useRazorpayCheckout';
 import {
   connectionsApi,
   proposalsApi,
@@ -15,7 +16,6 @@ import {
   type ApiProposal,
 } from '../../lib/proposals-api';
 import { paymentsApi } from '../../lib/payments-api';
-import { loadRazorpayCheckout } from '../../lib/loadRazorpayCheckout';
 import { ApiError } from '../../lib/api';
 import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
 
@@ -48,6 +48,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
     enabled: Boolean(token),
   });
 
+  const message = (err: unknown) =>
+    err instanceof ApiError
+      ? err.message
+      : "We couldn't reach the server. Check your connection and try again.";
+
   const [confirmingHire, setConfirmingHire] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +63,6 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   // hiring happened in, and reappeared as if unpaid was never offered on any
   // later visit.
   const [justAcceptedConnection, setJustAcceptedConnection] = useState<ApiConnection | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Only runs once the proposal is already accepted — an open or declined
   // proposal has no connection to find.
@@ -81,6 +84,15 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   // of this tab. Without polling, a client sitting on this exact page would
   // never see "Payment received" turn up on its own.
   usePolling(paymentStatus.refetch, Boolean(connection) && !paid);
+
+  const razorpayCheckout = useRazorpayCheckout({
+    token,
+    connectionId: connection?.id ?? '',
+    description: `Booking: ${connection?.job.title ?? ''}`,
+    prefillName: currentUser.name,
+    onVerified: () => paymentStatus.refetch(),
+    formatError: (err) => message(err),
+  });
 
   if (proposal.loading) {
     return <p className="text-xs text-ink-muted py-12 text-center">Loading proposal…</p>;
@@ -104,11 +116,6 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
   const files = attachments.data ?? [];
   const open = offer.status === 'SUBMITTED';
 
-  const message = (err: unknown) =>
-    err instanceof ApiError
-      ? err.message
-      : "We couldn't reach the server. Check your connection and try again.";
-
   const handleAccept = async () => {
     setBusy(true);
     setError(null);
@@ -125,48 +132,6 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       setConfirmingHire(false);
     } finally {
       setBusy(false);
-    }
-  };
-
-  const handlePay = async () => {
-    if (!connection) return;
-    setPaying(true);
-    setPaymentError(null);
-    try {
-      await loadRazorpayCheckout();
-      const order = await paymentsApi.createOrder(token, connection.id);
-
-      if (!window.Razorpay) {
-        throw new Error('Payment checkout failed to load.');
-      }
-      new window.Razorpay({
-        key: order.razorpayKeyId,
-        amount: order.amountPaise,
-        currency: order.currency,
-        order_id: order.razorpayOrderId,
-        name: 'Marché',
-        description: `Booking: ${connection.job.title}`,
-        prefill: { name: currentUser.name },
-        theme: { color: '#166534' },
-        handler: async (response) => {
-          try {
-            await paymentsApi.verify(token, connection.id, {
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            await paymentStatus.refetch();
-          } catch (err) {
-            setPaymentError(message(err));
-          } finally {
-            setPaying(false);
-          }
-        },
-        modal: { ondismiss: () => setPaying(false) },
-      }).open();
-    } catch (err) {
-      setPaymentError(message(err));
-      setPaying(false);
     }
   };
 
@@ -236,11 +201,16 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
                   agreed to.
                 </p>
               </div>
-              {paymentError && (
-                <p className="text-xs font-semibold text-destructive">{paymentError}</p>
+              {razorpayCheckout.error && (
+                <p className="text-xs font-semibold text-destructive">{razorpayCheckout.error}</p>
               )}
-              <Button icon={CreditCard} onClick={handlePay} disabled={paying} data-testid="pay-now">
-                {paying ? 'Opening checkout…' : `Pay ${formatOffer(offer)} now`}
+              <Button
+                icon={CreditCard}
+                onClick={razorpayCheckout.pay}
+                disabled={razorpayCheckout.paying}
+                data-testid="pay-now"
+              >
+                {razorpayCheckout.paying ? 'Opening checkout…' : `Pay ${formatOffer(offer)} now`}
               </Button>
             </>
           )}
