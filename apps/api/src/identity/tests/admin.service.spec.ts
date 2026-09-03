@@ -31,6 +31,7 @@ describe('AdminService.changePlatformRole', () => {
       findById: jest.fn(),
       countByPlatformRole: jest.fn(),
       updatePlatformRoleIfCurrent: jest.fn(),
+      updateStatusIfCurrent: jest.fn(),
     } as unknown as jest.Mocked<UsersRepository>;
     auditService = { record: jest.fn() } as unknown as jest.Mocked<AuditService>;
     service = new AdminService(usersRepository, auditService);
@@ -142,6 +143,120 @@ describe('AdminService.changePlatformRole', () => {
     usersRepository.updatePlatformRoleIfCurrent.mockResolvedValue(0);
 
     await expect(service.changePlatformRole('actor_1', 'target_1', 'ADMIN')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(auditService.record).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminService.setUserStatus', () => {
+  let usersRepository: jest.Mocked<UsersRepository>;
+  let auditService: jest.Mocked<AuditService>;
+  let service: AdminService;
+
+  beforeEach(() => {
+    usersRepository = {
+      findById: jest.fn(),
+      countByPlatformRole: jest.fn(),
+      updateStatusIfCurrent: jest.fn(),
+    } as unknown as jest.Mocked<UsersRepository>;
+    auditService = { record: jest.fn() } as unknown as jest.Mocked<AuditService>;
+    service = new AdminService(usersRepository, auditService);
+  });
+
+  it('rejects a self-change, regardless of direction', async () => {
+    await expect(service.setUserStatus('actor_1', 'actor_1', 'SUSPENDED')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(usersRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it('404s when the target does not exist', async () => {
+    usersRepository.findById.mockResolvedValue(null);
+
+    await expect(service.setUserStatus('actor_1', 'missing', 'SUSPENDED')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('404s for a soft-deleted target', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ deletedAt: new Date() }));
+
+    await expect(service.setUserStatus('actor_1', 'target_1', 'SUSPENDED')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('is a true no-op when the requested status equals the current one — no write, no audit', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ status: 'SUSPENDED' }));
+
+    const result = await service.setUserStatus('actor_1', 'target_1', 'SUSPENDED');
+
+    expect(result).toEqual({ changed: false, status: 'SUSPENDED' });
+    expect(usersRepository.updateStatusIfCurrent).not.toHaveBeenCalled();
+    expect(auditService.record).not.toHaveBeenCalled();
+  });
+
+  it('suspends an active user and audits the transition', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ status: 'ACTIVE' }));
+    usersRepository.updateStatusIfCurrent.mockResolvedValue(1);
+
+    const result = await service.setUserStatus('actor_1', 'target_1', 'SUSPENDED');
+
+    expect(result).toEqual({ changed: true, status: 'SUSPENDED' });
+    expect(usersRepository.updateStatusIfCurrent).toHaveBeenCalledWith(
+      'target_1',
+      'ACTIVE',
+      'SUSPENDED',
+    );
+    expect(auditService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'admin.user_status.changed',
+        userId: 'actor_1',
+        metadata: { targetUserId: 'target_1', previousStatus: 'ACTIVE', newStatus: 'SUSPENDED' },
+      }),
+    );
+  });
+
+  it('restores a suspended user back to active', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ status: 'SUSPENDED' }));
+    usersRepository.updateStatusIfCurrent.mockResolvedValue(1);
+
+    const result = await service.setUserStatus('actor_1', 'target_1', 'ACTIVE');
+
+    expect(result).toEqual({ changed: true, status: 'ACTIVE' });
+    expect(usersRepository.countByPlatformRole).not.toHaveBeenCalled();
+  });
+
+  it('rejects suspending the last Super Admin', async () => {
+    usersRepository.findById.mockResolvedValue(
+      buildUser({ platformRole: 'SUPER_ADMIN', status: 'ACTIVE' }),
+    );
+    usersRepository.countByPlatformRole.mockResolvedValue(1);
+
+    await expect(service.setUserStatus('actor_1', 'target_1', 'SUSPENDED')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(usersRepository.updateStatusIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('suspends a Super Admin when other Super Admins remain', async () => {
+    usersRepository.findById.mockResolvedValue(
+      buildUser({ platformRole: 'SUPER_ADMIN', status: 'ACTIVE' }),
+    );
+    usersRepository.countByPlatformRole.mockResolvedValue(2);
+    usersRepository.updateStatusIfCurrent.mockResolvedValue(1);
+
+    const result = await service.setUserStatus('actor_1', 'target_1', 'SUSPENDED');
+
+    expect(result.changed).toBe(true);
+  });
+
+  it('surfaces a concurrent-change conflict when the conditional update affects zero rows', async () => {
+    usersRepository.findById.mockResolvedValue(buildUser({ status: 'ACTIVE' }));
+    usersRepository.updateStatusIfCurrent.mockResolvedValue(0);
+
+    await expect(service.setUserStatus('actor_1', 'target_1', 'SUSPENDED')).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(auditService.record).not.toHaveBeenCalled();
