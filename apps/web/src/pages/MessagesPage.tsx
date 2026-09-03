@@ -15,6 +15,7 @@ import { useApp } from '../context/AppContext';
 import { Button, Input, Skeleton } from '@marche/ui';
 import { useApiResource } from '../hooks/useApiResource';
 import { usePolling } from '../hooks/usePolling';
+import { useMessagesSocket } from '../hooks/useMessagesSocket';
 import { connectionsApi, type ApiConnection } from '../lib/proposals-api';
 import { messagesApi, type ApiMessage } from '../lib/messages-api';
 
@@ -68,10 +69,12 @@ function conversationFromConnection(conn: ApiConnection, isClientView: boolean):
 
 type ConversationFilter = 'all' | 'unread' | 'favorites';
 
-// No websocket or SSE infrastructure exists anywhere in this app yet (see
-// FEATURE_GAP_ANALYSIS.md's messaging section) — polling on the screen that
-// actually needs near-live delivery is the minimal way to get replies to
-// show up without a page refresh, without adding a new pattern for one page.
+// The open thread now gets real push delivery via MessagesGateway
+// (FEATURE_GAP_ANALYSIS.md #2) instead of polling — see the
+// useMessagesSocket effect below. The conversation list (previews, for
+// every connection whether its room is joined or not) still polls: making
+// every row live would mean joining every connection's room up front, more
+// surface than the actual complaint (an open chat feeling laggy) justifies.
 const POLL_INTERVAL_MS = 4000;
 
 export const MessagesPage: React.FC = () => {
@@ -122,10 +125,33 @@ export const MessagesPage: React.FC = () => {
   // thread order, same as the mock data this replaces was sorted client-side.
   const activeMessages: ApiMessage[] = thread.data ? [...thread.data.items].reverse() : [];
 
-  // Poll the open thread and the conversation-list previews so a reply from
-  // the other party shows up without a manual refresh.
-  usePolling(thread.refetch, Boolean(activeConv), POLL_INTERVAL_MS);
+  // Poll the conversation-list previews so an unread badge on a conversation
+  // that isn't currently open still shows up without a manual refresh.
   usePolling(previews.refetch, Boolean(token), POLL_INTERVAL_MS);
+
+  // The open thread gets real push delivery instead: one socket per session
+  // (useMessagesSocket), joining/leaving the active conversation's room as
+  // it changes. message:new covers a reply arriving; message:read covers
+  // the other party opening the thread and the checkmark flipping live.
+  const socket = useMessagesSocket(token);
+  useEffect(() => {
+    if (!socket || !activeConv) return;
+
+    socket.emit('join:connection', { connectionId: activeConv.id });
+    const handleUpdate = () => {
+      void thread.refetch();
+      void previews.refetch();
+    };
+    socket.on('message:new', handleUpdate);
+    socket.on('message:read', handleUpdate);
+
+    return () => {
+      socket.emit('leave:connection', { connectionId: activeConv.id });
+      socket.off('message:new', handleUpdate);
+      socket.off('message:read', handleUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, activeConv?.id]);
 
   const previewFor = (convId: string) => previews.data?.find((p) => p.connectionId === convId);
 
