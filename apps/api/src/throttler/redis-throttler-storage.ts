@@ -79,6 +79,12 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
   constructor(redisUrl: string | undefined) {
     if (redisUrl) {
       this.client = new Redis(redisUrl);
+      // ioredis emits 'error' on every failed connection attempt; with no
+      // listener, Node treats it as an unhandled error and crashes the
+      // process — so an unreachable Redis would take down the whole API.
+      this.client.on('error', (err) => {
+        this.logger.error(`Redis throttler storage connection error: ${err.message}`);
+      });
       this.sweepInterval = null;
     } else {
       this.client = null;
