@@ -112,6 +112,8 @@ export interface ApiConnection {
   proposal: {
     id: string;
     proposedPrice: string;
+    agreedPrice: string | null;
+    agreedPriceAt: string | null;
     deliveryDays: number;
     submittedAt: string;
   };

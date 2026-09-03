@@ -161,6 +161,11 @@ describe('AuthService', () => {
       usersRepository.findByEmail.mockResolvedValue(null);
       usersRepository.create.mockResolvedValue(buildUser());
       const newAddressResult = await authService.register({ ...registerDto });
+      // Account creation is detached from the response (see
+      // REGISTER_FLOOR_MS / notBefore) — let it settle before clearing mocks,
+      // otherwise its calls would land after the clear and bleed into the
+      // duplicate-branch assertions below.
+      await new Promise((resolve) => setImmediate(resolve));
 
       jest.clearAllMocks();
       usersRepository.findByEmail.mockResolvedValue(buildUser());
@@ -306,19 +311,26 @@ describe('AuthService', () => {
       expect(usersRepository.grantCapability).not.toHaveBeenCalled();
     });
 
-    it('rolls back nothing further and rethrows if capability granting fails mid-transaction', async () => {
+    it('rolls back nothing further if capability granting fails mid-transaction', async () => {
       usersRepository.findByEmail.mockResolvedValue(null);
       const created = buildUser();
       usersRepository.create.mockResolvedValue(created);
       usersRepository.grantCapability.mockRejectedValue(new Error('db unavailable'));
 
-      await expect(authService.register({ ...registerDto })).rejects.toThrow('db unavailable');
+      // Account creation is detached from the response (see REGISTER_FLOOR_MS
+      // / notBefore), so register() still resolves the same acknowledgement
+      // — the failure surfaces only via the logger, not a rejection.
+      await expect(authService.register({ ...registerDto })).resolves.toEqual({
+        status: 'verification_email_sent',
+      });
+      // Let the detached createRegisteredUser promise settle before asserting.
+      await new Promise((resolve) => setImmediate(resolve));
       // The transaction callback throwing is what causes Prisma to roll back
       // User + Profile + Capability together — this test's mocked
       // $transaction just invokes the callback directly, so the meaningful
-      // assertion is that the error from inside the callback propagates
-      // rather than being swallowed, which is what would let a partial
-      // registration succeed.
+      // assertion is that the error from inside the callback stops the rest
+      // of createRegisteredUser rather than being swallowed silently, which
+      // is what would let a partial registration succeed.
       expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
   });

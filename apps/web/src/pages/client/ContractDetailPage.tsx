@@ -137,7 +137,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
 
   const c = connection.data;
   const otherParty = isClient ? c.providerProfile : c.clientProfile;
-  const amount = Number(c.proposal.proposedPrice);
+  const amount = Number(c.proposal.agreedPrice ?? c.proposal.proposedPrice);
   const eventHasPassed =
     Boolean(c.job.eventDate) &&
     new Date(c.job.eventDate as string).getTime() <= new Date().getTime();
