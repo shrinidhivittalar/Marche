@@ -16,6 +16,24 @@ import type {
 // this is additive.
 export type UserWithCapabilities = User & { capabilities: UserCapability[] };
 
+// The admin browse list's row shape — deliberately not User or
+// UserWithCapabilities. passwordHash must never leave this repository for
+// a multi-row admin listing (unlike findById/findByEmail, which exist to
+// feed a single caller's own auth flow), so this is a projection built
+// with an explicit Prisma `select` rather than the full row.
+const ADMIN_LIST_FIELDS = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  platformRole: true,
+  status: true,
+  emailVerifiedAt: true,
+  createdAt: true,
+} satisfies Prisma.UserSelect;
+
+export type AdminUserListItem = Prisma.UserGetPayload<{ select: typeof ADMIN_LIST_FIELDS }>;
+
 // Postgres' unique-violation code, surfaced by Prisma — same duck-typed
 // check already used in skills.service.ts, proposals.service.ts, etc.
 const UNIQUE_VIOLATION = 'P2002';
@@ -154,5 +172,51 @@ export class UsersRepository {
         data: { status: newStatus },
       })
       .then((result) => result.count);
+  }
+
+  // ---------- admin browse list ----------
+
+  listAll(
+    filters: { status?: UserStatus; platformRole?: PlatformRole; search?: string },
+    skip: number,
+    take: number,
+  ): Promise<AdminUserListItem[]> {
+    return this.prisma.client.user.findMany({
+      where: this.adminFilter(filters),
+      select: ADMIN_LIST_FIELDS,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take,
+    });
+  }
+
+  countAll(filters: {
+    status?: UserStatus;
+    platformRole?: PlatformRole;
+    search?: string;
+  }): Promise<number> {
+    return this.prisma.client.user.count({ where: this.adminFilter(filters) });
+  }
+
+  private adminFilter(filters: {
+    status?: UserStatus;
+    platformRole?: PlatformRole;
+    search?: string;
+  }): Prisma.UserWhereInput {
+    return {
+      // Soft-deleted rows are never part of the browse list, same
+      // convention countByPlatformRole already uses. Independent of
+      // `filters.status` — status and deletedAt are two separate signals
+      // on this model (account standing vs. existence).
+      deletedAt: null,
+      ...(filters.status && { status: filters.status }),
+      ...(filters.platformRole && { platformRole: filters.platformRole }),
+      ...(filters.search && {
+        OR: [
+          { email: { contains: filters.search, mode: 'insensitive' } },
+          { name: { contains: filters.search, mode: 'insensitive' } },
+        ],
+      }),
+    };
   }
 }

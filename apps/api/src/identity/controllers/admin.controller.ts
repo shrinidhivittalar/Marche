@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PlatformRoleGuard } from '../guards/platform-role.guard';
@@ -7,6 +7,7 @@ import { CurrentUser } from '../current-user.decorator';
 import { AdminService } from '../services/admin.service';
 import { UpdatePlatformRoleDto } from '../dto/update-platform-role.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
+import { UserListQueryDto } from '../dto/user-list-query.dto';
 import type { AuthenticatedUser } from '../strategies/jwt.strategy';
 
 // Super Admin only. module1-implementation-contract.md §5: this is the one
@@ -19,6 +20,16 @@ import type { AuthenticatedUser } from '../strategies/jwt.strategy';
 @UseGuards(JwtAuthGuard, PlatformRoleGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  // ADMIN, same bar as :id/status — this is the "identify a problematic
+  // user" half of the same gap, not a higher-stakes action than suspending
+  // one.
+  @Get()
+  @RequirePlatformRole('ADMIN')
+  @ApiOperation({ summary: 'Browse/search users (Admin only)' })
+  listUsers(@Query() query: UserListQueryDto) {
+    return this.adminService.listUsers(query);
+  }
 
   @Patch(':id/platform-role')
   @RequirePlatformRole('SUPER_ADMIN')
