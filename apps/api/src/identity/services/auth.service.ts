@@ -56,6 +56,14 @@ const DUMMY_PASSWORD_HASH = argon2.hash('dummy-password-for-timing-parity');
 // exceeds it.
 const FORGOT_PASSWORD_FLOOR_MS = 250;
 
+// Same floor, same reasoning, applied to register()'s sibling gap: the
+// duplicate branch (SELECT + email + audit) is otherwise measurably
+// faster than the new-account branch (SELECT + 4-statement $transaction +
+// verification token + audit), which lets response timing answer the same
+// "is this email registered" question the identical response body was
+// meant to hide.
+const REGISTER_FLOOR_MS = 250;
+
 async function notBefore<T>(floorMs: number, work: Promise<T>): Promise<T> {
   const [result] = await Promise.all([
     work,
@@ -141,6 +149,10 @@ export class AuthService {
   // the duplicate branch has no user it is allowed to describe, and inventing
   // plausible-looking fields would be a lie the frontend could act on.
   async register(dto: RegisterDto): Promise<RegisterResult> {
+    return notBefore(REGISTER_FLOOR_MS, this.performRegister(dto));
+  }
+
+  private async performRegister(dto: RegisterDto): Promise<RegisterResult> {
     const existing = await this.usersRepository.findByEmail(dto.email);
     // Hashed on both branches: argon2 dominates this request's cost, so
     // skipping it for a duplicate would replace the status-code oracle with
@@ -148,15 +160,43 @@ export class AuthService {
     const passwordHash = await argon2.hash(dto.password);
 
     if (existing) {
-      await this.emailService.sendDuplicateRegistrationEmail(existing.email);
-      await this.auditService.record({
-        eventType: AUTH_EVENTS.REGISTER_DUPLICATE,
-        userId: existing.id,
-        email: existing.email,
-      });
+      // Detached, same as forgotPassword: nothing past the lookup+hash is
+      // awaited, so both branches return at the same point regardless of
+      // how long the email send or audit write happens to take.
+      void this.notifyDuplicateRegistration(existing).catch((error: unknown) =>
+        this.logger.error(`Duplicate registration notice failed: ${String(error)}`),
+      );
       return REGISTER_ACKNOWLEDGEMENT;
     }
 
+    void this.createRegisteredUser(dto, passwordHash).catch((error: unknown) =>
+      this.logger.error(`Registration failed after acknowledgement: ${String(error)}`),
+    );
+
+    return REGISTER_ACKNOWLEDGEMENT;
+  }
+
+  // Deliberately returns the same status and the same body whether or not the
+  // address was already registered. Answering "409, that email is taken" turns
+  // the endpoint into a free membership oracle — anyone can test a list of
+  // addresses against the site — and it undoes the care taken in login and
+  // forgot-password, which are already non-disclosing. The real owner is told
+  // instead, by email, that someone tried to sign up with their address, which
+  // is the only party entitled to that information.
+  //
+  // The body is a fixed acknowledgement rather than the created user because
+  // the duplicate branch has no user it is allowed to describe, and inventing
+  // plausible-looking fields would be a lie the frontend could act on.
+  private async notifyDuplicateRegistration(existing: User): Promise<void> {
+    await this.emailService.sendDuplicateRegistrationEmail(existing.email);
+    await this.auditService.record({
+      eventType: AUTH_EVENTS.REGISTER_DUPLICATE,
+      userId: existing.id,
+      email: existing.email,
+    });
+  }
+
+  private async createRegisteredUser(dto: RegisterDto, passwordHash: string): Promise<void> {
     // User + Profile + initial UserCapability must be created together: if
     // the process dies partway, a user with no profile or no capability row
     // breaks downstream profile/authorization endpoints. The capability
@@ -192,8 +232,6 @@ export class AuthService {
     // address belongs to whoever submitted it, and marking a referral
     // joined off an unverified registration would let anyone spoof a
     // referral by registering with an email they don't own.
-
-    return REGISTER_ACKNOWLEDGEMENT;
   }
 
   async login(dto: LoginDto, context: RequestContext): Promise<AuthTokens & { user: PublicUser }> {
