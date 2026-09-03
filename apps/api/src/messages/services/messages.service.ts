@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MessagesRepository } from '../repositories/messages.repository';
+import { MessagesGateway } from '../gateways/messages.gateway';
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
@@ -15,6 +16,7 @@ export class MessagesService {
     private readonly connectionsService: ConnectionsService,
     private readonly connectionsRepository: ConnectionsRepository,
     private readonly profilesRepository: ProfilesRepository,
+    private readonly messagesGateway: MessagesGateway,
   ) {}
 
   // ---------- one connection's thread ----------
@@ -35,12 +37,18 @@ export class MessagesService {
 
   async send(userId: string, connectionId: string, body: string): Promise<Message> {
     await this.connectionsService.findById(userId, connectionId);
-    return this.messagesRepository.create(connectionId, userId, body);
+    const message = await this.messagesRepository.create(connectionId, userId, body);
+    // Best-effort push to whoever already has this thread open — the REST
+    // response above is the source of truth regardless of whether anyone
+    // is connected to receive this.
+    this.messagesGateway.emitNewMessage(connectionId, message);
+    return message;
   }
 
   async markRead(userId: string, connectionId: string): Promise<void> {
     await this.connectionsService.findById(userId, connectionId);
     await this.messagesRepository.markConnectionRead(connectionId, userId);
+    this.messagesGateway.emitMessagesRead(connectionId, userId);
   }
 
   // ---------- across every connection (conversation list) ----------
