@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Wand2, ArrowLeft } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button } from '@marche/ui';
+import { ApiError } from '../../lib/api';
+import { jobsApi, AI_JOB_DRAFT_STORAGE_KEY } from '../../lib/jobs-api';
 
 const MAX_PROMPT_LENGTH = 1500;
 
@@ -41,7 +43,9 @@ function PhaseStepper() {
               </span>
             </div>
             {idx < PHASES.length - 1 && (
-              <div className={`h-px flex-1 mt-[-1.25rem] ${idx === 0 ? 'bg-primary' : 'bg-border'}`} />
+              <div
+                className={`h-px flex-1 mt-[-1.25rem] ${idx === 0 ? 'bg-primary' : 'bg-border'}`}
+              />
             )}
           </React.Fragment>
         );
@@ -51,15 +55,40 @@ function PhaseStepper() {
 }
 
 export const PostJobIntroPage: React.FC = () => {
-  const { currentUser, navigate, goBack } = useApp();
+  const { currentUser, navigate, goBack, accessToken } = useApp();
+  const token = accessToken as string;
 
   const [view, setView] = useState<IntroView>('welcome');
   const [prompt, setPrompt] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleContinue = async () => {
+    setGenerating(true);
+    try {
+      const [titleResult, descriptionResult] = await Promise.all([
+        jobsApi.rephraseField(token, 'title', prompt),
+        jobsApi.rephraseField(token, 'description', prompt),
+      ]);
+      sessionStorage.setItem(
+        AI_JOB_DRAFT_STORAGE_KEY,
+        JSON.stringify({ title: titleResult.text, description: descriptionResult.text }),
+      );
+      navigate('/client/jobs/new/manual');
+    } catch (err) {
+      showToast(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not generate your job post. Please try again.',
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const firstName = currentUser.name.split(' ')[0];
@@ -113,7 +142,9 @@ export const PostJobIntroPage: React.FC = () => {
           <p className="text-[11px] text-ink-muted pt-6">
             Beta feature powered by Marché AI ·{' '}
             <button
-              onClick={() => showToast("This isn't wired up yet — Marché is still a frontend preview.")}
+              onClick={() =>
+                showToast("This isn't wired up yet — Marché is still a frontend preview.")
+              }
               className="underline hover:text-ink cursor-pointer"
             >
               How it works
@@ -143,19 +174,19 @@ export const PostJobIntroPage: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between pt-2">
-            <Button variant="outline" onClick={() => setView('welcome')}>
+            <Button variant="outline" onClick={() => setView('welcome')} disabled={generating}>
               Back
             </Button>
-            <Button
-              disabled={prompt.trim().length === 0}
-              onClick={() => showToast("AI-assisted job posting isn't wired up yet — Marché is still a frontend preview.")}
-            >
-              Continue
+            <Button disabled={prompt.trim().length === 0 || generating} onClick={handleContinue}>
+              {generating ? 'Generating your job post…' : 'Continue'}
             </Button>
           </div>
 
           <div className="h-1 w-full bg-border rounded-full overflow-hidden">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: '66%' }} />
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: '66%' }}
+            />
           </div>
         </div>
       )}

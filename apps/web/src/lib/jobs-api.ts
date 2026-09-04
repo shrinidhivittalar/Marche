@@ -10,6 +10,12 @@ import { apiFetch, toQuery } from './api-fetch';
 import type { Page } from './marketplace-api';
 import type { ServiceMode } from './category-templates-api';
 
+// PostJobIntroPage's AI prompt flow writes { title, description } here right
+// before navigating to CreateJobPage, which reads it once on mount and
+// clears it. sessionStorage rather than router state: navigate() only takes
+// a path (see AppContext), no state-passing mechanism exists.
+export const AI_JOB_DRAFT_STORAGE_KEY = 'marche:ai-job-draft';
+
 // The API returns the marketplace envelope; normalised to the same Page
 // shape every other screen already consumes.
 type JobsEnvelope<T> = {
