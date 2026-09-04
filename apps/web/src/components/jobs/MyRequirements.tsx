@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, MapPin, Pencil, Plus, Search, Trash2, Ban } from 'lucide-react';
+import { Calendar, MapPin, Pencil, Plus, Search, Trash2, Ban, Users } from 'lucide-react';
 import { Button, Card, Input } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
@@ -10,15 +10,13 @@ import { EmptyState } from '../common/EmptyState';
 
 // A client's own requirements, from GET /jobs/me.
 //
-// Replaces the mock list that stood here. Two of that list's controls are
+// Replaces the mock list that stood here. One of that list's controls is
 // deliberately absent rather than reimplemented:
 //
 // - Pause / resume. The lifecycle is DRAFT -> PUBLISHED -> FILLED with
 //   CANCELLED reachable from the first two, and a paused state would
 //   reopen a decision already made and tested. Cancelling is the way to
 //   stop receiving proposals.
-// - Proposal counts. Module 5 answers that with a query; storing it is what
-//   PROPOSAL_ACTIVITY was cut for.
 //
 // Everything else survives with real data behind it: filter by state,
 // search, resume a draft, cancel a published requirement, delete a draft.
@@ -237,6 +235,12 @@ function RequirementRow({
 
       <div className="flex items-center gap-3 text-[11px] text-ink-muted flex-wrap">
         <span>{job.category.name}</span>
+        {(job.status === 'PUBLISHED' || job.status === 'FILLED') && (
+          <span className="flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            {job.proposalCount} proposal{job.proposalCount === 1 ? '' : 's'}
+          </span>
+        )}
         {job.locationCoarse && (
           <span className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />
