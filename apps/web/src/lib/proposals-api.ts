@@ -40,6 +40,11 @@ export interface ProposalCore {
   id: string;
   coverMessage: string;
   proposedPrice: string;
+  /** The negotiated final figure, if the two parties agreed on one via
+   * price-negotiations before hiring. Always agreedPrice ?? proposedPrice
+   * for display/charging — see formatOffer in formatProposal.ts. */
+  agreedPrice: string | null;
+  agreedPriceAt: string | null;
   deliveryDays: number;
   status: ProposalStatus;
   submittedAt: string;

@@ -20,6 +20,12 @@ const PROPOSAL_FIELDS = {
   id: true,
   coverMessage: true,
   proposedPrice: true,
+  // Negotiated final figure, if the two parties agreed on one via
+  // /price-negotiations before hiring — never displayed/charged without
+  // falling back to proposedPrice first (agreedPrice ?? proposedPrice),
+  // same convention as ConnectionsRepository's own select.
+  agreedPrice: true,
+  agreedPriceAt: true,
   deliveryDays: true,
   status: true,
   submittedAt: true,
@@ -46,6 +52,12 @@ const OWN_PROPOSAL_FIELDS = {
   id: true,
   coverMessage: true,
   proposedPrice: true,
+  // Negotiated final figure, if the two parties agreed on one via
+  // /price-negotiations before hiring — never displayed/charged without
+  // falling back to proposedPrice first (agreedPrice ?? proposedPrice),
+  // same convention as ConnectionsRepository's own select.
+  agreedPrice: true,
+  agreedPriceAt: true,
   deliveryDays: true,
   status: true,
   submittedAt: true,

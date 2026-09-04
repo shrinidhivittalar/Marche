@@ -11,10 +11,15 @@ const rupees = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 0,
 });
 
-export function formatOffer(proposal: { proposedPrice: string }): string {
+export function formatOffer(proposal: {
+  proposedPrice: string;
+  agreedPrice?: string | null;
+}): string {
+  // Negotiated price wins once one exists — a proposal that's been through
+  // price-negotiations should never display or charge the original figure.
   // Said plainly rather than shown as "₹0" — a free offer is a real thing a
   // provider may make, and it should read as deliberate.
-  const value = Number(proposal.proposedPrice);
+  const value = Number(proposal.agreedPrice ?? proposal.proposedPrice);
   return value === 0 ? 'Free' : rupees.format(value);
 }
 
