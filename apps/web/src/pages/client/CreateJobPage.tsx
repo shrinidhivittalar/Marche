@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,7 +24,7 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { ApiError } from '../../lib/api';
 import { marketplaceApi } from '../../lib/marketplace-api';
 import { mediaApi } from '../../lib/media-api';
-import { jobsApi, type JobBody } from '../../lib/jobs-api';
+import { jobsApi, AI_JOB_DRAFT_STORAGE_KEY, type JobBody } from '../../lib/jobs-api';
 import {
   categoryTemplatesApi,
   type PublicCategoryTemplate,
@@ -69,6 +69,20 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
 // Matches JobsService.MAX_ATTACHMENTS. Stated here so the button disables
 // before a request is refused.
 const MAX_ATTACHMENTS = 10;
+
+// Set by PostJobIntroPage's AI prompt flow (jobsApi.rephraseField run against
+// the client's free-text prompt) right before navigating here — read once on
+// mount and cleared, so a direct visit to this route never picks up stale
+// content from an earlier AI session.
+function readAiDraftPrefill(): { title: string; description: string } | null {
+  const raw = sessionStorage.getItem(AI_JOB_DRAFT_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { title: string; description: string };
+  } catch {
+    return null;
+  }
+}
 
 // Mirrors the DTO, so a client is told before submitting rather than after.
 const MIN_TITLE = 3;
@@ -184,10 +198,15 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Empty defaults on purpose — see the note at the top of the file.
-  const [title, setTitle] = useState('');
+  // Empty defaults on purpose — see the note at the top of the file. The one
+  // exception is content the client actually provided: PostJobIntroPage's AI
+  // prompt flow, handed off via sessionStorage (see readAiDraftPrefill)
+  // rather than faked demo data.
+  const [title, setTitle] = useState(() => (draftId ? '' : (readAiDraftPrefill()?.title ?? '')));
   const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(() =>
+    draftId ? '' : (readAiDraftPrefill()?.description ?? ''),
+  );
   const [location, setLocation] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [timingMode, setTimingMode] = useState<EventTimingMode>('fixed');
@@ -214,6 +233,12 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
   const [originalCategoryId, setOriginalCategoryId] = useState<string | null>(null);
   const [categoryData, setCategoryData] = useState<CategoryDataValues>({});
   const [serviceMode, setServiceMode] = useState<ServiceMode | ''>('');
+
+  // Consumed once, on mount — a later direct visit to this route (or a
+  // resumed draft) must not pick up an earlier AI session's leftovers.
+  useEffect(() => {
+    if (!draftId) sessionStorage.removeItem(AI_JOB_DRAFT_STORAGE_KEY);
+  }, [draftId]);
 
   // Seeding a resumed draft. Keyed off the loaded id so it runs once per
   // draft rather than on every render, and never overwrites typing.

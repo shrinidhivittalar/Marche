@@ -3,6 +3,7 @@ import { ArrowRightLeft, Check, X, Undo2 } from 'lucide-react';
 import { Button, Card, Input } from '@marche/ui';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
+import { usePolling } from '../../hooks/usePolling';
 import { priceNegotiationsApi, type PriceNegotiationStatus } from '../../lib/proposals-api';
 import { ApiError } from '../../lib/api';
 
@@ -57,6 +58,10 @@ export const PriceNegotiationPanel: React.FC<PriceNegotiationPanelProps> = ({
     [token, proposalId],
     { enabled: Boolean(token) },
   );
+  // The other party's own proposes/accepts/rejects don't otherwise reach
+  // this screen — refetch-on-own-action only covers what the viewer does.
+  // Same interval as messaging/payments/notifications elsewhere in the app.
+  usePolling(negotiations.refetch, Boolean(token));
 
   const [proposing, setProposing] = useState(false);
   const [amountInput, setAmountInput] = useState('');
