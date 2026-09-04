@@ -154,13 +154,14 @@ export const Sidebar: React.FC = () => {
   const navItems = isAdmin ? adminNav : surface === 'PROVIDER' ? vendorNav : clientNav;
 
   // The sidebar itself is shared chrome across all three roles, so its
-  // styling is hardcoded rather than token-driven (client/provider never
-  // opt into the admin theme — see tokens.css's [data-theme='admin']).
-  // Admin gets a dark blue-950 card — same structure as the client/provider
-  // sidebar, recolored to the admin blue scale instead of red. The "M" logo
-  // mark stays red in both cases — it's the brand wordmark, not a theme
-  // color.
-  const sidebarBg = isAdmin ? 'bg-[#0f172a]' : 'bg-search-pill';
+  // styling is hardcoded rather than token-driven (bg-search-pill is a
+  // token class, but the rest below is literal). Client/provider and admin
+  // now use the same blue scale — see tokens.css, where the whole site
+  // adopted the admin panel's palette — so the isAdmin split that used to
+  // exist here for color has been removed; --color-search-pill itself was
+  // moved to the same dark navy as admin's sidebar, so bg-search-pill
+  // already matches without a ternary.
+  const sidebarBg = 'bg-search-pill';
   const sidebarBorder = '';
   // Admin reads the themed --shadow-float token (tokens.css defines a
   // dedicated 'none' for admin dark mode, where the page behind the
@@ -171,17 +172,17 @@ export const Sidebar: React.FC = () => {
   const sidebarShadow = isAdmin
     ? 'var(--shadow-float)'
     : '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)';
-  const activeFill = isAdmin ? 'bg-blue-600' : 'bg-red-700';
+  const activeFill = 'bg-blue-600';
   const activeText = 'text-white';
   const activeIcon = 'text-white';
   const idleIcon = isAdmin ? 'text-slate-400' : 'text-zinc-400';
   const idleText = isAdmin ? 'text-slate-400' : 'text-zinc-400';
   const idleHover = 'hover:text-white hover:bg-white/10';
-  const emphasisFill = isAdmin ? 'bg-blue-600' : 'bg-red-600';
+  const emphasisFill = 'bg-blue-600';
   const dividerBorder = 'border-white/10';
   const wordmarkText = 'text-white';
   const hoverBgOnly = 'hover:bg-white/10';
-  const avatarRing = isAdmin ? 'ring-blue-500/20' : 'ring-white/20';
+  const avatarRing = 'ring-blue-500/20';
 
   const homePath = isAdmin
     ? '/admin/audit'
@@ -223,7 +224,7 @@ export const Sidebar: React.FC = () => {
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <div
-              className="w-8 h-8 rounded-xl bg-red-700 text-white flex items-center justify-center text-lg tracking-tight group-hover:bg-red-800 transition-colors shadow-xs shrink-0"
+              className="w-8 h-8 rounded-xl bg-blue-700 text-white flex items-center justify-center text-lg tracking-tight group-hover:bg-blue-800 transition-colors shadow-xs shrink-0"
               style={{ fontFamily: 'Anton, sans-serif' }}
             >
               M
@@ -280,7 +281,7 @@ export const Sidebar: React.FC = () => {
                   {!collapsed && <span>{item.label}</span>}
                   {collapsed && item.badge && item.badge > 0 ? (
                     <span
-                      className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${emphasisFill} ring-2 ${isAdmin ? 'ring-[#0f172a]' : 'ring-[#1a1512]'}`}
+                      className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${emphasisFill} ring-2 ring-search-pill`}
                     />
                   ) : null}
                 </div>
@@ -467,7 +468,7 @@ export const Sidebar: React.FC = () => {
                           onClick={() => navigate(link.path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                             route === link.path
-                              ? 'bg-red-700 text-white font-bold'
+                              ? 'bg-blue-700 text-white font-bold'
                               : 'text-zinc-400 hover:text-white hover:bg-white/10'
                           }`}
                         >
