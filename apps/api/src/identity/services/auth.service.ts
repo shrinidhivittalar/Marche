@@ -57,12 +57,17 @@ const DUMMY_PASSWORD_HASH = argon2.hash('dummy-password-for-timing-parity');
 const FORGOT_PASSWORD_FLOOR_MS = 250;
 
 // Same floor, same reasoning, applied to register()'s sibling gap: the
-// duplicate branch (SELECT + email + audit) is otherwise measurably
-// faster than the new-account branch (SELECT + 4-statement $transaction +
-// verification token + audit), which lets response timing answer the same
-// "is this email registered" question the identical response body was
-// meant to hide.
-const REGISTER_FLOOR_MS = 250;
+// duplicate branch (SELECT + email + audit, detached) is otherwise
+// measurably faster than the new-account branch (SELECT + 4-statement
+// $transaction + verification token + audit, awaited — has to be, so the
+// response can't claim an account exists before it does), which lets
+// response timing answer the same "is this email registered" question the
+// identical response body was meant to hide. Set higher than
+// FORGOT_PASSWORD_FLOOR_MS because unlike that path, this floor has to
+// cover real awaited DB work, not just a detached one. Untuned — a rough
+// ceiling on the awaited chain's cost, not measured against production
+// latency.
+const REGISTER_FLOOR_MS = 750;
 
 async function notBefore<T>(floorMs: number, work: Promise<T>): Promise<T> {
   const [result] = await Promise.all([
@@ -169,9 +174,10 @@ export class AuthService {
       return REGISTER_ACKNOWLEDGEMENT;
     }
 
-    void this.createRegisteredUser(dto, passwordHash).catch((error: unknown) =>
-      this.logger.error(`Registration failed after acknowledgement: ${String(error)}`),
-    );
+    // Unlike the duplicate branch above, this one has to actually exist by
+    // the time the response goes out — the account is the whole point of the
+    // endpoint, so it must be awaited, not detached.
+    await this.createRegisteredUser(dto, passwordHash);
 
     return REGISTER_ACKNOWLEDGEMENT;
   }
