@@ -377,6 +377,21 @@ export class CategoryTemplatesService {
     }
   }
 
+  /**
+   * The category's name, for the AI field-suggestion route — the AI call
+   * itself stays at the controller layer (AiService is injected there
+   * directly, same as JobsController's own rephrase route), so this is the
+   * one piece of category data that route needs from this service.
+   */
+  async resolveCategoryName(platformRole: PlatformRole, categoryId: string): Promise<string> {
+    assertAdminRole(platformRole);
+    const category = await this.categoriesRepository.findById(categoryId);
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+    return category.name;
+  }
+
   // `options` is meaningful for exactly two types, and this is where that
   // is judged — a single-property class-validator decorator on the DTO
   // cannot see the sibling `type` field to make this call itself.
