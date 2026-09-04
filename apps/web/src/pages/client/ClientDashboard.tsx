@@ -30,13 +30,17 @@ import { formatJobBudget } from '../../lib/formatJob';
 
 // Wording for the statuses the API actually has. The mock model had Paused,
 // Closed and Completed as well; none of them exists on a real requirement.
-// Only PUBLISHED is reachable here: the sole consumer below (the Active Jobs
-// list) is already pre-filtered to PUBLISHED requirements, so DRAFT/FILLED/
-// CANCELLED entries would be dead code.
+// PUBLISHED and FILLED are the two the Active Jobs list shows (still
+// accepting proposals, or already hired for) — DRAFT/CANCELLED stay off the
+// dashboard, since neither is something to act on from here.
 const REQUIREMENT_STATUS: Partial<Record<JobStatus, { label: string; className: string }>> = {
   PUBLISHED: {
     label: 'In Progress',
     className: 'bg-surface-subtle text-ink-muted border-border',
+  },
+  FILLED: {
+    label: 'Hired',
+    className: 'bg-primary-subtle text-primary border-primary/20',
   },
 };
 
@@ -99,8 +103,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
     { enabled: Boolean(accessToken) },
   );
 
-  // "Active" means live to providers. A draft is not, and a filled or
-  // cancelled one has left discovery.
+  // "Active" means live to providers — still accepting proposals. Shown
+  // separately from the Active Jobs *panel* below, which also includes
+  // FILLED (hired) jobs; this KPI stays PUBLISHED-only on purpose, since
+  // "Active Projects" already covers the hired/in-progress count.
   const activeJobsCount = (myRequirements.data ?? []).filter(
     (r) => r.status === 'PUBLISHED',
   ).length;
@@ -383,20 +389,31 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
   // fetchAllPages already walked every page, so the count in hand is the
   // real total — no separate `total` field to fall back on.
   const requirementTotal = requirements.length;
-  // The "Active Jobs" panel's own label — only requirements actually live to
-  // providers. Filled/cancelled/draft ones belong under "View all", not here;
-  // showing them under an "Active Jobs" heading was the bug the previous pass
-  // introduced (relabelled the section without filtering the list to match).
-  const activeRequirements = requirements.filter((r) => r.status === 'PUBLISHED');
-  // Proposals still awaiting a decision — only on jobs still live. A filled
+  // Still open to new proposals. Kept separate from the Active Jobs panel's
+  // own list below (which also shows FILLED/hired jobs) because this is
+  // what the proposal-sum KPI below has to stay scoped to — a filled job's
+  // proposalCount includes the one that got accepted and every one that got
+  // declined, none of which are "new" or awaiting a decision.
+  const openRequirements = requirements.filter((r) => r.status === 'PUBLISHED');
+  // The "Active Jobs" panel's own list — a requirement stays visible here
+  // through its whole active life, not just while still accepting
+  // proposals: PUBLISHED (open) and FILLED (hired) both belong, since a
+  // hired job disappearing from the dashboard the moment it's filled read
+  // as the dashboard going blank right after the one thing a client came
+  // here to do. Cancelled/draft ones still belong under "View all", not here.
+  const activeRequirements = requirements.filter(
+    (r) => r.status === 'PUBLISHED' || r.status === 'FILLED',
+  );
+  // A hired job's connection, so a FILLED row can name who was hired and
+  // link to the actual contract instead of a proposal count that no longer
+  // means anything once the job is filled.
+  const connectionByJobId = new Map(connectionItems.map((c) => [c.job.id, c]));
+  // Proposals still awaiting a decision — only on jobs still open. A filled
   // or cancelled job's proposals are already resolved, so they don't belong
   // in a "New Proposals" count; summing every proposal ever received
   // (including on closed jobs) is what made this stat contradict "Needs
   // Attention" showing nothing to review.
-  const pendingProposalsSum = activeRequirements.reduce(
-    (sum, r) => sum + (r.proposalCount ?? 0),
-    0,
-  );
+  const pendingProposalsSum = openRequirements.reduce((sum, r) => sum + (r.proposalCount ?? 0), 0);
   // Still open and waiting on the client: published, with at least one
   // proposal nobody has decided on yet.
   const pendingProposalsCount = requirements.filter(
@@ -643,15 +660,23 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
           {activeRequirements.length > 0 && (
             <div className="space-y-3">
               {activeRequirements.slice(0, 5).map((req, idx) => {
-                // Safe: activeRequirements is already filtered to PUBLISHED,
-                // the only key REQUIREMENT_STATUS carries.
+                // Safe: activeRequirements is filtered to PUBLISHED/FILLED,
+                // the two keys REQUIREMENT_STATUS carries.
                 const status = REQUIREMENT_STATUS[req.status]!;
+                const hiredConnection =
+                  req.status === 'FILLED' ? connectionByJobId.get(req.id) : undefined;
                 return (
                   <button
                     key={req.id}
                     type="button"
                     data-testid="overview-requirement"
-                    onClick={() => navigate(`/client/jobs/${req.id}`)}
+                    onClick={() =>
+                      navigate(
+                        hiredConnection
+                          ? `/contracts/${hiredConnection.id}`
+                          : `/client/jobs/${req.id}`,
+                      )
+                    }
                     className="w-full text-left p-5 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all flex items-center gap-4"
                   >
                     <span
@@ -680,10 +705,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                           Budget: <strong className="text-ink">{formatJobBudget(req)}</strong>
                         </span>
                         <span>•</span>
-                        <span>
-                          <strong className="text-ink">{req.proposalCount ?? 0}</strong> proposal
-                          {(req.proposalCount ?? 0) !== 1 ? 's' : ''}
-                        </span>
+                        {hiredConnection ? (
+                          <span>
+                            Hired:{' '}
+                            <strong className="text-ink">
+                              {hiredConnection.providerProfile.displayName}
+                            </strong>
+                          </span>
+                        ) : (
+                          <span>
+                            <strong className="text-ink">{req.proposalCount ?? 0}</strong> proposal
+                            {(req.proposalCount ?? 0) !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
 

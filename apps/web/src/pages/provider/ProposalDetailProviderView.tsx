@@ -18,7 +18,12 @@ import { mediaApi } from '../../lib/media-api';
 import { ApiError } from '../../lib/api';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { PriceNegotiationPanel } from '../../components/proposals/PriceNegotiationPanel';
-import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
+import {
+  formatOffer,
+  formatOriginalOffer,
+  formatSubmitted,
+  formatTurnaround,
+} from '../../lib/formatProposal';
 import { formatEventWhen, formatDeadline } from '../../lib/formatJob';
 
 // A provider's own proposal.
@@ -252,6 +257,11 @@ export const ProposalDetailProviderView: React.FC<ProposalDetailProviderViewProp
           <div>
             <p className="text-ink-muted">{mine.job.isDirect ? 'Offered price' : 'Your price'}</p>
             <p className="font-mono font-bold text-ink text-base mt-0.5">{formatOffer(mine)}</p>
+            {formatOriginalOffer(mine) && (
+              <p className="text-[11px] text-ink-muted mt-0.5">
+                Originally {formatOriginalOffer(mine)}, negotiated to {formatOffer(mine)}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-ink-muted">Turnaround</p>
