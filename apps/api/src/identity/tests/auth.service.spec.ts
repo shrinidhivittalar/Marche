@@ -311,20 +311,17 @@ describe('AuthService', () => {
       expect(usersRepository.grantCapability).not.toHaveBeenCalled();
     });
 
-    it('rolls back nothing further if capability granting fails mid-transaction', async () => {
+    it('rejects instead of acknowledging if capability granting fails mid-transaction', async () => {
       usersRepository.findByEmail.mockResolvedValue(null);
       const created = buildUser();
       usersRepository.create.mockResolvedValue(created);
       usersRepository.grantCapability.mockRejectedValue(new Error('db unavailable'));
 
-      // Account creation is detached from the response (see REGISTER_FLOOR_MS
-      // / notBefore), so register() still resolves the same acknowledgement
-      // — the failure surfaces only via the logger, not a rejection.
-      await expect(authService.register({ ...registerDto })).resolves.toEqual({
-        status: 'verification_email_sent',
-      });
-      // Let the detached createRegisteredUser promise settle before asserting.
-      await new Promise((resolve) => setImmediate(resolve));
+      // Account creation is awaited (see REGISTER_FLOOR_MS / notBefore, which
+      // only pads the response time — it never swallows the error), so a
+      // failure here has to surface as a rejection, not a false-success
+      // acknowledgement the client would otherwise wrongly trust.
+      await expect(authService.register({ ...registerDto })).rejects.toThrow('db unavailable');
       // The transaction callback throwing is what causes Prisma to roll back
       // User + Profile + Capability together — this test's mocked
       // $transaction just invokes the callback directly, so the meaningful
