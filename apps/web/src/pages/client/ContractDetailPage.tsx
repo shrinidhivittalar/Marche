@@ -429,6 +429,7 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
                       key={value}
                       type="button"
                       title={`${value} star${value === 1 ? '' : 's'}`}
+                      aria-label={`${value} star${value === 1 ? '' : 's'}`}
                       data-testid={`review-rating-${value}`}
                       onClick={() => setReviewRating(value)}
                       className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${

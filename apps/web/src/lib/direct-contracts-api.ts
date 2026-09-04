@@ -5,6 +5,7 @@
 // provider's own accept/decline.
 import { apiFetch } from './api-fetch';
 import type { ApiConnection, ProposalCore } from './proposals-api';
+import type { ServiceMode } from './category-templates-api';
 
 export interface CreateDirectContractBody {
   providerProfileId: string;
@@ -15,6 +16,11 @@ export interface CreateDirectContractBody {
   deliveryDays: number;
   eventDate?: string;
   locationCoarse?: string;
+  // Same rules as an ordinary Job's serviceMode/categoryData — see
+  // create-direct-contract.dto.ts's own comment. Omitted entirely for a
+  // category with no active template, same as CreateJobPage does.
+  serviceMode?: ServiceMode;
+  categoryData?: Record<string, unknown>;
 }
 
 export const directContractsApi = {

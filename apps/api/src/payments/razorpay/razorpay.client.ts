@@ -1,9 +1,6 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import Razorpay from 'razorpay';
-import {
-  validatePaymentVerification,
-  validateWebhookSignature,
-} from 'razorpay/dist/utils/razorpay-utils';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 export interface RazorpayOrder {
   id: string;
@@ -21,6 +18,7 @@ export interface RazorpayOrder {
 // would let a client believe they paid when nothing was ever charged.
 @Injectable()
 export class RazorpayClient {
+  private static readonly RETRY_DELAYS_MS = [200, 600];
   private readonly logger = new Logger(RazorpayClient.name);
   private readonly client: Razorpay;
   private readonly keySecret: string;
@@ -50,17 +48,52 @@ export class RazorpayClient {
    * only unit Razorpay's API accepts and nowhere else needs to know that.
    */
   async createOrder(amountRupees: number, receipt: string): Promise<RazorpayOrder> {
-    try {
-      const order = await this.client.orders.create({
-        amount: Math.round(amountRupees * 100),
-        currency: 'INR',
-        receipt,
-      });
-      return { id: order.id, amount: Number(order.amount), currency: order.currency };
-    } catch (error) {
-      this.logger.error(`Razorpay order creation failed: ${(error as Error).message}`);
-      throw new InternalServerErrorException('Could not start the payment. Please try again.');
+    const payload = {
+      amount: Math.round(amountRupees * 100),
+      currency: 'INR',
+      receipt,
+    };
+    // Money path: a transient network blip shouldn't fail the whole checkout.
+    // 3 attempts total (1 initial + 2 retries), short backoff between them.
+    // Only retried when the failure looks transient (see isTransientError) —
+    // a definitive rejection (bad request, auth failure) fails immediately.
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RazorpayClient.RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        const order = await this.client.orders.create(payload);
+        return { id: order.id, amount: Number(order.amount), currency: order.currency };
+      } catch (error) {
+        lastError = error;
+        const isLastAttempt = attempt === RazorpayClient.RETRY_DELAYS_MS.length;
+        if (isLastAttempt || !this.isTransientError(error)) {
+          break;
+        }
+        this.logger.warn(
+          `Razorpay order creation attempt ${attempt + 1} failed, retrying: ${(error as Error).message}`,
+        );
+        await this.delay(RazorpayClient.RETRY_DELAYS_MS[attempt] as number);
+      }
     }
+    this.logger.error(`Razorpay order creation failed: ${(lastError as Error).message}`);
+    throw new InternalServerErrorException('Could not start the payment. Please try again.');
+  }
+
+  // Razorpay's SDK (node_modules/razorpay/dist/api.js normalizeError) rethrows
+  // `{ statusCode, error }` when the request actually reached the server, but
+  // throws a plain TypeError with no statusCode when it never got a response
+  // at all (timeout, DNS failure, connection reset) — that's the transient
+  // case worth retrying. A 5xx response is also worth retrying; a 4xx is a
+  // definitive rejection (bad request, auth failure) and isn't.
+  private isTransientError(error: unknown): boolean {
+    const statusCode = (error as { statusCode?: number })?.statusCode;
+    if (typeof statusCode !== 'number') {
+      return true;
+    }
+    return statusCode >= 500;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -87,15 +120,35 @@ export class RazorpayClient {
 
   /** The Checkout.js success-callback signature — order_id + payment_id, signed with the key secret. */
   verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
-    return validatePaymentVerification(
-      { order_id: orderId, payment_id: paymentId },
-      signature,
-      this.keySecret,
-    );
+    return this.hmacHexEquals(`${orderId}|${paymentId}`, signature, this.keySecret);
   }
 
   /** The async webhook's own signature, signed with the separate webhook secret set in the Razorpay dashboard. */
   verifyWebhookSignature(rawBody: string, signature: string): boolean {
-    return validateWebhookSignature(rawBody, signature, this.webhookSecret);
+    return this.hmacHexEquals(rawBody, signature, this.webhookSecret);
+  }
+
+  // Same HMAC construction as razorpay/dist/utils/razorpay-utils.js
+  // (validatePaymentVerification / validateWebhookSignature), computed
+  // locally so the comparison can be timing-safe — the SDK's own helpers
+  // compare with plain `===`, which is a (largely theoretical, over a
+  // rate-limited HTTP endpoint) timing oracle.
+  private hmacHexEquals(payload: string, signature: string, secret: string): boolean {
+    // Buffer.from(_, 'hex') silently stops at the first non-hex character
+    // instead of throwing, so a malformed signature must be rejected by
+    // format before it ever reaches the byte-length/timingSafeEqual check.
+    if (!/^[0-9a-fA-F]+$/.test(signature)) {
+      return false;
+    }
+    const expectedHex = createHmac('sha256', secret).update(payload).digest('hex');
+    const expected = Buffer.from(expectedHex, 'hex');
+    const actual = Buffer.from(signature, 'hex');
+    // timingSafeEqual throws on length mismatch instead of returning false —
+    // check first so a mismatched length is just "not valid", same as any
+    // other tampered signature.
+    if (expected.length !== actual.length) {
+      return false;
+    }
+    return timingSafeEqual(expected, actual);
   }
 }

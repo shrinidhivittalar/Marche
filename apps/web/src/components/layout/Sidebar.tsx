@@ -160,7 +160,7 @@ export const Sidebar: React.FC = () => {
   // sidebar, recolored to the admin blue scale instead of red. The "M" logo
   // mark stays red in both cases — it's the brand wordmark, not a theme
   // color.
-  const sidebarBg = isAdmin ? 'bg-[#0f172a]' : 'bg-[#1a1512]';
+  const sidebarBg = isAdmin ? 'bg-[#0f172a]' : 'bg-search-pill';
   const sidebarBorder = '';
   // Admin reads the themed --shadow-float token (tokens.css defines a
   // dedicated 'none' for admin dark mode, where the page behind the

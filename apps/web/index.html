@@ -21,16 +21,10 @@
       name="description"
       content="Marché connects event clients with trusted service professionals through a transparent requirement and proposal marketplace."
     />
-    <script>
-      (function () {
-        try {
-          var theme = localStorage.getItem('marche-theme');
-          document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
-        } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light');
-        }
-      })();
-    </script>
+    <!-- Externalized (not inline) so the Content-Security-Policy in
+         public/_headers can set script-src 'self' with no unsafe-inline
+         allowance. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

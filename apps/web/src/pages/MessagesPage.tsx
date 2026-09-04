@@ -290,7 +290,7 @@ export const MessagesPage: React.FC = () => {
                   placeholder="Search messages or providers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#1a1512] border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
+                  className="w-full bg-search-pill border-none rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
                 />
               </div>
 

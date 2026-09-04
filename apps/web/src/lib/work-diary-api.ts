@@ -27,6 +27,19 @@ export interface ApiWorkDiaryEntry {
   author: { id: string; name: string };
 }
 
+// The plain create() response — WorkDiaryRepository.create returns the bare
+// Prisma row with no `select`, so `author` genuinely isn't present here the
+// way it is on every list read (WorkDiaryRepository.ENTRY_WITH_CONTEXT).
+// Typed separately rather than reusing ApiWorkDiaryEntry so this shape never
+// silently lies about having a relation it doesn't.
+export interface ApiWorkDiaryEntryCreated {
+  id: string;
+  connectionId: string;
+  authorUserId: string;
+  note: string;
+  createdAt: string;
+}
+
 export interface ApiWorkDiaryEntryWithConnection extends ApiWorkDiaryEntry {
   connection: {
     id: string;
@@ -41,7 +54,7 @@ export const workDiaryApi = {
     apiFetch<ApiWorkDiaryEntry[]>(`/connections/${connectionId}/work-diary`, token),
 
   addEntry: (token: string, connectionId: string, note: string) =>
-    apiFetch<ApiWorkDiaryEntry>(`/connections/${connectionId}/work-diary`, token, {
+    apiFetch<ApiWorkDiaryEntryCreated>(`/connections/${connectionId}/work-diary`, token, {
       method: 'POST',
       body: JSON.stringify({ note }),
     }),

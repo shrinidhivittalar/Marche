@@ -48,7 +48,7 @@ export const MobileTabBar: React.FC = () => {
 
   return (
     <nav
-      className="md:hidden fixed bottom-3 inset-x-3 z-40 bg-[#1a1512] rounded-2xl"
+      className="md:hidden fixed bottom-3 inset-x-3 z-40 bg-search-pill rounded-2xl"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
         boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15)',
