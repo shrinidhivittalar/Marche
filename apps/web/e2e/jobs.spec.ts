@@ -175,6 +175,7 @@ test.describe('module 4 — validation the server also enforces', () => {
     await signIn(page, users.client);
     await page.goto('/client/jobs/new/manual');
 
+    await page.getByTestId('category-select').click();
     const firstCategory = page.locator('[data-testid^="category-"]').first();
     await expect(firstCategory).toBeVisible({ timeout: 40_000 });
     await firstCategory.click();
@@ -190,6 +191,7 @@ test.describe('module 4 — validation the server also enforces', () => {
     await signIn(page, users.client);
     await page.goto('/client/jobs/new/manual');
 
+    await page.getByTestId('category-select').click();
     const firstCategory = page.locator('[data-testid^="category-"]').first();
     await expect(firstCategory).toBeVisible({ timeout: 40_000 });
     await firstCategory.click();
@@ -227,6 +229,7 @@ test.describe('module 4 — validation the server also enforces', () => {
     await signIn(page, users.client);
     await page.goto('/client/jobs/new/manual');
 
+    await page.getByTestId('category-select').click();
     const options = page.locator('[data-testid^="category-"]');
     await expect.poll(() => options.count(), { timeout: 40_000 }).toBeGreaterThan(3);
     await expect(page.getByTestId('categories-error')).toHaveCount(0);
