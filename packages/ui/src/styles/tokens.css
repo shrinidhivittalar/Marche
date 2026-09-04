@@ -8,65 +8,74 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  /* ---- Color: surfaces (matches the app's existing neutral palette) ---- */
-  --color-bg: #f7f2e7;
+  /* ---- Color: surfaces ----
+     Adopted from the admin panel's blue scheme, now the site-wide default
+     rather than an admin-only palette — see the [data-theme='admin'] block
+     below, which is unchanged and now simply matches these values. */
+  --color-bg: #eff6ff; /* blue-50 */
   --color-surface: #ffffff;
-  --color-surface-subtle: #f1ebdc;
-  --color-border: #e9e0cd;
-  --color-border-strong: #d4d4d8;
+  --color-surface-subtle: #dbeafe; /* blue-100 */
+  --color-border: #bfdbfe; /* blue-200 */
+  --color-border-strong: #93c5fd; /* blue-300 */
 
   /* ---- Color: text ---- */
-  --color-ink: #111827;
-  --color-ink-muted: #6b7280;
+  --color-ink: #0f172a; /* blue-950 */
+  --color-ink-muted: #475569;
 
-  /* ---- Color: primary (Tailwind green-900/800 — the app's existing brand
-     green, not a generic SaaS indigo) ---- */
-  --color-primary: #b91c1c;
-  --color-primary-hover: #991b1b;
-  --color-primary-active: #7f1d1d;
-  --color-primary-subtle: #fef2f2;
+  /* ---- Color: primary (blue-600, matching admin) ---- */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-subtle: #dbeafe;
   /* Foreground for text/icons placed on a solid --color-primary fill. Kept as
      its own token (not hardcoded white) because dark mode needs a much
      brighter primary for standalone text contrast, which in turn needs dark
      text — not white — to stay readable as a button fill. */
   --color-primary-fg: #ffffff;
 
-  /* ---- Color: inverse (max-contrast neutral for deliberately punctuated
-     blocks — the dark CTA band, the "secondary" button — independent of
-     --color-ink so these blocks stay high-contrast in both themes instead
-     of flattening out when ink itself flips to near-white in dark mode) ---- */
-  --color-inverse: #15171a;
+  /* ---- Color: inverse (max-contrast punctuated blocks — the dark CTA band,
+     the "secondary" button — independent of --color-ink so these blocks
+     stay high-contrast in both themes instead of flattening out when ink
+     itself flips to near-white in dark mode). blue-900, matching admin's
+     reserved financial/escrow emphasis color, now the site-wide inverse. ---- */
+  --color-inverse: #1e3a8a;
   --color-inverse-fg: #ffffff;
 
-  /* ---- Color: search pill (warm near-black used on the search bar/tab-bar
-     "pill" elements — visually close to but distinct from --color-inverse,
-     which is a cooler dark; kept as its own token instead of reusing
-     inverse so this doesn't shift if inverse ever changes) ---- */
-  --color-search-pill: #1a1512;
+  /* ---- Color: search pill (dark navy used on the search bar/tab-bar
+     "pill" elements and the Sidebar background — blue-950, matching the
+     admin panel's sidebar exactly, so this dark chrome reads as one
+     consistent piece of navigation across the whole site rather than
+     admin having its own separate dark navy). ---- */
+  --color-search-pill: #0f172a;
 
-  /* ---- Color: accent (marigold gold — used sparingly: ratings, "Work" role) ---- */
-  --color-accent: #f59e0b;
-  --color-accent-hover: #d97f06;
-  --color-accent-subtle: #fff6e5;
-  /* AA-safe (6.6:1) shade for text/initials on accent-subtle or white */
-  --color-accent-text: #92400e;
+  /* ---- Color: accent (blue-400, matching admin — was marigold gold; used
+     sparingly, e.g. the landing page category badge) ---- */
+  --color-accent: #60a5fa;
+  --color-accent-hover: #3b82f6;
+  --color-accent-subtle: #eff6ff;
+  --color-accent-text: #1d4ed8;
 
-  /* ---- Color: success (verified — trust blue, deliberately a different hue
-     from primary emerald so brand actions and verification badges never
-     read as the same color). success = icon/fill only; success-text is
-     the AA-safe darker shade for any text on success-subtle/white. ---- */
-  --color-success: #2563eb;
-  --color-success-text: #1d4ed8;
-  --color-success-subtle: #eaf1ff;
+  /* ---- Color: success (verified — a distinct green, deliberately not blue,
+     so it never reads as just another primary button now that primary
+     itself is blue; same fix admin already made for the same reason).
+     success = icon/fill only; success-text is the AA-safe darker shade for
+     any text on success-subtle/white. ---- */
+  --color-success: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-subtle: #f0fdf4;
 
-  /* ---- Color: danger (form/validation errors, destructive actions) ---- */
+  /* ---- Color: danger (form/validation errors, destructive actions —
+     unchanged: this rebrand is about primary/accent/success, not the
+     destructive-action color) ---- */
   --color-danger: #dc2626;
   --color-danger-text: #b91c1c;
   --color-danger-subtle: #fef2f2;
   --color-danger-fg: #ffffff;
 
-  /* ---- Type ---- */
-  --font-sans: 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* ---- Type (Manrope, matching admin — was Inter; Anton is unaffected,
+     still used for h1 only, per the base `h1` rule further down) ---- */
+  --font-sans:
+    'Manrope', 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* ---- Radius ---- */
   --radius-sm: 8px;
@@ -74,11 +83,11 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
 
-  /* ---- Shadow (matches the app's existing shadow-marche-* utilities) ---- */
-  --shadow-card: 0 2px 8px -2px rgba(17, 24, 39, 0.04), 0 1px 3px -1px rgba(17, 24, 39, 0.02);
-  --shadow-card-hover: 0 4px 6px -1px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.1);
-  --shadow-float: 0 24px 48px -12px rgba(185, 28, 28, 0.2), 0 4px 14px rgba(17, 24, 39, 0.06);
-  --shadow-focus: 0 0 0 3px rgba(185, 28, 28, 0.35);
+  /* ---- Shadow ---- */
+  --shadow-card: 0 2px 8px -2px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
+  --shadow-card-hover: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -2px rgba(15, 23, 42, 0.1);
+  --shadow-float: 0 24px 48px -12px rgba(37, 99, 235, 0.2), 0 4px 14px rgba(15, 23, 42, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.35);
 }
 
 /* ---- Dark mode ----
@@ -89,42 +98,42 @@
    auto-switch on the OS's prefers-color-scheme — that would half-invert
    the page instead of a clean theme swap. */
 :root[data-theme='dark'] {
-  --color-bg: #121110;
-  --color-surface: #1a1815;
-  --color-surface-subtle: #221f1a;
-  --color-border: #33302a;
-  --color-border-strong: #46423a;
+  --color-bg: #0a0e1a;
+  --color-surface: #16213a;
+  --color-surface-subtle: #1c2b4a;
+  --color-border: #2c3d5e;
+  --color-border-strong: #3d5277;
 
-  --color-ink: #f5f3ec;
-  --color-ink-muted: #a8a296;
+  --color-ink: #f1f5f9;
+  --color-ink-muted: #94a3b8;
 
-  --color-primary: #ef4444;
-  --color-primary-hover: #f87171;
-  --color-primary-active: #dc2626;
-  --color-primary-subtle: #3a1414;
-  --color-primary-fg: #2b0a0a;
+  --color-primary: #2563eb;
+  --color-primary-hover: #3b82f6;
+  --color-primary-active: #1d4ed8;
+  --color-primary-subtle: #1e3a5f;
+  --color-primary-fg: #ffffff;
 
-  --color-accent: #fbbf24;
-  --color-accent-hover: #fdd463;
-  --color-accent-subtle: #3a2a0e;
-  --color-accent-text: #fbbf24;
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93c5fd;
+  --color-accent-subtle: #16213a;
+  --color-accent-text: #93c5fd;
 
-  --color-success: #5b8def;
-  --color-success-text: #7da6f5;
-  --color-success-subtle: #16233d;
+  --color-success: #22c55e;
+  --color-success-text: #4ade80;
+  --color-success-subtle: #0f2a1a;
 
   --color-danger: #f87171;
   --color-danger-text: #fca5a5;
   --color-danger-subtle: #3a1414;
   --color-danger-fg: #ffffff;
 
-  --color-inverse: #f2efe6;
-  --color-inverse-fg: #15171a;
+  --color-inverse: #1e3a8a;
+  --color-inverse-fg: #ffffff;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-card-hover: 0 12px 28px -8px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-float: 0 24px 48px -12px rgba(239, 68, 68, 0.28), 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-focus: 0 0 0 3px rgba(239, 68, 68, 0.45);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 20px 40px -14px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(37, 99, 235, 0.12);
+  --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.45);
 }
 
 /* Not scoped to :root (unlike the dark block above) so this can also be set
@@ -132,56 +141,56 @@
    of the app-wide dark mode toggle and always render light, regardless of
    the user's saved theme preference on <html>. */
 [data-theme='light'] {
-  --color-bg: #f7f2e7;
+  --color-bg: #eff6ff;
   --color-surface: #ffffff;
-  --color-surface-subtle: #f1ebdc;
-  --color-border: #e9e0cd;
-  --color-border-strong: #d4d4d8;
+  --color-surface-subtle: #dbeafe;
+  --color-border: #bfdbfe;
+  --color-border-strong: #93c5fd;
 
-  --color-ink: #111827;
-  --color-ink-muted: #6b7280;
+  --color-ink: #0f172a;
+  --color-ink-muted: #475569;
 
-  --color-primary: #b91c1c;
-  --color-primary-hover: #991b1b;
-  --color-primary-active: #7f1d1d;
-  --color-primary-subtle: #fef2f2;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-subtle: #dbeafe;
   --color-primary-fg: #ffffff;
 
-  --color-accent: #f59e0b;
-  --color-accent-hover: #d97f06;
-  --color-accent-subtle: #fff6e5;
-  --color-accent-text: #92400e;
+  --color-accent: #60a5fa;
+  --color-accent-hover: #3b82f6;
+  --color-accent-subtle: #eff6ff;
+  --color-accent-text: #1d4ed8;
 
-  --color-success: #2563eb;
-  --color-success-text: #1d4ed8;
-  --color-success-subtle: #eaf1ff;
+  --color-success: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-subtle: #f0fdf4;
 
   --color-danger: #dc2626;
   --color-danger-text: #b91c1c;
   --color-danger-subtle: #fef2f2;
   --color-danger-fg: #ffffff;
 
-  --color-inverse: #15171a;
+  --color-inverse: #1e3a8a;
   --color-inverse-fg: #ffffff;
 
-  --shadow-card: 0 1px 2px rgba(20, 21, 26, 0.04), 0 1px 3px rgba(20, 21, 26, 0.05);
-  --shadow-card-hover: 0 12px 28px -8px rgba(20, 21, 26, 0.12), 0 2px 8px rgba(20, 21, 26, 0.04);
-  --shadow-float: 0 24px 48px -12px rgba(185, 28, 28, 0.2), 0 4px 14px rgba(20, 21, 26, 0.06);
-  --shadow-focus: 0 0 0 3px rgba(185, 28, 28, 0.35);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-card-hover: 0 12px 28px -8px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-float: 0 24px 48px -12px rgba(37, 99, 235, 0.2), 0 4px 14px rgba(15, 23, 42, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.35);
 }
 
 /* ---- Admin panel theme ----
-   Scoped to the admin content area only (see App.tsx's data-theme="admin"
-   on the outer wrapper), never :root — the Sidebar's own admin branch is
-   hand-styled separately (see Sidebar.tsx, now a dark blue-950 card to
-   match) and every client/provider screen is untouched. The full screen —
-   the gaps around the Sidebar and every <main> surface — sits on the
-   lightest blue in the scale (blue-50), with white cards and blue-100
-   for structural sub-surfaces. success stays a distinct soft green (not
-   the app's default blue success token) so a "Verified/Active" badge
-   never reads as just another primary button once primary itself is
-   blue. Font switches to Manrope (Anton is still used sparingly for h1
-   only, per the base `h1` rule below — unaffected by this block). */
+   Originally scoped to the admin content area only; the site-wide @theme
+   block above now uses this same blue palette too (client/provider are no
+   longer a different color scheme), so these color values are redundant
+   with the defaults — kept rather than deleted so this block still reads
+   as a complete, self-contained theme, and because the structural
+   overrides further down ([data-slot='card'] radius, button/label font
+   weight) are still admin-only and stay scoped to this selector. The
+   Sidebar's own admin branch is hand-styled separately (see Sidebar.tsx,
+   a dark blue-950 card). success stays a distinct soft green (not
+   --color-primary) so a "Verified/Active" badge never reads as just
+   another primary button. */
 [data-theme='admin'] {
   --font-sans:
     'Manrope', 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -236,12 +245,13 @@
    data-theme="dark" on <html>, independently of the wrapper's own
    data-theme="admin" set lower in the tree (see App.tsx) — the two never
    collide, so this compound selector (html toggled to dark AND inside the
-   admin wrapper) is how admin gets its own dark palette instead of
-   inheriting the app's default dark theme. Naturally wins over the plain
+   admin wrapper) still resolves cleanly. Naturally wins over the plain
    [data-theme='admin'] block above via specificity, so no !important
-   needed. One blue scale, not two — the mockup's separate "Trust Blue"
-   swatch was the same job as Primary Blue with a different name, so it
-   isn't duplicated here. The Sidebar is already a permanent dark navy for
+   needed. Values now match the site-wide dark theme (:root[data-theme='dark']
+   above) almost exactly, now that both use the same blue scale — kept as
+   its own block rather than deleted because the bg/surface are still one
+   shade darker here on purpose (see below), which the shared block can't
+   express. The Sidebar is already a permanent dark navy for
    admin regardless of this toggle (see Sidebar.tsx) — the page canvas here
    is deliberately a shade darker than that, not the same navy, so the
    Sidebar still reads as a distinct floating panel instead of dissolving
@@ -322,34 +332,34 @@
   :root[data-theme='dark'] {
     --color-bg: #f8f8f6;
     --color-surface: #ffffff;
-    --color-surface-subtle: #f3f4f2;
-    --color-border: #e7e8e4;
-    --color-border-strong: #d4d4d8;
+    --color-surface-subtle: #eff6ff;
+    --color-border: #bfdbfe;
+    --color-border-strong: #93c5fd;
 
-    --color-ink: #111827;
-    --color-ink-muted: #6b7280;
+    --color-ink: #0f172a;
+    --color-ink-muted: #475569;
 
-    --color-primary: #b91c1c;
-    --color-primary-hover: #991b1b;
-    --color-primary-active: #7f1d1d;
-    --color-primary-subtle: #fef2f2;
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --color-primary-active: #1e40af;
+    --color-primary-subtle: #dbeafe;
     --color-primary-fg: #ffffff;
 
-    --color-accent: #f59e0b;
-    --color-accent-hover: #d97f06;
-    --color-accent-subtle: #fff6e5;
-    --color-accent-text: #92400e;
+    --color-accent: #60a5fa;
+    --color-accent-hover: #3b82f6;
+    --color-accent-subtle: #eff6ff;
+    --color-accent-text: #1d4ed8;
 
-    --color-success: #2563eb;
-    --color-success-text: #1d4ed8;
-    --color-success-subtle: #eaf1ff;
+    --color-success: #16a34a;
+    --color-success-text: #15803d;
+    --color-success-subtle: #f0fdf4;
 
     --color-danger: #dc2626;
     --color-danger-text: #b91c1c;
     --color-danger-subtle: #fef2f2;
     --color-danger-fg: #ffffff;
 
-    --color-inverse: #15171a;
+    --color-inverse: #1e3a8a;
     --color-inverse-fg: #ffffff;
   }
 }

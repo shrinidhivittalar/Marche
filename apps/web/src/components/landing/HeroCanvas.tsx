@@ -30,11 +30,11 @@ export const HeroCanvas: React.FC = () => {
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
 
-    // Two colors pulled straight from the brand tokens (red primary, gold
-    // accent) so the field reads as "part of this page" rather than a
+    // Two colors pulled straight from the brand tokens (primary blue,
+    // accent blue) so the field reads as "part of this page" rather than a
     // generic stock effect dropped on top of it.
-    const brandRed = new THREE.Color('#b91c1c');
-    const brandGold = new THREE.Color('#f59e0b');
+    const brandPrimary = new THREE.Color('#2563eb');
+    const brandAccent = new THREE.Color('#60a5fa');
 
     const positions = new Float32Array(PARTICLE_COUNT * 3);
     const colors = new Float32Array(PARTICLE_COUNT * 3);
@@ -43,7 +43,7 @@ export const HeroCanvas: React.FC = () => {
       positions[i * 3 + 1] = (Math.random() - 0.5) * 14;
       positions[i * 3 + 2] = (Math.random() - 0.5) * 12;
 
-      const mixed = brandRed.clone().lerp(brandGold, Math.random() * 0.4);
+      const mixed = brandPrimary.clone().lerp(brandAccent, Math.random() * 0.4);
       colors[i * 3] = mixed.r;
       colors[i * 3 + 1] = mixed.g;
       colors[i * 3 + 2] = mixed.b;

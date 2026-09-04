@@ -14,7 +14,7 @@ export const TopSearchBar: React.FC = () => {
     <button
       type="button"
       onClick={() => navigate('/client/search')}
-      className="hidden md:flex items-center gap-2 bg-search-pill hover:bg-[#241d18] text-white rounded-full px-5 py-2.5 shadow-md transition-colors cursor-pointer text-sm font-semibold"
+      className="hidden md:flex items-center gap-2 bg-search-pill hover:bg-[#16213a] text-white rounded-full px-5 py-2.5 shadow-md transition-colors cursor-pointer text-sm font-semibold"
     >
       <Search className="w-4 h-4 text-zinc-400 shrink-0" />
       Search Marketplace

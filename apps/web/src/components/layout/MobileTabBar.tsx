@@ -66,13 +66,13 @@ export const MobileTabBar: React.FC = () => {
               key={tab.label}
               onClick={() => navigate(tab.path)}
               className={`flex flex-col items-center justify-center gap-0.5 py-2 cursor-pointer ${
-                isActive ? 'text-red-600' : 'text-zinc-400'
+                isActive ? 'text-primary' : 'text-zinc-400'
               }`}
             >
               <span className="relative">
                 <Icon className="w-5 h-5" />
                 {tab.badge && tab.badge > 0 ? (
-                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-[#1a1512]" />
+                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-search-pill" />
                 ) : null}
               </span>
               <span className="text-[10px] font-medium">{tab.label}</span>
@@ -83,7 +83,7 @@ export const MobileTabBar: React.FC = () => {
         <button
           onClick={() => navigate('/menu')}
           className={`flex flex-col items-center justify-center gap-0.5 py-2 cursor-pointer ${
-            isMenuActive ? 'text-red-600' : 'text-zinc-400'
+            isMenuActive ? 'text-primary' : 'text-zinc-400'
           }`}
         >
           <span className="relative">
@@ -91,7 +91,7 @@ export const MobileTabBar: React.FC = () => {
               src={currentUser.avatar}
               alt={currentUser.name}
               className={`w-5 h-5 rounded-full object-cover ${
-                isMenuActive ? 'ring-2 ring-red-600' : 'ring-1 ring-white/20'
+                isMenuActive ? 'ring-2 ring-primary' : 'ring-1 ring-white/20'
               }`}
             />
             {unreadNotifications > 0 ? (
