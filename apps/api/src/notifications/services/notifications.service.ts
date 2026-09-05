@@ -150,6 +150,16 @@ export class NotificationsService {
     });
   }
 
+  async reviewReminder(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
+    await this.createSafely({
+      recipientUserId,
+      type: 'REVIEW_REMINDER',
+      title: 'Leave a review',
+      message: 'Your job is complete — leave a review for the other party.',
+      data,
+    });
+  }
+
   async disputeRaised(recipientUserId: string, data: Prisma.InputJsonValue): Promise<void> {
     await this.createSafely({
       recipientUserId,

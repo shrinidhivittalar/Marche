@@ -131,7 +131,7 @@ describe('platformRole and UserCapability — schema foundation', () => {
      */
     const preExisting = { email: { not: { contains: RUN } } };
 
-    it('every ADMIN user has platformRole=ADMIN and holds no capability rows', async () => {
+    it('every ADMIN user has platformRole ADMIN or SUPER_ADMIN, and holds no capability rows', async () => {
       const admins = await prisma.client.user.findMany({
         where: { role: 'ADMIN', ...preExisting },
         include: { capabilities: true },
@@ -139,7 +139,12 @@ describe('platformRole and UserCapability — schema foundation', () => {
 
       expect(admins.length).toBeGreaterThan(0); // sanity: the assertion below is meaningless if this is 0
       for (const admin of admins) {
-        expect(admin.platformRole).toBe('ADMIN');
+        // The backfill itself only ever produces ADMIN — SUPER_ADMIN shows
+        // up here once bootstrap-super-admin.ts (module1-implementation-
+        // contract.md §5) promotes one of these rows in place, which is the
+        // one legitimate way a pre-existing ADMIN-role row ends up with a
+        // platformRole the backfill mapping alone would never produce.
+        expect(['ADMIN', 'SUPER_ADMIN']).toContain(admin.platformRole);
         expect(admin.capabilities).toHaveLength(0);
       }
     });
@@ -175,12 +180,13 @@ describe('platformRole and UserCapability — schema foundation', () => {
     it('no user has a platformRole/role combination the backfill mapping does not produce', async () => {
       // The migration's mapping is CLIENT/PROVIDER -> USER, ADMIN -> ADMIN.
       // SUPER_ADMIN is never produced by the backfill (no legacy role maps
-      // to it) — it only exists for rows created after this migration, like
-      // the one in the structural test above.
+      // to it) directly — it only exists for rows created after this
+      // migration, or for a pre-existing ADMIN row later promoted in place
+      // by bootstrap-super-admin.ts, same exception as the test above.
       const mismatches = await prisma.client.user.count({
         where: {
           OR: [
-            { role: 'ADMIN', platformRole: { not: 'ADMIN' } },
+            { role: 'ADMIN', platformRole: { notIn: ['ADMIN', 'SUPER_ADMIN'] } },
             { role: { in: ['CLIENT', 'PROVIDER'] }, platformRole: { not: 'USER' } },
           ],
         },

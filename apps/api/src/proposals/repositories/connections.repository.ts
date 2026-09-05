@@ -175,6 +175,21 @@ export class ConnectionsRepository {
     });
   }
 
+  // Candidates for the review-reminder cron (ReviewRemindersService), which
+  // runs once a day and wants "connections that turned COMPLETED 3 days
+  // ago" — a half-open [windowStart, windowEnd) range so a connection is
+  // only ever picked up by one day's run.
+  findCompletedForReviewReminder(windowStart: Date, windowEnd: Date) {
+    return this.prisma.client.connection.findMany({
+      where: { status: 'COMPLETED', completedAt: { gte: windowStart, lt: windowEnd } },
+      select: {
+        id: true,
+        clientProfile: { select: { userId: true } },
+        providerProfile: { select: { userId: true } },
+      },
+    });
+  }
+
   // Unpaginated, ids only — for MessagesService, which needs every
   // connection a profile is party to in order to build the conversation
   // list preview, not one page of the "Connections" screen's own listing.

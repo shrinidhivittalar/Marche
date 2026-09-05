@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { ProposalsModule } from '../proposals/proposals.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ConnectionReviewsController } from './controllers/connection-reviews.controller';
 import { ProfileReviewsController } from './controllers/profile-reviews.controller';
 import { ClientReviewHistoryController } from './controllers/client-review-history.controller';
 import { ReviewsRepository } from './repositories/reviews.repository';
 import { ReviewsService } from './services/reviews.service';
+import { ReviewRemindersService } from './services/review-reminders.service';
 
 // Depends on ProposalsModule for ConnectionsService/ConnectionsRepository —
 // eligibility to review starts with "is this user a party to this
@@ -19,13 +21,13 @@ import { ReviewsService } from './services/reviews.service';
 // ProfilesModule would make this a real circular module import; see the
 // comment on profiles.module.ts's imports array for why that was reverted.
 @Module({
-  imports: [ProfilesModule, ProposalsModule],
+  imports: [ProfilesModule, ProposalsModule, NotificationsModule],
   controllers: [
     ConnectionReviewsController,
     ProfileReviewsController,
     ClientReviewHistoryController,
   ],
-  providers: [ReviewsRepository, ReviewsService],
+  providers: [ReviewsRepository, ReviewsService, ReviewRemindersService],
   exports: [ReviewsService],
 })
 export class ReviewsModule {}

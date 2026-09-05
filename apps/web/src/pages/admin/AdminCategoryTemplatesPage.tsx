@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ListChecks, Plus, ChevronRight, Pencil } from 'lucide-react';
+import { ListChecks, Plus, ChevronRight, Pencil, Sparkles } from 'lucide-react';
 import {
   Button,
   Card,
@@ -343,6 +343,8 @@ const CategoryDetail: React.FC<{
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   // Rename / edit description — deliberately separate from the template
   // version state above: this edits the Category row itself (PATCH
@@ -394,6 +396,41 @@ const CategoryDetail: React.FC<{
       );
     } finally {
       setPrefillLoading(false);
+    }
+  };
+
+  // Replaces whatever is currently in the editor with the suggestion —
+  // same "review before it's real" relationship CreateJobPage's AI prompt
+  // flow has to the manual form: nothing is saved here, canSubmit still
+  // gates on the same validateFields check a hand-built version does, and
+  // every suggested field can be edited or removed before Create Version
+  // actually runs.
+  const handleSuggestFields = async () => {
+    setSuggestError(null);
+    setSuggesting(true);
+    try {
+      const suggested = await categoryTemplatesApi.suggestFields(token, id);
+      setEditableFields(
+        suggested.fields.length > 0
+          ? suggested.fields.map((field) => ({
+              key: field.key,
+              keyLocked: false,
+              label: field.label,
+              type: field.type,
+              required: field.required,
+              options: field.options ?? [],
+              validation: (field.validation ?? {}) as EditableField['validation'],
+            }))
+          : [emptyField()],
+      );
+      setAllowedModes(suggested.allowedModes);
+      setLocationRequired(suggested.locationRequired);
+    } catch (error) {
+      setSuggestError(
+        error instanceof ApiError ? error.message : "Couldn't get AI suggestions. Try again.",
+      );
+    } finally {
+      setSuggesting(false);
     }
   };
 
@@ -633,7 +670,20 @@ const CategoryDetail: React.FC<{
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-ink">Fields</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xs font-bold text-ink">Fields</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                icon={Sparkles}
+                onClick={handleSuggestFields}
+                disabled={suggesting}
+              >
+                {suggesting ? 'Suggesting…' : 'Suggest fields with AI'}
+              </Button>
+            </div>
+            {suggestError && <Alert variant="destructive" title={suggestError} />}
             <TemplateFieldEditor
               fields={editableFields}
               onChange={setEditableFields}
