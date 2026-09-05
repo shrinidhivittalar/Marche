@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { stdSerializers } from 'pino';
@@ -28,6 +29,7 @@ import { WorkDiaryModule } from './work-diary/work-diary.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     // Structured (JSON) app/request logs — stdout only, nothing persisted
     // to Postgres. In production a hosting platform or log service reads
     // stdout directly; pino-pretty is dev-only, for human-readable output.

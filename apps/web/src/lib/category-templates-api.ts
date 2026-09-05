@@ -69,6 +69,27 @@ export interface CreateCategoryTemplateInput {
   locationRequired?: boolean;
 }
 
+// A starting point, not a saved template — the backend already assigns a
+// valid, deduplicated key and order to each suggestion (see
+// ai.service.ts's sanitizeSuggestedTemplate), so this matches
+// CreateCategoryTemplateFieldInput minus the parts a fresh suggestion never
+// carries.
+export interface SuggestedCategoryTemplateField {
+  key: string;
+  label: string;
+  type: CategoryTemplateFieldType;
+  required: boolean;
+  order: number;
+  options?: string[];
+  validation?: Record<string, unknown>;
+}
+
+export interface SuggestedCategoryTemplate {
+  allowedModes: ServiceMode[];
+  locationRequired: boolean;
+  fields: SuggestedCategoryTemplateField[];
+}
+
 export const categoryTemplatesApi = {
   // ---------- public ----------
 
@@ -97,4 +118,16 @@ export const categoryTemplatesApi = {
       method: 'POST',
       body: JSON.stringify(dto),
     }),
+
+  /** Nothing is saved by this call — the response is meant for the field
+   * editor to prefill, for the admin to review/edit before create() above
+   * actually runs. */
+  suggestFields: (token: string, categoryId: string) =>
+    apiFetch<SuggestedCategoryTemplate>(
+      `/categories/${categoryId}/templates/suggest-fields`,
+      token,
+      {
+        method: 'POST',
+      },
+    ),
 };

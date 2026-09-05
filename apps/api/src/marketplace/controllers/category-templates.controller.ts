@@ -1,12 +1,18 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
 import { PlatformRoleGuard } from '../../identity/guards/platform-role.guard';
 import { RequirePlatformRole } from '../../identity/decorators/require-platform-role.decorator';
 import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { CategoryTemplatesService } from '../services/category-templates.service';
+import { AiService } from '../../ai/ai.service';
 import { CreateCategoryTemplateDto } from '../dto/category-template.dto';
+
+// Same reasoning and same limit as JobsController's own AI_THROTTLE: a
+// billed LLM call per request, not a database read.
+const AI_THROTTLE = { default: { limit: 15, ttl: 60_000 } };
 
 // Deliberately its own controller rather than folded into
 // CategoriesController — template management is substantial enough to
@@ -19,7 +25,10 @@ import { CreateCategoryTemplateDto } from '../dto/category-template.dto';
 @ApiTags('categories')
 @Controller('categories')
 export class CategoryTemplatesController {
-  constructor(private readonly categoryTemplatesService: CategoryTemplatesService) {}
+  constructor(
+    private readonly categoryTemplatesService: CategoryTemplatesService,
+    private readonly aiService: AiService,
+  ) {}
 
   @Get(':slug/template')
   @ApiOperation({
@@ -91,5 +100,25 @@ export class CategoryTemplatesController {
     @Body() dto: CreateCategoryTemplateDto,
   ) {
     return this.categoryTemplatesService.createAndActivate(user.platformRole, user.id, id, dto);
+  }
+
+  // A starting point, not a submission — the response goes into the same
+  // field editor an admin already fills by hand (TemplateFieldEditor.tsx),
+  // for review and editing before POST .../templates above ever runs. Never
+  // writes anything itself.
+  @Post(':id/templates/suggest-fields')
+  @ApiBearerAuth()
+  @Throttle(AI_THROTTLE)
+  @ApiOperation({
+    summary: 'AI-suggested starter fields for a new template version (Administrator only)',
+  })
+  @UseGuards(JwtAuthGuard, PlatformRoleGuard)
+  @RequirePlatformRole('ADMIN')
+  async suggestFields(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    const categoryName = await this.categoryTemplatesService.resolveCategoryName(
+      user.platformRole,
+      id,
+    );
+    return this.aiService.suggestCategoryTemplateFields(categoryName);
   }
 }
