@@ -55,7 +55,11 @@ export const YourHiresPage: React.FC = () => {
         </button>
       </div>
 
-      {hiredProviderIds.length === 0 ? (
+      {myConnections.loading && <p className="text-xs text-ink-muted">Loading your hires…</p>}
+
+      {myConnections.error && <p className="text-xs text-destructive">{myConnections.error}</p>}
+
+      {!myConnections.loading && !myConnections.error && hiredProviderIds.length === 0 && (
         <div className="text-center space-y-4 rounded-2xl border border-dashed border-border bg-bg px-6 py-12">
           <p className="text-xs text-ink-muted">
             You haven't hired anyone yet. Start searching for the right fit for your next project.
@@ -64,7 +68,9 @@ export const YourHiresPage: React.FC = () => {
             Find Talent
           </Button>
         </div>
-      ) : (
+      )}
+
+      {!myConnections.loading && !myConnections.error && hiredProviderIds.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {hiredProviderIds.map((providerId) => {
             const providerConnections = connectionItems.filter(
