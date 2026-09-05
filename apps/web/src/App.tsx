@@ -71,6 +71,7 @@ import { AdminCategoryTemplatesPage } from './pages/admin/AdminCategoryTemplates
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { MessagesPage } from './pages/MessagesPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 // Exact-path routes. A plain object can't have a duplicate key silently shadow another
 // (TS flags it), which is the shadowing risk the old sequential if/else chain had.
@@ -286,8 +287,11 @@ function AppContent() {
       }
     }
 
-    // Fallback default — send each role back to its own home, not just the client's
-    return roleHome();
+    // No route matched at all — a genuinely unknown URL, not a role-gate
+    // redirect (those are handled above and still go to roleHome()). This
+    // is the one case that should tell the user the page doesn't exist
+    // rather than silently landing them on their dashboard.
+    return <NotFoundPage />;
   };
 
   // Which destinations count as "root" for the mobile back button. Admin is
