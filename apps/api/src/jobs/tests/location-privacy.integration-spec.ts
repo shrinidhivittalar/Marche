@@ -184,6 +184,12 @@ describe('Job location privacy', () => {
     expect(own).toMatchObject({ locationExact: EXACT });
   }, 30_000);
 
+  // 60s, not 30: accept()'s own transaction budgets timeout: 15_000,
+  // maxWait: 5_000 (proposals.service.ts) for its several sequential round
+  // trips against the hosted test database, and this test still has three
+  // more reads after that returns — the same "real network latency, not a
+  // hang" situation AuthService.googleLogin's transaction override
+  // documents for the same database.
   it('once hired, the provider sees exact location; the job owner still does too', async () => {
     const job = await jobWithExactLocation();
     const proposal = await proposals.submit(providerAUserId, {
@@ -204,7 +210,7 @@ describe('Job location privacy', () => {
     const connectionAsProvider = await connections.findById(providerAUserId, connection.id);
     expect(connectionAsClient).toMatchObject({ job: { locationExact: EXACT } });
     expect(connectionAsProvider).toMatchObject({ job: { locationExact: EXACT } });
-  }, 30_000);
+  }, 60_000);
 
   it('multiple proposals: hiring Provider B does not leak exact location to Provider A', async () => {
     const job = await jobWithExactLocation();
@@ -237,7 +243,7 @@ describe('Job location privacy', () => {
     // Provider B: hired, sees exact.
     const bView = await proposals.findById(providerBUserId, proposalBRow.id);
     expect(bView).toMatchObject({ job: { locationExact: EXACT } });
-  }, 30_000);
+  }, 60_000);
 
   it('a direct-contract job discloses exact location to the named provider once they accept, and to no one else, through the same primitive', async () => {
     const offer = await directContracts.create(clientUserId, {

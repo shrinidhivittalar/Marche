@@ -238,11 +238,25 @@ describe('Email verification gates', () => {
   });
 
   describe('migration compatibility', () => {
-    it('every user with emailVerifiedAt set holds a matching Verification(EMAIL, VERIFIED) row', async () => {
+    // What this checks: the one-time backfill in
+    // 20260827090000_add_verification_model, which ran once against every
+    // row that already existed when the Verification table was introduced.
+    // It says nothing about rows created afterwards — those go through the
+    // write-path transaction the test above already covers — so this must
+    // stay scoped to rows old enough to have been backfilled. Without that
+    // bound, this assertion also catches any other integration suite's test
+    // user that sets emailVerifiedAt directly as setup shorthand (several
+    // do, e.g. registration-capability-lifecycle, service-modes-location)
+    // and was never meant to prove the backfill, making the test flaky on
+    // suite composition rather than on the thing it's named for.
+    const VERIFICATION_MODEL_MIGRATED_AT = new Date('2026-08-27T09:00:00Z');
+
+    it('every pre-existing user with emailVerifiedAt set holds a matching Verification(EMAIL, VERIFIED) row', async () => {
       const mismatched = await prisma.client.user.count({
         where: {
           emailVerifiedAt: { not: null },
           deletedAt: null,
+          createdAt: { lt: VERIFICATION_MODEL_MIGRATED_AT },
           verifications: { none: { type: 'EMAIL', status: 'VERIFIED' } },
         },
       });
