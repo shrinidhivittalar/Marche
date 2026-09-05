@@ -23,6 +23,24 @@ export function formatOffer(proposal: {
   return value === 0 ? 'Free' : rupees.format(value);
 }
 
+/**
+ * The pre-negotiation figure, formatted the same way as formatOffer — but
+ * only when a negotiation actually changed the price. Returns null when
+ * there's nothing to contrast against (no negotiation happened, or the
+ * negotiated round settled on the exact same number), so a caller can do
+ * `{formatOriginalOffer(offer) && <p>Originally {...}</p>}` without a
+ * separate "was this negotiated" check.
+ */
+export function formatOriginalOffer(proposal: {
+  proposedPrice: string;
+  agreedPrice?: string | null;
+}): string | null {
+  if (proposal.agreedPrice == null) return null;
+  if (Number(proposal.agreedPrice) === Number(proposal.proposedPrice)) return null;
+  const value = Number(proposal.proposedPrice);
+  return value === 0 ? 'Free' : rupees.format(value);
+}
+
 const dateFormat = new Intl.DateTimeFormat('en-IN', {
   day: 'numeric',
   month: 'short',

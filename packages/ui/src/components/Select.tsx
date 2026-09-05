@@ -86,3 +86,18 @@ export function SelectItem({
     </SelectPrimitive.Item>
   );
 }
+
+// A non-selectable heading inside a SelectGroup — e.g. a parent category
+// name grouping its children in a long, categorised list.
+export function SelectLabel({ className, ...props }: ComponentProps<typeof SelectPrimitive.Label>) {
+  return (
+    <SelectPrimitive.Label
+      data-slot="select-label"
+      className={cn(
+        'px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-ink-muted',
+        className,
+      )}
+      {...props}
+    />
+  );
+}

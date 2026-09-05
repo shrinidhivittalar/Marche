@@ -16,7 +16,21 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Button, Card, DatePicker, Input, TimePicker, Textarea } from '@marche/ui';
+import {
+  Button,
+  Card,
+  DatePicker,
+  Input,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+  TimePicker,
+  Textarea,
+} from '@marche/ui';
 import { EventTimingMode } from '../../types';
 import { formatEventSchedule, todayISODate } from '../../lib/formatTime';
 import { formatJobBudget } from '../../lib/formatJob';
@@ -286,7 +300,13 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
     ]);
   }
 
-  const selectedCategory = (categories.data ?? []).find((c) => c.id === categoryId);
+  // Flattened parent + children — a job can be posted against a leaf
+  // (child) category as well as a standalone top-level one (Photography,
+  // Painting, Electrical Work have no children), and categories.data is a
+  // tree (GET /categories returns parents with nested children), so a
+  // parent-only lookup would never find a selected child.
+  const flatCategories = (categories.data ?? []).flatMap((c) => [c, ...(c.children ?? [])]);
+  const selectedCategory = flatCategories.find((c) => c.id === categoryId);
 
   // True in create mode as soon as any category is picked (there is no
   // "original" to compare against there), and in edit mode only once the
@@ -698,30 +718,53 @@ export const CreateJobPage: React.FC<CreateJobPageProps> = ({ draftId }) => {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {categories.loading && (
-                <p className="text-xs text-ink-muted col-span-2">Loading categories…</p>
-              )}
+            <div>
+              {categories.loading && <p className="text-xs text-ink-muted">Loading categories…</p>}
               {categories.error && (
-                <p className="text-xs text-destructive col-span-2" data-testid="categories-error">
+                <p className="text-xs text-destructive" data-testid="categories-error">
                   Categories could not be loaded. {categories.error}
                 </p>
               )}
-              {(categories.data ?? []).map((cat) => (
-                <button
-                  type="button"
-                  key={cat.id}
-                  data-testid={`category-${cat.slug}`}
-                  onClick={() => handleSelectCategory(cat.id)}
-                  className={`p-3.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                    categoryId === cat.id
-                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
-                      : 'border-border bg-bg text-ink-muted hover:text-ink hover:border-zinc-300'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
+              {!categories.loading && !categories.error && (
+                <Select value={categoryId || undefined} onValueChange={handleSelectCategory}>
+                  <SelectTrigger data-testid="category-select" aria-label="Category">
+                    <SelectValue placeholder="Choose a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(categories.data ?? []).map((cat) =>
+                      // Standalone categories (Photography, Painting, Electrical
+                      // Work — no children) are directly selectable. A parent
+                      // with children (the six-branch discovery taxonomy) is a
+                      // group heading only, never itself a valid target —
+                      // children are what services actually attach to (see
+                      // seed.ts's own comment on CATEGORIES), so only they're
+                      // selectable within the group.
+                      cat.children && cat.children.length > 0 ? (
+                        <SelectGroup key={cat.id}>
+                          <SelectLabel>{cat.name}</SelectLabel>
+                          {cat.children.map((child) => (
+                            <SelectItem
+                              key={child.id}
+                              value={child.id}
+                              data-testid={`category-${child.slug}`}
+                            >
+                              {child.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ) : (
+                        <SelectItem
+                          key={cat.id}
+                          value={cat.id}
+                          data-testid={`category-${cat.slug}`}
+                        >
+                          {cat.name}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 

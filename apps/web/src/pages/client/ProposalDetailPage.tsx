@@ -17,7 +17,12 @@ import {
 } from '../../lib/proposals-api';
 import { paymentsApi } from '../../lib/payments-api';
 import { ApiError } from '../../lib/api';
-import { formatOffer, formatSubmitted, formatTurnaround } from '../../lib/formatProposal';
+import {
+  formatOffer,
+  formatOriginalOffer,
+  formatSubmitted,
+  formatTurnaround,
+} from '../../lib/formatProposal';
 
 // One proposal, as the client who received it sees it, on the real API.
 //
@@ -224,6 +229,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
           <div>
             <p className="text-ink-muted">Price</p>
             <p className="font-mono font-bold text-ink text-base mt-0.5">{formatOffer(offer)}</p>
+            {formatOriginalOffer(offer) && (
+              <p className="text-[11px] text-ink-muted mt-0.5">
+                Originally {formatOriginalOffer(offer)}, negotiated to {formatOffer(offer)}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-ink-muted">Turnaround</p>
@@ -323,7 +333,11 @@ export const ProposalDetailPage: React.FC<ProposalDetailPageProps> = ({ id }) =>
       >
         <div className="space-y-4 text-xs text-ink-muted">
           <p>
-            You are accepting {formatOffer(offer)} for a {formatTurnaround(offer)} turnaround.
+            You are accepting {formatOffer(offer)}
+            {formatOriginalOffer(offer) && (
+              <> (originally {formatOriginalOffer(offer)}, negotiated)</>
+            )}{' '}
+            for a {formatTurnaround(offer)} turnaround.
           </p>
           {/* Spelled out because it is irreversible and affects other people:
               accepting one proposal declines the rest, in the same

@@ -36,6 +36,9 @@ export async function fillWizard(page: Page, title: string) {
   await page.goto('/client/jobs/new/manual');
 
   // Step 1 — category, from the seeded taxonomy rather than a hardcoded list.
+  // A real Select: the option list only exists in the DOM once the trigger
+  // opens it.
+  await page.getByTestId('category-select').click();
   const firstCategory = page.locator('[data-testid^="category-"]').first();
   await expect(firstCategory).toBeVisible({ timeout: 40_000 });
   await firstCategory.click();

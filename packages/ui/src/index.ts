@@ -76,6 +76,7 @@ export {
   SelectTrigger,
   SelectContent,
   SelectItem,
+  SelectLabel,
 } from './components/Select';
 
 export { LANGUAGES } from './data/languages';
