@@ -8,6 +8,7 @@ import { ServicesRepository } from '../repositories/services.repository';
 import { CategoriesRepository } from '../repositories/categories.repository';
 import { CategoryTemplatesService } from '../services/category-templates.service';
 import { CategoryTemplatesRepository } from '../repositories/category-templates.repository';
+import { ThrottlerStorageModule } from '../../throttler/throttler-storage.module';
 
 // Resolves the real module graph. Unit tests construct services with mocked
 // collaborators and would keep passing through a broken wiring change — a
@@ -15,11 +16,13 @@ import { CategoryTemplatesRepository } from '../repositories/category-templates.
 // which without this test means finding out from a deploy.
 describe('MarketplaceModule wiring', () => {
   it('resolves every provider, including ProfilesRepository from ProfilesModule', async () => {
-    // PrismaModule is @Global and registered once by AppModule in the real
-    // app, so it must be imported explicitly here — overrideProvider
-    // replaces an existing provider, it does not introduce one.
+    // PrismaModule and ThrottlerStorageModule are @Global and registered once
+    // by AppModule in the real app, so they must be imported explicitly here
+    // — overrideProvider replaces an existing provider, it does not
+    // introduce one. ThrottlerStorageModule backs AiUserThrottlerGuard,
+    // pulled in transitively via AiModule.
     const moduleRef = await Test.createTestingModule({
-      imports: [PrismaModule, MarketplaceModule],
+      imports: [PrismaModule, ThrottlerStorageModule, MarketplaceModule],
     })
       // Overridden so nothing reaches a database while the graph is built;
       // every other provider is the real one.

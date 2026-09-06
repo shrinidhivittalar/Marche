@@ -4,6 +4,7 @@ import { EmailModule } from '../email/email.module';
 import { ReferralsController } from './controllers/referrals.controller';
 import { ReferralsRepository } from './repositories/referrals.repository';
 import { ReferralsService } from './services/referrals.service';
+import { ReferralThrottlerGuard } from './guards/referral-throttler.guard';
 
 // Exported so IdentityModule can inject ReferralsService and call
 // handleUserJoined at registration time — the same "downstream module
@@ -11,7 +12,7 @@ import { ReferralsService } from './services/referrals.service';
 @Module({
   imports: [ProfilesModule, EmailModule],
   controllers: [ReferralsController],
-  providers: [ReferralsRepository, ReferralsService],
+  providers: [ReferralsRepository, ReferralsService, ReferralThrottlerGuard],
   exports: [ReferralsService],
 })
 export class ReferralsModule {}
