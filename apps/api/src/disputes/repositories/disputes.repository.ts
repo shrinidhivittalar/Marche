@@ -68,4 +68,39 @@ export class DisputesRepository {
   private adminFilter(status: DisputeStatus | undefined): Prisma.DisputeWhereInput {
     return status ? { status } : {};
   }
+
+  // ---------- attachments (mirrors JobsRepository's exactly) ----------
+
+  listAttachments(disputeId: string) {
+    return this.prisma.client.disputeAttachment.findMany({
+      where: { disputeId },
+      orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        displayOrder: true,
+        mediaId: true,
+        media: {
+          select: { objectKey: true, status: true, originalFileName: true, mimeType: true },
+        },
+      },
+    });
+  }
+
+  addAttachment(disputeId: string, mediaId: string, displayOrder: number) {
+    return this.prisma.client.disputeAttachment.create({
+      data: { disputeId, mediaId, displayOrder },
+    });
+  }
+
+  removeAttachment(disputeId: string, attachmentId: string) {
+    // Scoped by disputeId as well as attachmentId: checking the attachment
+    // id alone would let any party detach any other dispute's evidence.
+    return this.prisma.client.disputeAttachment.deleteMany({
+      where: { id: attachmentId, disputeId },
+    });
+  }
+
+  countAttachments(disputeId: string) {
+    return this.prisma.client.disputeAttachment.count({ where: { disputeId } });
+  }
 }

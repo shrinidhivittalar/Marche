@@ -1369,6 +1369,9 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Supports a future reconciliation query ("all FAILED payments") — not
+  // needed by any query today, cheap to add ahead of the table growing.
+  @@index([status])
   @@map("payments")
 }
 
@@ -1437,6 +1440,7 @@ model Media {
   serviceImages       ServiceImage[]
   jobAttachments      JobAttachment[]
   proposalAttachments ProposalAttachment[]
+  disputeAttachments  DisputeAttachment[]
   avatarForProfiles   Profile[]
 
   @@index([ownerUserId])
@@ -1602,7 +1606,13 @@ model Dispute {
   raisedAgainst       User   @relation("DisputesReceived", fields: [raisedAgainstUserId], references: [id], onDelete: Cascade)
 
   reason   String
+  // The original free-text description, kept as-is — DisputeAttachment
+  // below is additive, for the photographic/document evidence a dispute
+  // most often actually needs (PRODUCTION_READINESS_REVIEW.md §8), not a
+  // replacement for the text summary.
   evidence String
+
+  attachments DisputeAttachment[]
 
   status DisputeStatus @default(OPEN)
 
@@ -1622,6 +1632,28 @@ model Dispute {
   @@index([connectionId])
   @@index([status, createdAt])
   @@map("disputes")
+}
+
+// Mirrors JobAttachment exactly — same reasoning, same shape: a dispute
+// needing more than one piece of evidence, or anything non-text, had no
+// way to represent it before this.
+model DisputeAttachment {
+  id        String  @id @default(uuid())
+  disputeId String
+  dispute   Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  // Restrict, matching JobAttachment/PortfolioImage/ServiceImage: evidence
+  // still attached to a dispute must not silently vanish from under it.
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([disputeId, mediaId])
+  @@index([disputeId])
+  @@map("dispute_attachments")
 }
 
 // A dated activity log on a connection, not hour-tracking — this
