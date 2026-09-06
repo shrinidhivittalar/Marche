@@ -8,6 +8,7 @@ import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { CategoryTemplatesService } from '../services/category-templates.service';
 import { AiService } from '../../ai/ai.service';
+import { AiUserThrottlerGuard } from '../../ai/guards/ai-user-throttler.guard';
 import { CreateCategoryTemplateDto } from '../dto/category-template.dto';
 
 // Same reasoning and same limit as JobsController's own AI_THROTTLE: a
@@ -112,7 +113,7 @@ export class CategoryTemplatesController {
   @ApiOperation({
     summary: 'AI-suggested starter fields for a new template version (Administrator only)',
   })
-  @UseGuards(JwtAuthGuard, PlatformRoleGuard)
+  @UseGuards(JwtAuthGuard, PlatformRoleGuard, AiUserThrottlerGuard)
   @RequirePlatformRole('ADMIN')
   async suggestFields(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     const categoryName = await this.categoryTemplatesService.resolveCategoryName(

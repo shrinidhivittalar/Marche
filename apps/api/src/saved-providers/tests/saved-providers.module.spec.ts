@@ -4,15 +4,19 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SavedProvidersService } from '../services/saved-providers.service';
 import { SavedProvidersRepository } from '../repositories/saved-providers.repository';
+import { ThrottlerStorageModule } from '../../throttler/throttler-storage.module';
 
 // Resolves the real module graph, including the transitive imports pulled
 // in through MarketplaceModule (ServicesRepository) and MediaModule
 // (MediaService) — same reason messages.module.spec.ts and
-// marketplace.module.spec.ts exist.
+// marketplace.module.spec.ts exist. ThrottlerStorageModule is @Global() in
+// the real app but Nest's testing module builder doesn't auto-wire globals
+// unless they're actually imported — needed here for AiUserThrottlerGuard,
+// pulled in transitively via MarketplaceModule's AiModule import.
 describe('SavedProvidersModule wiring', () => {
   it('resolves every provider, including ServicesRepository from MarketplaceModule', async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [PrismaModule, SavedProvidersModule],
+      imports: [PrismaModule, ThrottlerStorageModule, SavedProvidersModule],
     })
       .overrideProvider(PrismaService)
       .useValue({ client: {} })

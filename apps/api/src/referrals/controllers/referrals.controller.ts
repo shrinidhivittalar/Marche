@@ -6,6 +6,7 @@ import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { ReferralsService } from '../services/referrals.service';
 import { CreateReferralDto } from '../dto/create-referral.dto';
 import { PaginationQueryDto } from '../../profiles/dto/pagination-query.dto';
+import { ReferralThrottlerGuard } from '../guards/referral-throttler.guard';
 
 @ApiTags('referrals')
 @Controller('referrals')
@@ -23,6 +24,7 @@ export class ReferralsController {
   }
 
   @Post()
+  @UseGuards(ReferralThrottlerGuard)
   @ApiOperation({
     summary: 'Refer someone by email (Client only)',
     description:

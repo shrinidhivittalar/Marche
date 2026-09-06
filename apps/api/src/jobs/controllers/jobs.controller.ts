@@ -18,6 +18,7 @@ import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
 import { JobsService } from '../services/jobs.service';
 import { AiService } from '../../ai/ai.service';
+import { AiUserThrottlerGuard } from '../../ai/guards/ai-user-throttler.guard';
 import { CreateJobDto, UpdateJobDto } from '../dto/job.dto';
 import { SearchJobsDto } from '../dto/search-jobs.dto';
 import { AttachFileDto } from '../dto/attach-file.dto';
@@ -97,7 +98,7 @@ export class JobsController {
   @ApiBearerAuth()
   @Throttle(AI_THROTTLE)
   @ApiOperation({ summary: "Rephrase a requirement's title or description with AI" })
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AiUserThrottlerGuard)
   async rephrase(@Body() dto: RephraseJobFieldDto) {
     const text = await this.aiService.rephraseJobField(dto.field, dto.text);
     return { text };
