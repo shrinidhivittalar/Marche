@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import PDFDocument from 'pdfkit';
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ConnectionsRepository } from '../../proposals/repositories/connections.repository';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
@@ -265,4 +272,195 @@ export class PaymentsService {
     assertOwnership(connection.clientProfileId, myProfile.id);
     return connection;
   }
+
+  /**
+   * A plain payment record, not a GST tax invoice — Marché has no tax-ID
+   * fields on a Profile and charges 0% commission in Phase 1, so there is
+   * nothing to compute beyond what was actually agreed and paid. Provider
+   * bills the client: Marché is the facilitator, not the seller. Mirrors
+   * ContractDetailPage.tsx's existing (print-only) Invoice modal layout —
+   * same header, billed-to/provider, line item, total and disclaimer —
+   * just as a real generated PDF instead of window.print().
+   *
+   * Either party may download it. Reference is the Payment's own id: no
+   * Invoice table, no sequential numbering scheme — nothing is persisted,
+   * so there is nothing that needs a permanent number.
+   */
+  async generateInvoicePdf(userId: string, connectionId: string): Promise<Buffer> {
+    const connection = await this.connectionsService.findById(userId, connectionId); // party check
+    const payment = await this.paymentsRepository.findByConnectionId(connectionId);
+    if (!payment || payment.status !== 'PAID') {
+      throw new NotFoundException('No paid invoice exists for this connection');
+    }
+
+    // Same computation as ContractDetailPage.tsx's own `amount` — the
+    // negotiated price wins when one exists, never the original offer.
+    const amount = Number(connection.proposal.agreedPrice ?? connection.proposal.proposedPrice);
+    const location =
+      typeof connection.job.locationExact === 'string' && connection.job.locationExact
+        ? connection.job.locationExact
+        : connection.job.locationCoarse;
+
+    return buildInvoicePdf({
+      referenceId: payment.id,
+      issuedAt: payment.paidAt ?? payment.createdAt,
+      clientName: connection.clientProfile.displayName,
+      providerName: connection.providerProfile.displayName,
+      jobTitle: connection.job.title,
+      eventDate: connection.job.eventDate,
+      location,
+      amount,
+      status: connection.status,
+    });
+  }
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatRupees(amount: number): string {
+  return `Rs. ${amount.toLocaleString('en-IN')}`;
+}
+
+interface InvoiceData {
+  referenceId: string;
+  issuedAt: Date;
+  clientName: string;
+  providerName: string;
+  jobTitle: string;
+  eventDate: Date | null;
+  location: string | null;
+  amount: number;
+  status: string;
+}
+
+// Buffers the whole document rather than streaming it straight to the
+// response: the controller needs the final byte length for
+// Content-Length, and pdfkit has no way to know that before it finishes
+// writing.
+function buildInvoicePdf(data: InvoiceData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    doc.fontSize(20).font('Helvetica-Bold').text('MARCHÉ', { continued: false });
+    doc.fontSize(9).font('Helvetica').fillColor('#666').text('Event services marketplace');
+    doc.moveDown(0.5);
+
+    doc
+      .fontSize(11)
+      .font('Helvetica-Bold')
+      .fillColor('#000')
+      .text('INVOICE', 400, 50, { align: 'right' });
+    doc
+      .fontSize(8)
+      .font('Helvetica')
+      .fillColor('#666')
+      .text(`Ref. ${data.referenceId}`, 400, 66, { align: 'right' })
+      .text(`Issued ${formatDate(data.issuedAt)}`, 400, 78, { align: 'right' });
+
+    doc.moveDown(2);
+    doc.strokeColor('#ddd').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(1);
+
+    const columnTop = doc.y;
+    doc.fontSize(8).fillColor('#666').text('BILLED TO', 50, columnTop);
+    doc
+      .fontSize(11)
+      .font('Helvetica-Bold')
+      .fillColor('#000')
+      .text(data.clientName, 50, columnTop + 12);
+
+    doc.fontSize(8).font('Helvetica').fillColor('#666').text('SERVICE PROVIDER', 300, columnTop, {
+      width: 245,
+      align: 'right',
+    });
+    doc
+      .fontSize(11)
+      .font('Helvetica-Bold')
+      .fillColor('#000')
+      .text(data.providerName, 300, columnTop + 12, { width: 245, align: 'right' });
+
+    doc.moveDown(3);
+    doc.strokeColor('#ddd').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(1);
+
+    doc.fontSize(8).font('Helvetica').fillColor('#666');
+    doc.text('DESCRIPTION', 50, doc.y, { continued: false });
+    doc.text('AMOUNT', 450, doc.y - 10, { width: 95, align: 'right' });
+    doc.moveDown(0.5);
+    doc.strokeColor('#ddd').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    const rowTop = doc.y;
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text(data.jobTitle, 50, rowTop, {
+      width: 380,
+    });
+    let detailY = doc.y;
+    doc.fontSize(9).font('Helvetica').fillColor('#666');
+    if (data.eventDate) {
+      doc.text(formatDate(data.eventDate), 50, detailY, { width: 380 });
+      detailY = doc.y;
+    }
+    if (data.location) {
+      doc.text(data.location, 50, detailY, { width: 380 });
+    }
+    doc
+      .fontSize(10)
+      .font('Helvetica')
+      .fillColor('#000')
+      .text(formatRupees(data.amount), 450, rowTop, { width: 95, align: 'right' });
+
+    doc.moveDown(2);
+    doc.strokeColor('#ddd').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(1);
+
+    const totalsX = 350;
+    doc.fontSize(9).font('Helvetica').fillColor('#666');
+    doc.text('Subtotal', totalsX, doc.y, { width: 100, continued: false });
+    doc.text(formatRupees(data.amount), totalsX + 100, doc.y - doc.currentLineHeight(), {
+      width: 95,
+      align: 'right',
+    });
+    doc.text('Marché fee', totalsX, doc.y, { width: 100 });
+    // Not a stub — the platform charges 0% commission in Phase 1. There is
+    // no fee to compute, same as ContractDetailPage.tsx's own invoice modal.
+    doc.text('Rs. 0', totalsX + 100, doc.y - doc.currentLineHeight(), {
+      width: 95,
+      align: 'right',
+    });
+    doc.moveDown(0.3);
+    doc.strokeColor('#ddd').moveTo(totalsX, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(0.3);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#000');
+    doc.text('Total', totalsX, doc.y, { width: 100, continued: false });
+    doc.text(formatRupees(data.amount), totalsX + 100, doc.y - doc.currentLineHeight(), {
+      width: 95,
+      align: 'right',
+    });
+
+    doc.moveDown(2);
+    doc.fontSize(8).font('Helvetica').fillColor('#666');
+    doc.text(`Status: ${data.status}`, 50, doc.y);
+    doc.moveDown(1);
+    doc.strokeColor('#ddd').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc
+      .fontSize(8)
+      .font('Helvetica-Oblique')
+      .fillColor('#888')
+      .text(
+        'Non-fiscal document — a record of the amount agreed between the parties for this ' +
+          'booking. It does not replace a formal tax invoice.',
+        50,
+        doc.y,
+        { width: 495 },
+      );
+
+    doc.end();
+  });
 }

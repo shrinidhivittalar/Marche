@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   CreditCard,
+  Download,
   FileCheck,
   Gavel,
   NotebookPen,
@@ -102,6 +103,8 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
   });
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  const [invoiceDownloadError, setInvoiceDownloadError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -154,6 +157,29 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
     Boolean(c.job.eventDate) &&
     new Date(c.job.eventDate as string).getTime() <= new Date().getTime();
   const canConfirmComplete = isClient && c.status === 'ACTIVE' && eventHasPassed;
+
+  const handleDownloadInvoice = async () => {
+    setDownloadingInvoice(true);
+    setInvoiceDownloadError(null);
+    try {
+      const blob = await paymentsApi.downloadInvoice(token, id);
+      // No pre-signed URL exists for this — it needs the bearer token, so
+      // it can't be a plain <a href>. Build one from the blob just long
+      // enough to trigger the save, then release it.
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice-${id}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setInvoiceDownloadError(
+        error instanceof ApiError ? error.message : 'Unable to download the invoice.',
+      );
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
 
   const handleConfirmComplete = async () => {
     setConfirming(true);
@@ -785,13 +811,31 @@ export const ContractDetailPage: React.FC<ContractDetailPageProps> = ({ id }) =>
             </p>
           </div>
 
-          <div className="no-print flex justify-end gap-3 pt-2">
-            <Button variant="outline" size="sm" icon={Printer} onClick={() => window.print()}>
-              Print / Save as PDF
-            </Button>
-            <Button size="sm" onClick={() => setInvoiceOpen(false)}>
-              Close View
-            </Button>
+          <div className="no-print space-y-2">
+            {invoiceDownloadError && (
+              <p className="text-[11px] text-destructive font-medium text-right" role="alert">
+                {invoiceDownloadError}
+              </p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" size="sm" icon={Printer} onClick={() => window.print()}>
+                Print / Save as PDF
+              </Button>
+              {paid && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={Download}
+                  onClick={() => void handleDownloadInvoice()}
+                  disabled={downloadingInvoice}
+                >
+                  {downloadingInvoice ? 'Downloading…' : 'Download PDF'}
+                </Button>
+              )}
+              <Button size="sm" onClick={() => setInvoiceOpen(false)}>
+                Close View
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

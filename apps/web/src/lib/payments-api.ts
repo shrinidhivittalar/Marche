@@ -1,6 +1,7 @@
 // Client for Payments. Beside the other domain clients for the same reason
 // as always — a payment only ever exists on a Connection.
-import { apiFetch, toQuery } from './api-fetch';
+import { API_URL, apiFetch, toQuery } from './api-fetch';
+import { ApiError } from './api';
 import type { Page } from './marketplace-api';
 
 type Envelope<T> = {
@@ -78,4 +79,21 @@ export const paymentsApi = {
       `/payments/me${toQuery({ page, limit })}`,
       token,
     ).then(normalisePage),
+
+  /**
+   * A plain payment-record PDF, not JSON — apiFetch always parses a JSON
+   * body, so this can't reuse it. Only available once the connection has
+   * been paid.
+   */
+  downloadInvoice: async (token: string, connectionId: string): Promise<Blob> => {
+    const res = await fetch(`${API_URL}/connections/${connectionId}/payment/invoice`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new ApiError(res.status, body?.message ?? `Request failed with status ${res.status}`);
+    }
+    return res.blob();
+  },
 };
