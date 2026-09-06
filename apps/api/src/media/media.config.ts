@@ -13,7 +13,13 @@ export const ALLOWED_MIME_TYPES: readonly string[] = [...IMAGE_MIME_TYPES, ...DO
 // Deliberately narrow. Archives and anything executable are excluded: they
 // are the formats that turn a file store into a malware host, and nothing
 // in Phase 1 needs them.
-function isImage(mimeType: string): boolean {
+//
+// Exported so MediaService can force Content-Disposition: attachment on
+// signed download URLs for the one non-image type (PDF) — a browser
+// rendering an attacker-uploaded PDF inline, same-origin-adjacent via the
+// signed URL, is unnecessary exposure that images (meant to render inline)
+// don't share.
+export function isImage(mimeType: string): boolean {
   return (IMAGE_MIME_TYPES as readonly string[]).includes(mimeType);
 }
 

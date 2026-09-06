@@ -11,6 +11,7 @@ import { StorageService } from './storage.service';
 import {
   ALLOWED_MIME_TYPES,
   SIGNATURE_HEAD_BYTES,
+  isImage,
   matchesSignature,
   maxBytesFor,
   mediaConfig,
@@ -185,12 +186,23 @@ export class MediaService {
    *
    * Takes the objectKey rather than an id so callers that already loaded
    * the media through a relation do not pay for a second query.
+   *
+   * Forces Content-Disposition: attachment for non-image media (PDFs) —
+   * images are meant to render inline (avatars, portfolio, service photos),
+   * but nothing needs a browser rendering an attacker-uploaded PDF inline
+   * via the signed URL. `mimeType` is optional so callers that only ever
+   * deal in images (avatars, portfolio) don't need to select it.
    */
   async signViewUrl(
-    media: { objectKey: string; status: string } | null | undefined,
+    media: { objectKey: string; status: string; mimeType?: string } | null | undefined,
   ): Promise<string | null> {
     if (!media || media.status !== 'UPLOADED') return null;
-    return this.storage.createDownloadUrl(media.objectKey, mediaConfig.downloadUrlTtlSeconds);
+    const forceDownload = media.mimeType !== undefined && !isImage(media.mimeType);
+    return this.storage.createDownloadUrl(
+      media.objectKey,
+      mediaConfig.downloadUrlTtlSeconds,
+      forceDownload,
+    );
   }
 
   private async getOwned(userId: string, mediaId: string): Promise<Media> {
