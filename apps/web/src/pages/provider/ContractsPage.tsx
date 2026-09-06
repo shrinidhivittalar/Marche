@@ -3,6 +3,7 @@ import { ChevronRight, NotebookPen } from 'lucide-react';
 import { Skeleton } from '@marche/ui';
 import { ComingSoonOverlay } from '../../components/common/ComingSoonOverlay';
 import { EmptyState } from '../../components/common/EmptyState';
+import { clickableRowProps } from '../../lib/a11y';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
@@ -136,7 +137,7 @@ export const ContractsPage: React.FC = () => {
             {list.map((ctr) => (
               <div
                 key={ctr.id}
-                onClick={() => navigate(`/contracts/${ctr.id}`)}
+                {...clickableRowProps(() => navigate(`/contracts/${ctr.id}`))}
                 className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
@@ -207,7 +208,7 @@ export const ContractsPage: React.FC = () => {
             {diaryEntries.map((entry) => (
               <div
                 key={entry.id}
-                onClick={() => navigate(`/contracts/${entry.connection.id}`)}
+                {...clickableRowProps(() => navigate(`/contracts/${entry.connection.id}`))}
                 className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer space-y-2"
               >
                 <div className="flex items-center gap-2 text-xs text-ink-muted">

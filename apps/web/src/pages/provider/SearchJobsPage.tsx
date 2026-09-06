@@ -25,6 +25,7 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { marketplaceApi } from '../../lib/marketplace-api';
 import { jobsApi, type ApiJob, type JobSort } from '../../lib/jobs-api';
+import { clickableRowProps } from '../../lib/a11y';
 import { formatJobBudget, formatEventWhen, postedAgo } from '../../lib/formatJob';
 
 // Provider-side requirement discovery, on the real Jobs API.
@@ -367,7 +368,7 @@ function JobCard({
 
   return (
     <div
-      onClick={onOpen}
+      {...clickableRowProps(onOpen)}
       data-testid="job-result"
       data-job-title={job.title}
       className="bg-surface border border-border rounded-2xl p-5 hover:border-border-strong hover:shadow-md transition-all cursor-pointer"

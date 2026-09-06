@@ -673,7 +673,7 @@ export const VendorProfilePage: React.FC<VendorProfilePageProps> = ({ id }) => {
           <h3 className="text-base font-bold text-ink">Education</h3>
           <div className="divide-y divide-border">
             {talent.education.map((edu, idx) => (
-              <div key={`${edu.school}-${idx}`} className="py-3">
+              <div key={`${edu.school}-${edu.degree}-${idx}`} className="py-3">
                 <p className="text-xs font-semibold text-ink">{edu.school}</p>
                 {edu.degree && <p className="text-[11px] text-ink-muted mt-0.5">{edu.degree}</p>}
               </div>

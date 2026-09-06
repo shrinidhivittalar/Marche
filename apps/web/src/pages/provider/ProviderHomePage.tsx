@@ -36,6 +36,7 @@ import { profilesApi, marketplaceApi } from '../../lib/marketplace-api';
 import { jobsApi } from '../../lib/jobs-api';
 import { formatJobBudget, formatEventWhen, formatDeadline, postedAgo } from '../../lib/formatJob';
 import { LOCATIONS } from '../../data/categoryOptions';
+import { clickableRowProps } from '../../lib/a11y';
 
 const memberSinceFormat = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
 
@@ -275,7 +276,7 @@ export const ProviderHomePage: React.FC = () => {
             {feedItems.map((job) => (
               <div
                 key={job.id}
-                onClick={() => setSelectedJobId(job.id)}
+                {...clickableRowProps(() => setSelectedJobId(job.id))}
                 className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-2">

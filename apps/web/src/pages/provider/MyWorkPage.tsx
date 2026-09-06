@@ -16,6 +16,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ProposalStatusBadge } from '../../components/proposals/ProposalStatusBadge';
 import { useApiResource } from '../../hooks/useApiResource';
+import { clickableRowProps } from '../../lib/a11y';
 import { proposalsApi, connectionsApi } from '../../lib/proposals-api';
 import { fetchAllPages } from '../../lib/api-fetch';
 import { paymentsApi } from '../../lib/payments-api';
@@ -224,7 +225,7 @@ export const MyWorkPage: React.FC = () => {
                 data-status={proposal.status}
                 // The proposal, not the requirement it targets: this is where
                 // its status, attachments and withdrawal live.
-                onClick={() => navigate(`/provider/proposals/${proposal.id}`)}
+                {...clickableRowProps(() => navigate(`/provider/proposals/${proposal.id}`))}
                 className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
@@ -295,7 +296,7 @@ export const MyWorkPage: React.FC = () => {
               myContracts.map((ctr) => (
                 <div
                   key={ctr.id}
-                  onClick={() => navigate(`/contracts/${ctr.id}`)}
+                  {...clickableRowProps(() => navigate(`/contracts/${ctr.id}`))}
                   className="bg-white border border-border rounded-2xl p-6 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">

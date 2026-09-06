@@ -5,6 +5,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { useApp } from '../../context/AppContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import { workDiaryApi } from '../../lib/work-diary-api';
+import { clickableRowProps } from '../../lib/a11y';
 
 // Real entries across every one of the client's connections — the provider
 // side of this same aggregate lives in ContractsPage's Work Diary tab.
@@ -50,7 +51,7 @@ export const WorkDiariesPage: React.FC = () => {
       {entries.map((entry) => (
         <div
           key={entry.id}
-          onClick={() => navigate(`/contracts/${entry.connection.id}`)}
+          {...clickableRowProps(() => navigate(`/contracts/${entry.connection.id}`))}
           className="bg-white border border-border rounded-2xl p-5 hover:border-zinc-300 hover:shadow-md transition-all cursor-pointer space-y-2"
         >
           <div className="flex items-center gap-2 text-xs text-ink-muted">

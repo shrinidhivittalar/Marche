@@ -6,6 +6,7 @@ import { Button, Skeleton } from '@marche/ui';
 import { EmptyState } from '../components/common/EmptyState';
 import { notificationRoute, formatNotificationTime } from '../lib/formatNotification';
 import { NotificationIcon } from '../components/notifications/NotificationIcon';
+import { clickableRowProps } from '../lib/a11y';
 
 // The "activity" feed (real proposal/job events) now comes from Module 6's
 // API. "Job Alerts" stays on AppContext's mock jobAlertSettings — that
@@ -254,7 +255,7 @@ export const NotificationsPage: React.FC = () => {
                 data-testid="notification-row"
                 data-type={n.type}
                 data-unread={unread}
-                onClick={() => {
+                {...clickableRowProps(() => {
                   // Not awaited: navigation shouldn't wait on it. Caught so
                   // a failure surfaces here instead of becoming an unhandled
                   // rejection — see the Mark All as Read handler above.
@@ -264,7 +265,7 @@ export const NotificationsPage: React.FC = () => {
                     });
                   }
                   if (route) navigate(route);
-                }}
+                })}
                 className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
                   unread
                     ? 'bg-white border-primary/30 shadow-xs ring-1 ring-primary/10'

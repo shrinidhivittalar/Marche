@@ -1,10 +1,17 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DisputesRepository } from '../repositories/disputes.repository';
 import { ConnectionsService } from '../../proposals/services/connections.service';
 import { ProfilesRepository } from '../../profiles/repositories/profiles.repository';
 import { getOwnProfileOrThrow } from '../../profiles/profile-access.util';
 import { assertAdminRole } from '../../marketplace/marketplace-access.util';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { MediaService } from '../../media/media.service';
 import { paginate } from '../../marketplace/pagination';
 import type { DisputeListQueryDto } from '../dto/dispute-list-query.dto';
 import type { Dispute, PlatformRole } from '@marche/db';
@@ -15,11 +22,16 @@ function isAdminOrAbove(platformRole: PlatformRole): boolean {
 
 @Injectable()
 export class DisputesService {
+  // Same cap as JobsService's attachments — a moderation flow needs more
+  // than the old single free-text field, not an unbounded upload dump.
+  private static readonly MAX_ATTACHMENTS = 10;
+
   constructor(
     private readonly disputesRepository: DisputesRepository,
     private readonly connectionsService: ConnectionsService,
     private readonly profilesRepository: ProfilesRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly mediaService: MediaService,
   ) {}
 
   /**
@@ -108,5 +120,73 @@ export class DisputesService {
       return dispute;
     }
     return this.disputesRepository.resolve(disputeId, resolvedByUserId, resolution);
+  }
+
+  // ---------- evidence attachments ----------
+
+  private async getPartyDispute(userId: string, disputeId: string): Promise<Dispute> {
+    const dispute = await this.disputesRepository.findById(disputeId);
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+    if (dispute.raisedByUserId !== userId && dispute.raisedAgainstUserId !== userId) {
+      throw new ForbiddenException('You do not have access to this dispute');
+    }
+    return dispute;
+  }
+
+  /** Either party to the dispute may attach evidence — not gated on status. */
+  async attachEvidence(userId: string, disputeId: string, mediaId: string) {
+    const dispute = await this.getPartyDispute(userId, disputeId);
+
+    // Both halves of the rule: the file is this user's, and it finished
+    // uploading. Same check JobsService.addAttachment makes.
+    await this.mediaService.assertAttachable(userId, mediaId);
+
+    const existing = await this.disputesRepository.countAttachments(dispute.id);
+    if (existing >= DisputesService.MAX_ATTACHMENTS) {
+      throw new BadRequestException(
+        `A dispute can have at most ${DisputesService.MAX_ATTACHMENTS} attachments`,
+      );
+    }
+
+    // Marked private because of where it landed, not because the uploader
+    // said so — moderation evidence is never public. See MediaService.markPrivate.
+    await this.mediaService.markPrivate(mediaId);
+
+    return this.disputesRepository.addAttachment(dispute.id, mediaId, existing);
+  }
+
+  async removeEvidence(userId: string, disputeId: string, attachmentId: string): Promise<void> {
+    await this.getPartyDispute(userId, disputeId);
+
+    const result = await this.disputesRepository.removeAttachment(disputeId, attachmentId);
+    if (result.count === 0) {
+      throw new NotFoundException('Attachment not found on this dispute');
+    }
+  }
+
+  /** Either party to the dispute, or an admin. */
+  async listEvidence(userId: string, platformRole: PlatformRole, disputeId: string) {
+    if (!isAdminOrAbove(platformRole)) {
+      await this.getPartyDispute(userId, disputeId);
+    } else {
+      const dispute = await this.disputesRepository.findById(disputeId);
+      if (!dispute) {
+        throw new NotFoundException('Dispute not found');
+      }
+    }
+
+    const attachments = await this.disputesRepository.listAttachments(disputeId);
+    return Promise.all(
+      // media is dropped rather than spread: objectKey is the storage path
+      // and no client needs it. Same shape JobsService.listAttachments returns.
+      attachments.map(async ({ media, ...attachment }) => ({
+        ...attachment,
+        fileName: media.originalFileName,
+        mimeType: media.mimeType,
+        url: await this.mediaService.signViewUrl(media),
+      })),
+    );
   }
 }
