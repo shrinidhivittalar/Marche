@@ -179,7 +179,15 @@ export class JobsRepository {
   // deliberately avoids, and a future caller that isn't owner-gated would
   // leak silently with no select boundary to catch it. Fixed here rather
   // than left as a latent risk.
-  update(id: string, data: Prisma.JobUpdateInput) {
+  //
+  // Unchecked, matching `create` above: JobsService.update sets
+  // categoryId/categoryTemplateId as plain scalars rather than `category`/
+  // `categoryTemplate` relation connect/disconnect writes, so a category
+  // change and a categoryData change land in one SQL UPDATE statement
+  // rather than two — see JobsService.update's own comment for why a
+  // relation `disconnect` compiling into a second statement broke the
+  // jobs_category_data_template_invariant_check CHECK constraint.
+  update(id: string, data: Prisma.JobUncheckedUpdateInput) {
     return this.prisma.client.job.update({
       where: { id },
       data,
