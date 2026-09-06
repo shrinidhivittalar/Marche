@@ -172,7 +172,18 @@ export class JobsService {
       dto.locationCoarse !== undefined ? dto.locationCoarse : job.locationCoarse,
       categoryDataInput,
     );
-
+    // categoryId and categoryTemplateId are set as plain scalars (an
+    // Unchecked update), not `category: { connect }` / `categoryTemplate:
+    // { connect/disconnect }` relation writes — the same choice `create`
+    // above already makes. Prisma compiles a relation `disconnect` into its
+    // own separate UPDATE statement rather than folding it into the same
+    // SET clause as categoryData, and Postgres validates a CHECK constraint
+    // per-statement, not per-transaction: the categoryData-only statement
+    // would run first and briefly violate
+    // jobs_category_data_template_invariant_check (categoryData already
+    // NULL, categoryTemplateId not yet), aborting the whole update before
+    // the second statement ever ran. Scalars land in one statement, so both
+    // columns change together.
     return this.jobsRepository.update(job.id, {
       title: dto.title,
       description: dto.description,
@@ -187,10 +198,8 @@ export class JobsService {
       // Absent means "leave them alone"; an empty array means "clear them".
       // Collapsing the two would make removing every deliverable impossible.
       ...(dto.deliverables !== undefined ? { deliverables: dto.deliverables } : {}),
-      ...(dto.categoryId ? { category: { connect: { id: dto.categoryId } } } : {}),
-      ...(categoryChanged
-        ? { categoryTemplate: template ? { connect: { id: template.id } } : { disconnect: true } }
-        : {}),
+      categoryId: dto.categoryId,
+      ...(categoryChanged ? { categoryTemplateId: template?.id ?? null } : {}),
       ...(categoryChanged || dto.categoryData !== undefined
         ? {
             categoryData:
