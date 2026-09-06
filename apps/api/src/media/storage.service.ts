@@ -145,9 +145,22 @@ export class StorageService {
    * than by a bare URL — "public" describes who may ask for it, not that
    * the object is world-readable. Signing is local crypto with no network
    * call, so generating one per image on a listing page is cheap.
+   *
+   * `forceDownload` sets ResponseContentDisposition to "attachment" on the
+   * signed URL itself, without touching the object's stored metadata — used
+   * for non-image attachments (see MediaService.signViewUrl) so a browser
+   * downloads rather than renders them inline.
    */
-  async createDownloadUrl(objectKey: string, ttlSeconds: number): Promise<string> {
-    const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
+  async createDownloadUrl(
+    objectKey: string,
+    ttlSeconds: number,
+    forceDownload = false,
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: objectKey,
+      ResponseContentDisposition: forceDownload ? 'attachment' : undefined,
+    });
     return getSignedUrl(this.client, command, { expiresIn: ttlSeconds });
   }
 

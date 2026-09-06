@@ -37,6 +37,7 @@ function build() {
   };
   const storage = {
     createUploadUrl: jest.fn().mockResolvedValue('https://storage.example/signed'),
+    createDownloadUrl: jest.fn().mockResolvedValue('https://storage.example/signed-get'),
     head: jest.fn().mockResolvedValue({ sizeBytes: 1000, mimeType: 'image/jpeg' }),
     readHead: jest.fn().mockResolvedValue(JPEG_HEAD),
     delete: jest.fn().mockResolvedValue(undefined),
@@ -245,6 +246,44 @@ describe('MediaService', () => {
       await expect(service.assertAttachable(OWNER, 'media_1')).rejects.toBeInstanceOf(
         ForbiddenException,
       );
+    });
+  });
+
+  describe('signViewUrl', () => {
+    it('returns null when there is no media', async () => {
+      const { service } = build();
+      await expect(service.signViewUrl(null)).resolves.toBeNull();
+    });
+
+    it('returns null when the file never finished uploading', async () => {
+      const { service } = build();
+      await expect(
+        service.signViewUrl({ objectKey: 'k', status: 'PENDING', mimeType: 'image/jpeg' }),
+      ).resolves.toBeNull();
+    });
+
+    it('does not force a download for an image, so it still renders inline', async () => {
+      const { service, storage } = build();
+      await service.signViewUrl({ objectKey: 'k', status: 'UPLOADED', mimeType: 'image/jpeg' });
+      expect(storage.createDownloadUrl).toHaveBeenCalledWith('k', expect.any(Number), false);
+    });
+
+    // The audit finding this closes: an attacker-uploaded PDF must not
+    // render inline via the signed URL the way an image does.
+    it('forces a download for a PDF', async () => {
+      const { service, storage } = build();
+      await service.signViewUrl({
+        objectKey: 'k',
+        status: 'UPLOADED',
+        mimeType: 'application/pdf',
+      });
+      expect(storage.createDownloadUrl).toHaveBeenCalledWith('k', expect.any(Number), true);
+    });
+
+    it('does not force a download when mimeType is not supplied (avatar/portfolio callers)', async () => {
+      const { service, storage } = build();
+      await service.signViewUrl({ objectKey: 'k', status: 'UPLOADED' });
+      expect(storage.createDownloadUrl).toHaveBeenCalledWith('k', expect.any(Number), false);
     });
   });
 
