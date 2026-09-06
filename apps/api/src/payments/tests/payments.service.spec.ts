@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PaymentsService } from '../services/payments.service';
 
 const CONNECTION = {
@@ -381,6 +386,74 @@ describe('PaymentsService', () => {
       expect(paymentsRepository.listForProvider).toHaveBeenCalledWith('profile_provider', 0, 20);
       expect(paymentsRepository.listForClient).not.toHaveBeenCalled();
       expect(result.data).toEqual([{ id: 'payment_2' }]);
+    });
+  });
+
+  describe('generateInvoicePdf', () => {
+    const PAID_CONNECTION = {
+      ...CONNECTION,
+      status: 'COMPLETED',
+      proposal: { proposedPrice: '9500', agreedPrice: '9000' },
+      job: {
+        title: 'Wedding Photography',
+        eventDate: null,
+        locationCoarse: 'Mumbai',
+        locationExact: null,
+      },
+      clientProfile: { displayName: 'Priya Sharma' },
+      providerProfile: { displayName: 'Rahul Studios' },
+    };
+
+    it('generates a real PDF for a paid connection, using the negotiated price', async () => {
+      const { service, connectionsService, paymentsRepository } = build();
+      connectionsService.findById.mockResolvedValue(PAID_CONNECTION);
+      paymentsRepository.findByConnectionId.mockResolvedValue({
+        id: 'payment_1',
+        status: 'PAID',
+        paidAt: new Date('2026-01-15'),
+        createdAt: new Date('2026-01-10'),
+      });
+
+      const pdf = await service.generateInvoicePdf('user_client', 'connection_1');
+
+      expect(connectionsService.findById).toHaveBeenCalledWith('user_client', 'connection_1');
+      expect(Buffer.isBuffer(pdf)).toBe(true);
+      expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+      expect(pdf.length).toBeGreaterThan(0);
+    });
+
+    it('refuses when no payment exists for the connection', async () => {
+      const { service, connectionsService, paymentsRepository } = build();
+      connectionsService.findById.mockResolvedValue(PAID_CONNECTION);
+      paymentsRepository.findByConnectionId.mockResolvedValue(null);
+
+      await expect(
+        service.generateInvoicePdf('user_client', 'connection_1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('refuses when the payment has not been paid yet', async () => {
+      const { service, connectionsService, paymentsRepository } = build();
+      connectionsService.findById.mockResolvedValue(PAID_CONNECTION);
+      paymentsRepository.findByConnectionId.mockResolvedValue({
+        id: 'payment_1',
+        status: 'CREATED',
+        paidAt: null,
+        createdAt: new Date('2026-01-10'),
+      });
+
+      await expect(
+        service.generateInvoicePdf('user_client', 'connection_1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('propagates the party check — a stranger cannot generate an invoice', async () => {
+      const { service, connectionsService } = build();
+      connectionsService.findById.mockRejectedValue(new ForbiddenException());
+
+      await expect(
+        service.generateInvoicePdf('user_stranger', 'connection_1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

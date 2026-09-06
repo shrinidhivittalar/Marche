@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../identity/guards/jwt-auth.guard';
 import { CurrentUser } from '../../identity/current-user.decorator';
 import type { AuthenticatedUser } from '../../identity/strategies/jwt.strategy';
@@ -53,5 +54,26 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Payment status for this connection, readable by either party' })
   getStatus(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.paymentsService.getStatus(user.id, id);
+  }
+
+  @Get('invoice')
+  @ApiOperation({
+    summary: 'A plain payment-record PDF for this connection, readable by either party',
+    description:
+      'Only available once the connection has been paid. Not a GST tax invoice — a record of ' +
+      'the amount agreed and paid, generated fresh on every request rather than stored.',
+  })
+  async getInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    const pdf = await this.paymentsService.generateInvoicePdf(user.id, id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="invoice-${id}.pdf"`,
+      'Content-Length': String(pdf.length),
+    });
+    res.send(pdf);
   }
 }
