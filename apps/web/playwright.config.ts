@@ -94,6 +94,14 @@ export default defineConfig({
         PORT: String(API_PORT),
         NODE_ENV: 'development',
         FRONTEND_ORIGIN: WEB_URL,
+        // apps/api/.env's own CORS_ORIGINS is the ordinary dev port
+        // (5173), not this suite's WEB_URL — a credentialed request from
+        // the browser at WEB_URL is real cross-origin traffic and gets
+        // blocked by the browser's own CORS check before it ever reaches
+        // the server, surfacing as a generic "something went wrong" with
+        // no server-side error to point at (see cors-origins.ts for the
+        // allow-list this parses).
+        CORS_ORIGINS: WEB_URL,
         // The server under test writes to the test database, not the one in
         // apps/api/.env.
         DATABASE_URL: TEST_DATABASE_URL,
