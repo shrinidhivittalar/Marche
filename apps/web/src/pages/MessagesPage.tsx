@@ -18,6 +18,7 @@ import { usePolling } from '../hooks/usePolling';
 import { useMessagesSocket } from '../hooks/useMessagesSocket';
 import { connectionsApi, type ApiConnection } from '../lib/proposals-api';
 import { messagesApi, type ApiMessage } from '../lib/messages-api';
+import { clickableRowProps } from '../lib/a11y';
 
 interface ConversationView {
   id: string; // connection id
@@ -337,7 +338,7 @@ export const MessagesPage: React.FC = () => {
                   <div
                     key={conv.id}
                     data-testid="conversation-row"
-                    onClick={() => openConversation(conv.id)}
+                    {...clickableRowProps(() => openConversation(conv.id))}
                     className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${
                       isActive
                         ? 'bg-surface border-l-4 border-l-primary shadow-xs'

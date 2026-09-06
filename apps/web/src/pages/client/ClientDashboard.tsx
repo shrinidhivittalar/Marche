@@ -472,9 +472,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
         {/* Compact KPI Cards Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:w-auto lg:flex-1 lg:max-w-2xl">
           {/* Active Jobs */}
-          <div
+          <Card
+            padding="sm"
             onClick={() => navigate('/client/jobs')}
-            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+            className="hover:border-red-300 space-y-2 group"
           >
             <div className="flex items-center justify-between">
               <span
@@ -493,12 +494,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                   : `${activeJobsCount} briefs in progress`}
               </p>
             </div>
-          </div>
+          </Card>
 
           {/* New Proposals */}
-          <div
+          <Card
+            padding="sm"
             onClick={() => navigate('/client/jobs')}
-            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+            className="hover:border-red-300 space-y-2 group"
           >
             <div className="flex items-center justify-between">
               <span
@@ -517,12 +519,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
                 {pendingProposalsSum > 0 ? 'Require your review' : 'All reviewed'}
               </p>
             </div>
-          </div>
+          </Card>
 
           {/* Active Projects */}
-          <div
+          <Card
+            padding="sm"
             onClick={() => navigate('/client/jobs')}
-            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+            className="hover:border-red-300 space-y-2 group"
           >
             <div className="flex items-center justify-between">
               <span
@@ -539,12 +542,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               </p>
               <p className="text-[11px] text-ink-muted">Work in progress</p>
             </div>
-          </div>
+          </Card>
 
           {/* Completed Projects */}
-          <div
+          <Card
+            padding="sm"
             onClick={() => navigate('/client/jobs')}
-            className="bg-surface p-4 rounded-2xl border border-border hover:border-red-300 hover:shadow-md transition-all cursor-pointer space-y-2 group"
+            className="hover:border-red-300 space-y-2 group"
           >
             <div className="flex items-center justify-between">
               <span
@@ -561,7 +565,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ view = 'dashbo
               </p>
               <p className="text-[11px] text-ink-muted">Delivered successfully</p>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 

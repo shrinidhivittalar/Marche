@@ -25,6 +25,7 @@ import { formatBudget } from '../lib/formatBudget';
 import { useApiResource } from '../hooks/useApiResource';
 import { marketplaceApi } from '../lib/marketplace-api';
 import { HeroCanvas } from '../components/landing/HeroCanvas';
+import { clickableRowProps } from '../lib/a11y';
 
 // Best-effort icon per category slug — falls back to Sparkles for anything
 // not seeded yet, since the category list itself is real (fetched from the
@@ -478,7 +479,9 @@ export const LandingPage: React.FC = () => {
             {jobs.slice(0, 3).map((req) => (
               <div
                 key={req.id}
-                onClick={() => promptLogin('Sign in to view this job and submit a proposal.')}
+                {...clickableRowProps(() =>
+                  promptLogin('Sign in to view this job and submit a proposal.'),
+                )}
                 className="lp-job-card opacity-0 bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-primary/40 hover:bg-white/[0.07] transition-all cursor-pointer flex flex-col justify-between"
               >
                 <div>
