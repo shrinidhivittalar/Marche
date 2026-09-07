@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      # Unit tests only. apps/api's "test" script also runs the integration
+      # suite, which needs a live Neon test database (TEST_DATABASE_URL /
+      # TEST_DIRECT_DATABASE_URL) — not wired into CI as secrets yet, so it
+      # stays a local-only step for now.
+      - run: npm run test:unit --workspace=@marche/api
