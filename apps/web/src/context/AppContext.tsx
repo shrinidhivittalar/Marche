@@ -7,12 +7,8 @@ import {
   User,
   UserRole,
   Job,
-  Proposal,
-  Contract,
   AuditLogEntry,
   Notification,
-  BookingState,
-  EventCategory,
   Review,
   ClientSettings,
   TalentProfile,
@@ -26,13 +22,10 @@ import {
 import {
   DEMO_USERS,
   INITIAL_JOBS,
-  INITIAL_PROPOSALS,
-  INITIAL_CONTRACTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
   INITIAL_TALENT,
 } from '../data/mockData';
-import { isBidWithinBudget } from '../lib/formatBudget';
 import {
   BackendUser,
   forgotPasswordRequest,
@@ -54,25 +47,6 @@ import {
   routeBelongsToOtherMode,
   type ActiveMode,
 } from '../lib/active-mode';
-
-type JobDraftInput = Omit<
-  Job,
-  | 'id'
-  | 'clientId'
-  | 'clientName'
-  | 'clientAvatar'
-  | 'clientCompany'
-  | 'clientVerified'
-  | 'proposalsCount'
-  | 'createdAt'
-  | 'status'
-  | 'isDraftPost'
->;
-
-// The only fields a client can edit on an already-published job — status/proposalsCount/
-// isDraftPost etc. must only ever change via the dedicated transition functions
-// (hireVendor, vendorMarkCompleted, togglePauseJob, ...), not through a generic update.
-type EditableJobFields = Pick<Job, 'title' | 'budgetMin' | 'budgetMax' | 'location'>;
 
 interface AppContextType {
   currentUser: User;
@@ -133,8 +107,6 @@ interface AppContextType {
   navigate: (path: string) => void;
   goBack: () => void;
   jobs: Job[];
-  proposals: Proposal[];
-  contracts: Contract[];
   auditLogs: AuditLogEntry[];
   notifications: Notification[];
   // Module 6's real notifications — separate from the mock `notifications`
@@ -175,67 +147,11 @@ interface AppContextType {
   selectedLocationFilter: string;
   setSelectedLocationFilter: (loc: string) => void;
 
-  // Actions
-  createJob: (data: JobDraftInput) => Job;
-  saveJobDraft: (draftId: string | null, data: JobDraftInput) => Job;
-  publishJobDraft: (draftId: string, data: JobDraftInput) => Job;
-
-  submitProposal: (data: {
-    jobId: string;
-    bidAmount: number;
-    coverLetter: string;
-    estimatedDelivery: string;
-    proposedStartTime?: string;
-    proposedEndTime?: string;
-    milestones: { title: string; amount: number; description: string }[];
-    portfolioLinks?: string[];
-    draftId?: string;
-  }) => Proposal;
-
-  saveProposalDraft: (
-    draftId: string | null,
-    data: {
-      jobId: string;
-      bidAmount: number;
-      coverLetter: string;
-      estimatedDelivery: string;
-      proposedStartTime?: string;
-      proposedEndTime?: string;
-      milestones: { title: string; amount: number; description: string }[];
-      portfolioLinks?: string[];
-    },
-  ) => Proposal;
-
-  vendorMarkCompleted: (contractId: string) => void;
-  clientConfirmCompletion: (contractId: string) => void;
-  submitReview: (data: { contractId: string; rating: number; comment: string }) => Review;
-  raiseDispute: (data: { contractId: string; reason: string; evidence: string }) => Dispute;
-  addWorkDiaryEntry: (data: {
-    contractId: string;
-    workDate: string;
-    hours: number;
-    summary: string;
-    proofUrl?: string;
-  }) => WorkDiaryEntry;
-  adminOverrideBookingState: (bookingId: string, targetState: BookingState, reason: string) => void;
-
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
 
-  // Job quick actions
-  togglePauseJob: (id: string) => void;
-  deleteJob: (id: string) => void;
-  updateJob: (id: string, updates: Partial<EditableJobFields>) => void;
-
   // Helper helpers
-  getJobById: (id: string) => Job | undefined;
-  getProposalsForJob: (reqId: string) => Proposal[];
-  getContractByJobId: (reqId: string) => Contract | undefined;
-  getContractById: (contractId: string) => Contract | undefined;
-  getReviewForContract: (contractId: string) => Review | undefined;
   getReviewsForVendor: (vendorId: string) => Review[];
-  getDisputeForContract: (contractId: string) => Dispute | undefined;
-  getWorkDiaryForContract: (contractId: string) => WorkDiaryEntry[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -274,15 +190,6 @@ const getDefaultJobAlertSettings = (vendorId: string): JobAlertSettings => {
 // the random suffix (matching the pattern already used for notifications) avoids that.
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
-}
-
-// Fixed-budget jobs must keep max mirrored to min so provider bid validation stays
-// consistent — enforced once here instead of separately in every place a job is
-// created or edited.
-function normalizeJobBudget<
-  T extends { budgetMode: 'fixed' | 'range'; budgetMin: number; budgetMax: number },
->(data: T): T {
-  return data.budgetMode === 'fixed' ? { ...data, budgetMax: data.budgetMin } : data;
 }
 
 // The backend (Identity module) only knows CLIENT/PROVIDER/ADMIN — the
@@ -527,19 +434,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? window.location.pathname
       : '/';
   });
-  const [jobs, setJobs] = useState<Job[]>(() => {
+  const [jobs] = useState<Job[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_jobs`);
     return saved ? JSON.parse(saved) : INITIAL_JOBS;
-  });
-
-  const [proposals, setProposals] = useState<Proposal[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_proposals`);
-    return saved ? JSON.parse(saved) : INITIAL_PROPOSALS;
-  });
-
-  const [contracts, setContracts] = useState<Contract[]>(() => {
-    const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_contracts`);
-    return saved ? JSON.parse(saved) : INITIAL_CONTRACTS;
   });
 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
@@ -552,7 +449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
   });
 
-  const [reviews, setReviews] = useState<Review[]>(() => {
+  const [reviews] = useState<Review[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_reviews`);
     return saved ? JSON.parse(saved) : [];
   });
@@ -570,11 +467,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_referrals`);
     return saved ? JSON.parse(saved) : [];
   });
-  const [disputes, setDisputes] = useState<Dispute[]>(() => {
+  const [disputes] = useState<Dispute[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_disputes`);
     return saved ? JSON.parse(saved) : [];
   });
-  const [workDiaryEntries, setWorkDiaryEntries] = useState<WorkDiaryEntry[]>(() => {
+  const [workDiaryEntries] = useState<WorkDiaryEntry[]>(() => {
     const saved = localStorage.getItem(`${LOCAL_STORAGE_KEY}_work_diary`);
     return saved ? JSON.parse(saved) : [];
   });
@@ -609,8 +506,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_user_role`, currentUser.role);
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_jobs`, JSON.stringify(jobs));
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_proposals`, JSON.stringify(proposals));
-    localStorage.setItem(`${LOCAL_STORAGE_KEY}_contracts`, JSON.stringify(contracts));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_audit`, JSON.stringify(auditLogs));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_notifications`, JSON.stringify(notifications));
     localStorage.setItem(`${LOCAL_STORAGE_KEY}_reviews`, JSON.stringify(reviews));
@@ -630,8 +525,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [
     currentUser,
     jobs,
-    proposals,
-    contracts,
     auditLogs,
     notifications,
     reviews,
@@ -958,525 +851,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) => [notif, ...prev]);
   };
 
-  // Notifies vendors whose saved alert preferences match the new job.
-  const notifyMatchingVendors = (job: Job) => {
-    INITIAL_TALENT.forEach((vendor) => {
-      const settings = {
-        ...getDefaultJobAlertSettings(vendor.id),
-        ...jobAlertSettingsByVendor[vendor.id],
-      };
-      const matchesCategory =
-        settings.categories.length === 0 || settings.categories.includes(job.category);
-      const vendorProfile = vendor.id === currentUser.id ? currentUser : vendor;
-      const profileLocation = vendorProfile.location?.toLowerCase().trim();
-      const matchesLocation =
-        settings.locationMode === 'anywhere' ||
-        !profileLocation ||
-        job.location.toLowerCase().includes(profileLocation) ||
-        profileLocation.includes(job.location.toLowerCase());
-
-      if (!settings.enabled || !matchesCategory || !matchesLocation) return;
-
-      addNotification(
-        vendor.id,
-        'New Matching Job',
-        `New job posted in ${job.category}: "${job.title}"`,
-        'job_alert',
-        `/provider/jobs/${job.id}`,
-      );
-    });
-  };
-
-  // Shared "new job" base fields between createJob/saveJobDraft's create branches.
-  const buildNewJobBase = () => ({
-    clientId: currentUser.id,
-    clientName: currentUser.name,
-    clientAvatar: currentUser.avatar,
-    clientCompany: currentUser.companyOrTitle,
-    clientVerified: currentUser.verified,
-    proposalsCount: 0,
-    createdAt: new Date().toISOString(),
-  });
-
-  // 1. Create Job
-  const createJob = (data: JobDraftInput): Job => {
-    const newReqId = generateId('job');
-    const newReq: Job = {
-      ...normalizeJobBudget(data),
-      id: newReqId,
-      ...buildNewJobBase(),
-      status: 'Open', // Active for proposals
-    };
-
-    setJobs((prev) => [newReq, ...prev]);
-
-    addAuditLog('Job Published', `Job ${newReq.id} ("${newReq.title}")`, 'Draft', 'Open');
-
-    notifyMatchingVendors(newReq);
-
-    return newReq;
-  };
-
-  // 1b. Save Job Draft (create a new draft, or update an existing one in place)
-  const saveJobDraft = (draftId: string | null, data: JobDraftInput): Job => {
-    if (draftId) {
-      const existing = jobs.find((r) => r.id === draftId);
-      if (!existing) throw new Error('Draft not found');
-      const updated: Job = {
-        ...existing,
-        ...normalizeJobBudget(data),
-        status: 'Draft',
-        isDraftPost: true,
-      };
-      setJobs((prev) => prev.map((r) => (r.id === draftId ? updated : r)));
-      return updated;
-    }
-
-    const newReqId = generateId('job');
-    const newReq: Job = {
-      ...normalizeJobBudget(data),
-      id: newReqId,
-      ...buildNewJobBase(),
-      status: 'Draft',
-      isDraftPost: true,
-    };
-
-    setJobs((prev) => [newReq, ...prev]);
-    addAuditLog(
-      'Job Draft Saved',
-      `Job ${newReqId} ("${newReq.title || 'Untitled job'}")`,
-      'None',
-      'Draft',
-    );
-
-    return newReq;
-  };
-
-  // 1c. Publish an existing Job Draft
-  const publishJobDraft = (draftId: string, data: JobDraftInput): Job => {
-    const existing = jobs.find((r) => r.id === draftId);
-    if (!existing) throw new Error('Draft not found');
-
-    const published: Job = {
-      ...existing,
-      ...normalizeJobBudget(data),
-      status: 'Open',
-      isDraftPost: false,
-    };
-    setJobs((prev) => prev.map((r) => (r.id === draftId ? published : r)));
-
-    addAuditLog('Job Published', `Job ${draftId} ("${published.title}")`, 'Draft', 'Open');
-
-    notifyMatchingVendors(published);
-
-    return published;
-  };
-
-  // Shared by submitProposal/saveProposalDraft's four create/update branches, so the vendor
-  // snapshot fields (and their magic fallback defaults) and milestone-id mapping only exist
-  // in one place instead of drifting across four copies.
-  const buildVendorSnapshot = (targetReq: Job | undefined) => ({
-    vendorId: currentUser.id,
-    vendorName: currentUser.name,
-    vendorAvatar: currentUser.avatar,
-    vendorRating: currentUser.rating || 4.95,
-    vendorReviewCount: currentUser.reviewCount || 12,
-    vendorCategory: (targetReq?.category || 'Photography') as EventCategory,
-    vendorLocation: currentUser.location || 'Mumbai, Maharashtra',
-  });
-
-  const buildMilestones = (
-    proposalId: string,
-    milestones: { title: string; amount: number; description: string }[],
-  ) =>
-    milestones.map((m, idx) => ({
-      id: `ms_${proposalId}_${idx}`,
-      title: m.title,
-      amount: m.amount,
-      description: m.description,
-    }));
-
-  // 2. Submit Proposal
-  const submitProposal = (data: {
-    jobId: string;
-    bidAmount: number;
-    coverLetter: string;
-    estimatedDelivery: string;
-    proposedStartTime?: string;
-    proposedEndTime?: string;
-    milestones: { title: string; amount: number; description: string }[];
-    portfolioLinks?: string[];
-    draftId?: string;
-  }): Proposal => {
-    const targetReq = jobs.find((r) => r.id === data.jobId);
-    if (targetReq && targetReq.status !== 'Open') {
-      throw new Error('This job is no longer accepting proposals.');
-    }
-    if (targetReq && !isBidWithinBudget(targetReq, data.bidAmount)) {
-      throw new Error("Bid amount is outside the client's allowed budget range.");
-    }
-    let newProposal: Proposal;
-
-    if (data.draftId) {
-      const existing = proposals.find((p) => p.id === data.draftId);
-      if (!existing) throw new Error('Draft not found');
-      newProposal = {
-        ...existing,
-        bidAmount: data.bidAmount,
-        coverLetter: data.coverLetter,
-        estimatedDelivery: data.estimatedDelivery,
-        proposedStartTime: data.proposedStartTime,
-        proposedEndTime: data.proposedEndTime,
-        milestones: buildMilestones(existing.id, data.milestones),
-        status: 'submitted',
-        submittedAt: new Date().toISOString(),
-        portfolioLinks: data.portfolioLinks,
-      };
-      setProposals((prev) => prev.map((p) => (p.id === data.draftId ? newProposal : p)));
-    } else {
-      const newPropId = generateId('prop');
-      newProposal = {
-        id: newPropId,
-        jobId: data.jobId,
-        ...buildVendorSnapshot(targetReq),
-        bidAmount: data.bidAmount,
-        coverLetter: data.coverLetter,
-        estimatedDelivery: data.estimatedDelivery,
-        proposedStartTime: data.proposedStartTime,
-        proposedEndTime: data.proposedEndTime,
-        milestones: buildMilestones(newPropId, data.milestones),
-        status: 'submitted',
-        submittedAt: new Date().toISOString(),
-        portfolioLinks: data.portfolioLinks,
-      };
-      setProposals((prev) => [newProposal, ...prev]);
-    }
-
-    // Increment proposals count on job
-    setJobs((prev) =>
-      prev.map((r) => (r.id === data.jobId ? { ...r, proposalsCount: r.proposalsCount + 1 } : r)),
-    );
-
-    addAuditLog(
-      'Proposal Submitted',
-      `Proposal ${newProposal.id} for Job ${data.jobId}`,
-      'None',
-      `Submitted (₹${data.bidAmount.toLocaleString('en-IN')})`,
-    );
-
-    if (targetReq) {
-      addNotification(
-        targetReq.clientId,
-        'New Proposal Received',
-        `${currentUser.name} submitted a proposal (₹${data.bidAmount.toLocaleString('en-IN')}) for "${targetReq.title}"`,
-        'proposal',
-        `/client/jobs/${targetReq.id}`,
-      );
-    }
-
-    return newProposal;
-  };
-
-  // 2b. Save Proposal Draft (create a new draft, or update an existing one in place)
-  const saveProposalDraft = (
-    draftId: string | null,
-    data: {
-      jobId: string;
-      bidAmount: number;
-      coverLetter: string;
-      estimatedDelivery: string;
-      proposedStartTime?: string;
-      proposedEndTime?: string;
-      milestones: { title: string; amount: number; description: string }[];
-      portfolioLinks?: string[];
-    },
-  ): Proposal => {
-    if (draftId) {
-      const existing = proposals.find((p) => p.id === draftId);
-      if (!existing) throw new Error('Draft not found');
-      const updated: Proposal = {
-        ...existing,
-        bidAmount: data.bidAmount,
-        coverLetter: data.coverLetter,
-        estimatedDelivery: data.estimatedDelivery,
-        proposedStartTime: data.proposedStartTime,
-        proposedEndTime: data.proposedEndTime,
-        milestones: buildMilestones(existing.id, data.milestones),
-        status: 'draft',
-        portfolioLinks: data.portfolioLinks,
-      };
-      setProposals((prev) => prev.map((p) => (p.id === draftId ? updated : p)));
-      return updated;
-    }
-
-    const newPropId = generateId('prop');
-    const targetReq = jobs.find((r) => r.id === data.jobId);
-    const newProposal: Proposal = {
-      id: newPropId,
-      jobId: data.jobId,
-      ...buildVendorSnapshot(targetReq),
-      bidAmount: data.bidAmount,
-      coverLetter: data.coverLetter,
-      estimatedDelivery: data.estimatedDelivery,
-      proposedStartTime: data.proposedStartTime,
-      proposedEndTime: data.proposedEndTime,
-      milestones: buildMilestones(newPropId, data.milestones),
-      status: 'draft',
-      submittedAt: new Date().toISOString(),
-      portfolioLinks: data.portfolioLinks,
-    };
-    setProposals((prev) => [newProposal, ...prev]);
-    return newProposal;
-  };
-
-  // 4. Vendor Marks Event Completed
-  const vendorMarkCompleted = (contractId: string) => {
-    const ctr = contracts.find((c) => c.id === contractId);
-    if (!ctr || ctr.bookingState !== 'Confirmed') return;
-
-    setContracts((prev) =>
-      prev.map((c) =>
-        c.id === contractId
-          ? {
-              ...c,
-              bookingState: 'Completed',
-              vendorCompletedAt: new Date().toISOString(),
-            }
-          : c,
-      ),
-    );
-
-    setJobs((prev) => prev.map((r) => (r.id === ctr.jobId ? { ...r, status: 'Completed' } : r)));
-
-    addAuditLog(
-      'Vendor Marked Event Completed',
-      `Contract ${contractId}`,
-      'Confirmed',
-      'Completed',
-    );
-
-    addNotification(
-      ctr.clientId,
-      'Event Marked Delivered',
-      `${ctr.vendorName} marked the event "${ctr.jobTitle}" as completed. Please confirm to close out the booking.`,
-      'contract',
-      `/contracts/${contractId}`,
-    );
-  };
-
-  // 5. Client Confirms Completion
-  const clientConfirmCompletion = (contractId: string) => {
-    const ctr = contracts.find((c) => c.id === contractId);
-    if (!ctr || ctr.bookingState !== 'Completed') return;
-
-    setContracts((prev) =>
-      prev.map((c) =>
-        c.id === contractId
-          ? {
-              ...c,
-              bookingState: 'Closed',
-              clientConfirmedAt: new Date().toISOString(),
-            }
-          : c,
-      ),
-    );
-
-    setJobs((prev) => prev.map((r) => (r.id === ctr.jobId ? { ...r, status: 'Closed' } : r)));
-
-    addAuditLog('Booking Completed & Closed', `Contract ${contractId}`, 'Completed', 'Closed');
-
-    addNotification(
-      ctr.vendorId,
-      'Booking Completed!',
-      `${ctr.clientName} confirmed "${ctr.jobTitle}" is complete. Payment of ₹${ctr.amount.toLocaleString('en-IN')} is confirmed.`,
-      'contract',
-      `/contracts/${contractId}`,
-    );
-  };
-
-  const submitReview = (data: { contractId: string; rating: number; comment: string }): Review => {
-    const ctr = contracts.find((c) => c.id === data.contractId);
-    if (!ctr) throw new Error('Contract not found');
-    if (ctr.bookingState !== 'Closed')
-      throw new Error('Reviews can only be left after a contract is closed.');
-    if (ctr.clientId !== currentUser.id)
-      throw new Error('Only the client can review this contract.');
-    if (reviews.some((review) => review.contractId === data.contractId)) {
-      throw new Error('This contract already has a review.');
-    }
-
-    const review: Review = {
-      id: generateId('rev'),
-      contractId: ctr.id,
-      jobId: ctr.jobId,
-      jobTitle: ctr.jobTitle,
-      vendorId: ctr.vendorId,
-      vendorName: ctr.vendorName,
-      clientId: ctr.clientId,
-      clientName: ctr.clientName,
-      rating: Math.min(5, Math.max(1, data.rating)),
-      comment: data.comment.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    setReviews((prev) => [review, ...prev]);
-    addAuditLog(
-      'Review Submitted',
-      'Review ' + review.id + ' for Contract ' + ctr.id,
-      'None',
-      review.rating + ' stars',
-    );
-    addNotification(
-      ctr.vendorId,
-      'New Client Review',
-      ctr.clientName + ' left a ' + review.rating + '-star review for "' + ctr.jobTitle + '".',
-      'contract',
-      '/contracts/' + ctr.id,
-    );
-
-    return review;
-  };
-  const raiseDispute = (data: {
-    contractId: string;
-    reason: string;
-    evidence: string;
-  }): Dispute => {
-    const ctr = contracts.find((c) => c.id === data.contractId);
-    if (!ctr) throw new Error('Contract not found');
-    if (ctr.bookingState === 'Closed' || ctr.bookingState === 'Cancelled') {
-      throw new Error('Disputes can only be raised before a contract reaches a terminal state.');
-    }
-    if (
-      disputes.some(
-        (dispute) => dispute.contractId === data.contractId && dispute.status !== 'resolved',
-      )
-    ) {
-      throw new Error('This contract already has an active dispute.');
-    }
-
-    const raisedAgainstId = currentUser.id === ctr.clientId ? ctr.vendorId : ctr.clientId;
-    const raisedAgainstName = currentUser.id === ctr.clientId ? ctr.vendorName : ctr.clientName;
-    const dispute: Dispute = {
-      id: generateId('dsp'),
-      contractId: ctr.id,
-      jobTitle: ctr.jobTitle,
-      raisedById: currentUser.id,
-      raisedByName: currentUser.name,
-      raisedAgainstId,
-      raisedAgainstName,
-      reason: data.reason.trim(),
-      evidence: data.evidence.trim(),
-      status: 'open',
-      createdAt: new Date().toISOString(),
-    };
-
-    setDisputes((prev) => [dispute, ...prev]);
-    addAuditLog(
-      'Dispute Raised',
-      'Dispute ' + dispute.id + ' for Contract ' + ctr.id,
-      'None',
-      'Open',
-    );
-    addNotification(
-      raisedAgainstId,
-      'Dispute Raised',
-      currentUser.name + ' raised a dispute on "' + ctr.jobTitle + '".',
-      'contract',
-      '/contracts/' + ctr.id,
-    );
-    addNotification(
-      DEMO_USERS.admin.id,
-      'Dispute Needs Review',
-      'A dispute was raised on "' + ctr.jobTitle + '".',
-      'system',
-      '/admin/audit',
-    );
-
-    return dispute;
-  };
-  const addWorkDiaryEntry = (data: {
-    contractId: string;
-    workDate: string;
-    hours: number;
-    summary: string;
-    proofUrl?: string;
-  }): WorkDiaryEntry => {
-    const ctr = contracts.find((c) => c.id === data.contractId);
-    if (!ctr) throw new Error('Contract not found');
-    if (ctr.vendorId !== currentUser.id)
-      throw new Error('Only the hired provider can add work diary entries.');
-    if (ctr.bookingState !== 'Confirmed' && ctr.bookingState !== 'Completed') {
-      throw new Error(
-        'Work diary entries can only be added while a contract is active or awaiting completion review.',
-      );
-    }
-    if (data.hours <= 0 || data.hours > 24) {
-      throw new Error('Hours must be between 0 and 24.');
-    }
-
-    const entry: WorkDiaryEntry = {
-      id: generateId('wde'),
-      contractId: ctr.id,
-      vendorId: ctr.vendorId,
-      vendorName: ctr.vendorName,
-      workDate: data.workDate,
-      hours: data.hours,
-      summary: data.summary.trim(),
-      proofUrl: data.proofUrl?.trim() || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    setWorkDiaryEntries((prev) => [entry, ...prev]);
-    addAuditLog(
-      'Work Diary Logged',
-      'Work Diary ' + entry.id + ' for Contract ' + ctr.id,
-      'None',
-      entry.hours + ' hours',
-    );
-    addNotification(
-      ctr.clientId,
-      'Work Diary Updated',
-      ctr.vendorName +
-        ' logged ' +
-        entry.hours +
-        ' hour' +
-        (entry.hours === 1 ? '' : 's') +
-        ' for "' +
-        ctr.jobTitle +
-        '".',
-      'contract',
-      '/contracts/' + ctr.id,
-    );
-
-    return entry;
-  };
-  // 6. Admin State Override
-  const adminOverrideBookingState = (
-    bookingId: string,
-    targetState: BookingState,
-    reason: string,
-  ) => {
-    const req = jobs.find((r) => r.id === bookingId);
-    const ctr = contracts.find((c) => c.jobId === bookingId || c.id === bookingId);
-
-    const oldState = req?.status || ctr?.bookingState || 'Unknown';
-
-    // Reviving a terminal state is explicitly forbidden per the admin panel's own rule.
-    if (oldState === 'Closed' || oldState === 'Cancelled') return;
-
-    if (req) {
-      setJobs((prev) => prev.map((r) => (r.id === bookingId ? { ...r, status: targetState } : r)));
-    }
-
-    if (ctr) {
-      setContracts((prev) =>
-        prev.map((c) => (c.id === ctr.id ? { ...c, bookingState: targetState } : c)),
-      );
-    }
-
-    addAuditLog('ADMIN OVERRIDE APPLIED', `Booking ${bookingId}`, oldState, targetState, reason);
-  };
-
   const markNotificationRead = (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
@@ -1544,82 +918,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const togglePauseJob = (id: string) => {
-    setJobs((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          if (r.isDraftPost) return r;
-          // Only an Open (or already-paused/Draft) job can be paused/resumed — once a job
-          // has a contract (status flips to Confirmed/Completed/Closed), pausing it would
-          // silently desync the job's own status from the contract that's actually running.
-          if (r.status !== 'Open' && r.status !== 'Draft') return r;
-          const isPaused = r.status === 'Draft' || r.isPaused;
-          const newStatus = isPaused ? 'Open' : 'Draft';
-          addAuditLog(
-            'Job Status Changed',
-            `Job ${id}`,
-            r.status,
-            newStatus,
-            isPaused ? 'Resumed by Client' : 'Paused by Client',
-          );
-          return { ...r, status: newStatus, isPaused: !isPaused };
-        }
-        return r;
-      }),
-    );
-  };
-
-  const deleteJob = (id: string) => {
-    // A job with a contract is actively running (or finished) — deleting it would orphan
-    // the contract's parent job while the contract keeps existing on its own.
-    if (contracts.some((c) => c.jobId === id)) return;
-    const job = jobs.find((r) => r.id === id);
-    setJobs((prev) => prev.filter((r) => r.id !== id));
-    addAuditLog(
-      'Job Deleted',
-      `Job ${id}`,
-      job?.status ?? 'Unknown',
-      'Deleted',
-      'Removed by Client',
-    );
-  };
-
-  const updateJob = (id: string, updates: Partial<EditableJobFields>) => {
-    const job = jobs.find((r) => r.id === id);
-    // Reuses the same normalizeJobBudget() the job-creation functions use, by normalizing
-    // a full merged (job + updates) object and taking just the resulting budgetMax back —
-    // updateJob's `updates` alone isn't a full Job (missing budgetMode), so it can't be
-    // passed to normalizeJobBudget directly.
-    const normalizedUpdates = job
-      ? { ...updates, budgetMax: normalizeJobBudget({ ...job, ...updates }).budgetMax }
-      : updates;
-    setJobs((prev) => prev.map((r) => (r.id === id ? { ...r, ...normalizedUpdates } : r)));
-    addAuditLog(
-      'Job Updated',
-      `Job ${id}`,
-      job?.status ?? 'Unknown',
-      job?.status ?? 'Unknown',
-      'Edited by Client',
-    );
-  };
-
-  const getJobById = (id: string) => jobs.find((r) => r.id === id);
-  const getProposalsForJob = (reqId: string) => proposals.filter((p) => p.jobId === reqId);
-  const getContractByJobId = (reqId: string) => contracts.find((c) => c.jobId === reqId);
-  const getContractById = (contractId: string) => contracts.find((c) => c.id === contractId);
-
-  const getReviewForContract = (contractId: string) =>
-    reviews.find((review) => review.contractId === contractId);
   const getReviewsForVendor = (vendorId: string) =>
     reviews.filter((review) => review.vendorId === vendorId);
-  const getDisputeForContract = (contractId: string) =>
-    disputes.find((dispute) => dispute.contractId === contractId && dispute.status !== 'resolved');
-  const getWorkDiaryForContract = (contractId: string) =>
-    workDiaryEntries
-      .filter((entry) => entry.contractId === contractId)
-      .sort(
-        (a, b) => b.workDate.localeCompare(a.workDate) || b.createdAt.localeCompare(a.createdAt),
-      );
 
   return (
     <AppContext.Provider
@@ -1647,8 +947,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigate,
         goBack,
         jobs,
-        proposals,
-        contracts,
         auditLogs,
         notifications,
         apiNotifications: apiNotificationsList.data?.items ?? [],
@@ -1680,30 +978,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedCategoryFilter,
         selectedLocationFilter,
         setSelectedLocationFilter,
-        createJob,
-        saveJobDraft,
-        publishJobDraft,
-        submitProposal,
-        saveProposalDraft,
-        vendorMarkCompleted,
-        clientConfirmCompletion,
-        submitReview,
-        raiseDispute,
-        addWorkDiaryEntry,
-        adminOverrideBookingState,
         markNotificationRead,
         markAllNotificationsRead,
-        togglePauseJob,
-        deleteJob,
-        updateJob,
-        getJobById,
-        getProposalsForJob,
-        getContractByJobId,
-        getContractById,
-        getReviewForContract,
         getReviewsForVendor,
-        getDisputeForContract,
-        getWorkDiaryForContract,
       }}
     >
       {children}

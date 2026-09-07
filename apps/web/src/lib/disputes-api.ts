@@ -2,6 +2,7 @@
 // as always — a dispute only ever exists on a Connection.
 import { apiFetch, toQuery } from './api-fetch';
 import type { Page } from './marketplace-api';
+import type { ApiJobAttachment } from './jobs-api';
 
 type Envelope<T> = {
   data: T[];
@@ -36,6 +37,11 @@ export interface ApiDispute {
   updatedAt: string;
 }
 
+// Identical to a requirement's attachment, because both come from the same
+// media pipeline. Aliased rather than redeclared so the two cannot drift —
+// same reasoning as ApiProposalAttachment in proposals-api.ts.
+export type ApiDisputeAttachment = ApiJobAttachment;
+
 export const disputesApi = {
   /** Either party on the connection, or an admin. */
   forConnection: (token: string, connectionId: string) =>
@@ -58,5 +64,22 @@ export const disputesApi = {
     apiFetch<ApiDispute>(`/disputes/${disputeId}/resolve`, token, {
       method: 'PATCH',
       body: JSON.stringify({ resolution }),
+    }),
+
+  // ---------- evidence attachments (either party, or Admin) ----------
+
+  attachments: (token: string, disputeId: string) =>
+    apiFetch<ApiDisputeAttachment[]>(`/disputes/${disputeId}/evidence`, token),
+
+  addAttachment: (token: string, disputeId: string, mediaId: string) =>
+    apiFetch<{ id: string; mediaId: string; displayOrder: number }>(
+      `/disputes/${disputeId}/evidence`,
+      token,
+      { method: 'POST', body: JSON.stringify({ mediaId }) },
+    ),
+
+  removeAttachment: (token: string, disputeId: string, attachmentId: string) =>
+    apiFetch<void>(`/disputes/${disputeId}/evidence/${attachmentId}`, token, {
+      method: 'DELETE',
     }),
 };
