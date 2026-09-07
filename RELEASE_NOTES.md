@@ -3,6 +3,24 @@
 Short summary of what's shipped, newest first. For implementation detail,
 see git history — this is the "what changed and why it matters" version.
 
+## 2026-09-07 — Provider Contracts and Stats unlocked
+
+- Provider Contracts tab (locked since 2026-08-24) is now live — it was
+  already reading real connection/payment/work-diary data, just hidden
+  behind the "Coming Soon" preview.
+- Provider Stats page unlocked too, but first rewired off leftover mock
+  data onto real endpoints: win rate and proposal funnel from real
+  proposals, earnings (total, by month, by category) from real payments,
+  and client rating from real reviews.
+- Five security-audit findings closed out: per-user throttling on
+  referrals and AI routes, a production clamp on the auth rate-limit
+  override, an upgraded `nodemailer`, and forced-download signed URLs for
+  PDFs.
+- Fixed the test database silently drifting from production — migrations
+  had been applying to production's direct connection instead for months.
+  Running them for real surfaced and fixed a genuine ordering bug in job
+  category updates.
+
 ## 2026-08-24 — Post-redesign bug fixes
 
 - Provider now gets a real notification the moment a client's payment goes
@@ -54,6 +72,6 @@ see git history — this is the "what changed and why it matters" version.
 
 ---
 
-**Known gaps, not yet built:** the Contracts tab in the nav is a locked
-preview, not a real feature. Real Redis isn't provisioned anywhere yet
-(in-memory fallback works but isn't the intended production shape).
+**Known gaps, not yet built:** Redis is confirmed provisioned in production
+(Render), but local dev/e2e still fall back to in-memory throttling —
+unconfirmed whether that's provisioned there too.
