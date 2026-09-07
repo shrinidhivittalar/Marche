@@ -35,9 +35,9 @@ Backed by their own API modules under `apps/api/src`:
 - **saved-providers**, **referrals** — smaller supporting modules
 - **ai** — one feature: "Rephrase with AI" on the job-posting form, via Groq
 
-**Not real yet:** the Contracts tab shown in the app's nav is a locked/blurred
-preview (`ComingSoonOverlay`) — there's no separate "contract" concept beyond
-the Connection a proposal acceptance already creates.
+The provider's Contracts and Stats screens are real too — both read off the
+same Connection/Proposal/Payment data as everywhere else, not a separate
+"contract" concept.
 
 ## Layout
 
