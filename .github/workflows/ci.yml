@@ -30,3 +30,5 @@ jobs:
       # TEST_DIRECT_DATABASE_URL) — not wired into CI as secrets yet, so it
       # stays a local-only step for now.
       - run: npm run test:unit --workspace=@marche/api
+
+      - run: npm run test --workspace=@marche/web
